@@ -112,6 +112,9 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ## 8. Video and submission
 - [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
+- [from session/research-docs, video notes] Production plan: record the real run from a working build as early as Sat evening (screen capture at 1440x900 or 1920x1080, mic or captions only); keep every take. Edit with ffmpeg plus a Remotion or hyperframes overlay pass (titles, captions, scale labels, "simulated" and "sped up" tags). Skills installed for this in `.agents/skills/`: `video-editing`, `remotion-video-creation` (plus existing `hyperframes`). Captions are burned in so it works muted. Hard cap 2:00; export H.264 MP4; upload to Devpost and keep a copy outside the repo.
+- [from session/research-docs, video notes] Schedule: script locked and storyboard shot list by 20:00 Sat; a rough cut using whatever works by 21:00 Sat (so a valid submission exists before building closes); final cut and re-record of any weak shot Sun 09:00 to 11:00; uploaded by 11:30. Never leave the video until after the last code change.
+- [from session/research-docs, video notes] Every claim in the video must be on screen and real: no mocked numbers; label simulated cells and sped-up footage.
 
 ## 9. Stack and repo [D]
 - Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (three.js/WebGL; deck.gl replaced in R21); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
