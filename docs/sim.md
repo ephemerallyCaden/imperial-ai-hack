@@ -1,5 +1,12 @@
 # Cell simulator: rules and output format (P2, `sim/cellsim.py`)
 
+> **P2 v2 (Sun 00:00): the follower rule is the default for WHAD forecasts, upload, draw tool and playback.** Use `Params(rule="follow")`
+> (Agent 4, 3dd4fcf). A cell that moves pulls the chain behind it, so the sheet stays packed and the wound closes as a front, and fitted Tm no longer
+> depends on field size. The code default stays `rule="free"`, so the v1 results (sim_ensemble, rules below) reproduce bit for bit. Under the follower rule:
+> Tm grid 0.05-500 h (fits are about 8-10x the free-rule Tm; part II about 4-8 h, part I stalls up to 500 h); fits in `sim/fits/whad_fits_follow.json` (sim/v2.py,
+> series time at P1's cut-offs, near-tie break); gate files `sim_follow*` via `python sim/v2.py gate sim_follow`; upload `sim/upload.py` (follower fits and
+> prior, NCA band only with the follower weights `nca/v2/weights.pt`). Results and the pre-declared criterion it did not pass: `docs/p2-results.md` "P2 v2".
+
 Run: `python3 sim/cellsim.py --hours 24 --Tm 0.1 [--Td 20] [--out run.npz]` (synthetic straight scratch, ~1 s).
 API: `simulate(occ0, Params(...), hours, frame_dt=1.0, seed=0, grain=GRAIN) -> dict`; `occ0` is an (H,W) uint8 array, 1 = cell.
 Shared constants in `sim/cellsim.py`: `DT = 0.05` (h per step), `SITE_UM = 20` (one site = one cell), `GRAIN = 2`. A WHAD field (1920x1440 px at 0.454 um/px) becomes a **32 x 44** lattice and a **16 x 22** density grid.

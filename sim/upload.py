@@ -20,7 +20,8 @@ Rules:
     mapped onto the WHAD field extent (32 x 44 sites = 640 x 880 um): a window centred on the first frame's wound, padded with
     cells if the image is smaller. Uploads whose field differs from WHAD by more than 5% are flagged.
   - NCA band: Agent 2's nca/api.py nca_forecast (start = lattice of the LAST frame), from $NCA_DIR (default <repo>/nca), with the
-    follower-trained weights $NCA_WEIGHTS (default $NCA_DIR/weights_follow.pt); skipped if absent (never the free-rule weights).
+    follower-trained weights $NCA_WEIGHTS (default $NCA_DIR/v2/weights.pt + weights.config.json, Agent 2); skipped if absent
+    (never the free-rule weights).
 """
 import sys, os, json, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +31,7 @@ from cellsim import Params, simulate, SITE_UM
 from start_state import mask_to_lattice, area_error
 
 NCA_DIR = os.environ.get("NCA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nca"))
-NCA_WEIGHTS = os.environ.get("NCA_WEIGHTS", os.path.join(NCA_DIR, "weights_follow.pt"))
+NCA_WEIGHTS = os.environ.get("NCA_WEIGHTS", os.path.join(NCA_DIR, "v2", "weights.pt"))  # needs v2/weights.config.json beside it
 RULE = "follow"
 FITS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fits", "whad_fits_follow.json")
 
