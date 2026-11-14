@@ -61,3 +61,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 
 ## 2026-11-14 22:40 [randodeh] Flags (R16 in design.md)
 - DECIDED: ship the stall flag (validated). Out-of-band shown as an observation only. No measure-again flag until a signal passes (AUC > 0.7).
+
+## 2026-11-14 22:45 [randodeh] Gate (R18 in design.md)
+- DECIDED: NCA not passable at 3.8 h (29% worse than edge speed). Edge-speed + conformal ships as the forecaster; NCA = draw-tool emulator. NCA ties/beats baselines at 9.5 h. Cut-offs are 1.9/3.8/5.7/9.5 h.
