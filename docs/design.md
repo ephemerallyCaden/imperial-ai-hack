@@ -13,7 +13,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Teams 1 to 4 students; one track; up to 2 bounties from own track; Figma and Adaption prizes open to every track and do not count toward the 2 (show how Figma was used in the presentation).
 - Building starts 12:10 Sat 14 Nov; pre-existing projects not eligible; building closes 21:00 Sat, reopens 10:00 Sun; **submissions close 12:00 sharp Sun 15 Nov**; video and last commit must be before 12:00.
 - Deliverables: Devpost project with public GitHub repo + demo video up to 2 minutes.
-- Judging Sun 13:00 to 16:30, 10-minute slot: the demo video, then 6 min judge questions; no slides, and live demo is not part of the slot (organiser site and Devpost disagree; the video is required either way, R15). AI for Science judged in Blackett LT3. Finals on main stage 17:00; prizes 17:30.
+- Judging Sun 13:00 to 16:30, 10-minute slot: video, then 6 min judge questions; no slides, no live demo. AI for Science judged in Blackett LT3. Finals on main stage 17:00; prizes 17:30.
 - AI for Science marks (0 to 3 each, weighted): scientific rigour 30, technical execution 25, path to the lab 20, novelty 15, video and answers 10.
 - Prize verification afterwards: public repo, last commit before 12:00. Contact: aisociety@imperial.ac.uk. Source: `docs/event-rules.md`.
 
@@ -59,7 +59,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ### 5.3 NCA vs statistical forecaster [D]
 - Primary model: density-field NCA ensemble (stochastic, energy-score/CRPS-style training; mass-conserving; parameters broadcast as channels).
 - Baselines (all evaluated): persistence; linear healing-rate extrapolation; logistic; Gompertz; Fisher-KPP / Porous-Fisher; Nardini Model 4 (reimplement; repo unlicensed); small MLP/LSTM on scalar features; deterministic NCA ablation.
-- **Gate at 19:00 Sat [D]:** NCA is "passable" if on held-out wounds its CRPS is within 10% of the best statistical forecaster AND empirical 90% coverage is between 85% and 95%. Passable: ship NCA as the forecaster. Not passable: ship the statistical forecaster as the forecaster and keep the NCA as the draw-tool emulator (labelled "emulator").
+- **Gate at 00:00 Sun [D, moved from 19:00 in R15]:** NCA is "passable" if on held-out wounds its CRPS is within 10% of the best statistical forecaster AND empirical 90% coverage is between 85% and 95%. Passable: ship NCA as the forecaster. Not passable: ship the statistical forecaster as the forecaster and keep the NCA as the draw-tool emulator (labelled "emulator").
 ### 5.4 Uncertainty [D]
 - Ensemble spread + conformal calibration across wounds (leave-one-wound-out jackknife+ or split conformal across wounds; wound is the exchangeable unit). Report coverage with confidence interval, CRPS, reliability plot.
 
@@ -68,7 +68,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - **Target:** A(t) = wound pixels / ROI pixels from masks; closure = 1 - A(t)/A(first frame). t50/t90 = first time closure crosses 50%/90% (reopening ignored after first crossing); not reached by the last usable frame = censored, report P(not closed). t0 = first 10/20/30/50% of usable frames; horizon = last usable frame (t00 to t19 for WHAD, hours).
 - **Units and grid:** time in hours since first frame; lengths in um; one lattice site = one cell (~20 um, P2 confirms from WHAD nuclei); NCA density grid = coarse-grained agent counts; area-preserving resampling between mask, lattice and density grid.
 - **Forecast JSON (P1 writes `contracts/forecast.schema.json`; P2 emits, P3 reads):** wound_id, model, t_hours[], area_q05[], area_q50[], area_q95[], t50 and t90 {median, q05, q95, censored_prob}, p_close_by_T, p_stall, flags[] {type, reason}, segmentation_quality, version.
-- **Splits (unit = position; all frames of a position stay in one fold; thresholds and tuning frozen on training folds only):** fold A = train part I, test part II, and the reverse; fold B = train CC, test C61 (confounded with plate part, so report both folds and say so). Report per fold, never pooled only.
+- **Splits [revised R15] (unit = physical wound `posNNNN`; part I and part II of WHAD exp1/exp2 are the SAME wounds filmed consecutively, so both parts of a wound always stay in one fold):** main = leave-one-wound-out over WHAD MCF10A (9 manual-mask + 22 auto-segmented wounds; report manual-only and all); held-out condition = train CC, test C61 (and WHiM-BC monolayer to sphere). Thresholds and tuning frozen on training folds only. Report per split, never pooled only. Superseded: fold A (part I to part II) tested on the same wounds.
 - **Uncertainty recipe:** 50 members; spread from bootstrap over the parameter fit plus stochastic agent/NCA noise; conformal at wound level (leave-one-wound-out jackknife+ because wounds are few) on a normalised max-over-horizon area residual; report n and Wilson CI beside coverage.
 - **Draw tool:** a simulation under a preset, not a forecast; label it "simulation, preset parameters", no band or coverage claim for a drawn wound. Preset values come from the CC and C61 fits (division OFF).
 - **Viewer:** at most ~20k agents in a Web Worker; deep zoom draws the agents (they are the cells); zoomed out is the coarse-grained density of the same agents, so area matches at every zoom. NCA weights ship as JSON with a small JS inference loop for the band; fall back to precomputed ensembles if too slow.
@@ -111,11 +111,10 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 8. Video and submission
 - [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
-- [D, R15] **The demo video is required and is the only thing most judges see**, so it is a core deliverable with its own owner (P3) and schedule, not a final-hour task. It carries 10 marks directly and the real run carries most of the rest.
-- Production plan: record the real run from a working build as early as Sat evening (screen capture at 1440x900 or 1920x1080, mic or captions only); keep every take. Edit with ffmpeg plus a Remotion or hyperframes overlay pass (titles, captions, scale labels, "simulated" and "sped up" tags). Skills installed for this in `.agents/skills/`: `video-editing`, `remotion-video-creation` (plus existing `hyperframes`). Captions are burned in so it works muted. Hard cap 2:00; export H.264 MP4; upload to Devpost and keep a copy outside the repo.
-- Schedule: script locked and storyboard shot list by 20:00 Sat; a rough cut using whatever works by 21:00 Sat (so a valid submission exists before building closes); final cut and re-record of any weak shot Sun 09:00 to 11:00; uploaded by 11:30. Never leave the video until after the last code change.
-- Every claim in the video must be on screen and real: no mocked numbers; label simulated cells and sped-up footage.
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
+- [from session/research-docs, video notes] Production plan: record the real run from a working build as early as Sat evening (screen capture at 1440x900 or 1920x1080, mic or captions only); keep every take. Edit with ffmpeg plus a Remotion or hyperframes overlay pass (titles, captions, scale labels, "simulated" and "sped up" tags). Skills installed for this in `.agents/skills/`: `video-editing`, `remotion-video-creation` (plus existing `hyperframes`). Captions are burned in so it works muted. Hard cap 2:00; export H.264 MP4; upload to Devpost and keep a copy outside the repo.
+- [from session/research-docs, video notes] Schedule: script locked and storyboard shot list by 20:00 Sat; a rough cut using whatever works by 21:00 Sat (so a valid submission exists before building closes); final cut and re-record of any weak shot Sun 09:00 to 11:00; uploaded by 11:30. Never leave the video until after the last code change.
+- [from session/research-docs, video notes] Every claim in the video must be on screen and real: no mocked numbers; label simulated cells and sped-up footage.
 
 ## 9. Stack and repo [D]
 - Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (deck.gl/WebGL); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
@@ -128,7 +127,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Not included: Reviewer 2 audit, report/caption writer, segmentation QC as a separate role, free-form chat.
 
 ## 10. Schedule [D / F]
-- Now: Sat afternoon. **Gate: 19:00 Sat** (section 5.3). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
+- Now: Sat afternoon. **Gate: 00:00 Sun** (section 5.3; moved in R15). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
 
 ## 11. Honesty rules [D]
 - Research prototype, advisory only; no clinical or drug-effect claims.
@@ -149,13 +148,12 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 2b. Upload 1 to 5 real frames and get a forecast with band from the same pipeline (or a precomputed sample if live processing fails).
 3. Gate result recorded (passable or not) with numbers.
 4. Public repo, 2-minute video, Devpost submitted before 12:00 Sun.
-5. A rough-cut video from a working build exists by 21:00 Sat; the final cut replaces it Sun morning (8).
 
 ## 15. OPEN (not decided)
 Resolved by the user on 14 Nov (R12):
 - Product name: Stitch (final).
 - Overnight work outside the building: allowed (user decision; the organisers' data.js says building closes 21:00 Sat, so keep commits and video inside the 12:00 Sun cutoff either way).
-- Demo: superseded by R15. The demo video is required and is a core deliverable; a live demo is only a fallback if organisers ask for one.
+- Demo: do a live demo if time allows, not required. The 2-minute video stays the submission.
 - Cell-simulator parameters: taken from the training data (calibration on WHAD), not from the literature priors alone.
 - Anomaly-detector thresholds and the LLM prompt/output schema: set by testing against the training wounds.
 - Role names: as written in section 3. Figma owner: P3.
@@ -171,7 +169,7 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - WHAD cannot calibrate division (mitomycin); division comes from priors and Jin.
 - Segmentation error (IoU ~0.74, part II 0.62) propagates to start states and labels.
 - Cell agents are a model: always label "simulated cells, not tracked cells".
-- The demo video is the main thing judges see (R15): record early, keep every take, ship a rough cut Sat night; cut order never removes the video.
+- No live demo: the video's real run must work first time; keep a recorded backup.
 - Coordination: unmerged `feature/data-baselines` also edits HACKATHON.md; mockup choice and Figma authentication pending.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
@@ -195,4 +193,7 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R12 (14 Nov): open list closed: name Stitch final; overnight work allowed; live demo optional; simulator parameters from training data; anomaly thresholds by testing; roles kept; Boltz not used; Jin supplement permission granted.
 - R13 (14 Nov): upload promoted to core-lite (4.4): 1 to 5 frames in, classical segmenter to start state, forecast with band out; no LLM on pixels; sample-frame fallback; video real run uses it. Reason: without user input the forecaster has no path to the lab.
 - R14 (14 Nov): risks and implementation contracts added (5.5, 15c): pipeline, target definition, splits, uncertainty recipe, JSON forecast contract, upload refusal rules, repo ownership, video plan. Proposed defaults.
-- R15 (14 Nov): demo video confirmed as required and promoted to a core deliverable with schedule and tooling (section 8); video skills installed (video-editing, remotion-video-creation); rough cut by 21:00 Sat.
+- R15 (14 Nov, P1, team said go ahead): WHAD part II = same wounds as part I (same pos ids, files named PartI_plus4, mask IoU 0.82-0.90 between last part I and first part II frame); so 9 physical annotated wounds, not 16, and fold A is dropped. Data added: 22 more WHAD MCF10A wounds auto-segmented (segmenter IoU 0.84 part I / 0.60 part II, matches 6.2), WHiM-BC monolayer 12 + sphere 12 wells (0-27 h, author masks). HUVEC/SKOV-3 (Zenodo 21779854) and diabetic (19738270) have only 2-4 time points: not used. Splits = leave-one-wound-out + CC to C61 + WHiM-BC monolayer to sphere. Gate moved to 00:00. Team plan and GitHub issues: docs/team-plan.md.
+- R16 (14 Nov, P1): flags evaluated leave-one-wound-out on WHAD (eval/flags.py, eval/results/flags.csv). Stall ships (AUC 0.79-0.89, precision 0.50-0.80, recall 0.62-0.77; threshold in eval/results/flag_thresholds.json). Out-of-band (2 frames outside band) does not predict an off-track forecast (fires 2-3 of 55): shown as an observation, not a prediction. Measure-again has no validated signal (AUC 0.46-0.73, inconsistent across cut-offs): not shipped; the NCA ensemble spread is tested against the same check.
+- R17 (14 Nov, P1): WHAD cut-offs aligned with the NCA files to 2, 4, 6, 10 h (same frames seen by every model); scorer accepts fold names loo / B_CC_to_C61 and looks up physical wounds. Dry-run gate 22:40: NCA ensemble FAILS (4 h: quantile score 0.082 vs edge speed 0.035; coverage 0.11, band width 0.06) because its band has no conformal step (5.4).
+- R18 (14 Nov, gate, P1 scored P2's files): WHAD cut-offs back to 1.9/3.8/5.7/9.5 h (P2's gate files use them; R17's 2/4/6/10 superseded). Gate compares against statistical baselines only. **NCA not passable at the headline cut-off** (loo_all 3.8 h: 0.0495 vs edge speed 0.0385, ratio 1.29, coverage 0.93); passes 4/12 (all splits at 9.5 h, CC_to_C61 5.7 h); simulator 3/12; NCA within 7% of the simulator. Per 5.3: calibrated edge-speed forecaster ships for forecasts; NCA ships as the draw-tool emulator, labelled 'emulator'. Raw NCA/sim coverage 0.14/0.21, calibrated 0.93. Tables: docs/results.md.
