@@ -7,7 +7,7 @@ into a random EMPTY Moore neighbour (no empty neighbour = contact inhibited / qu
 Wound bias: with prob `bias` (Migliaccio: 7/9) the target is chosen only among empty neighbours
 pointing toward the wound (up the blurred-emptiness gradient); else uniformly among empty ones.
 Conflicts (two cells claim one site) are resolved by random priority.
-Boundary: sites within `edge` of the lattice border are a reservoir, refilled every step
+Boundary: border-band sites (width `edge`) that are occupied at t0 are a reservoir, refilled every step
 (cells keep entering the ROI, as in the WHAD field of view).
 """
 from dataclasses import dataclass, asdict
@@ -36,10 +36,17 @@ def box_mean(a, r):
     return s[: a.shape[0], : a.shape[1]] / (k * k)
 
 
-def refill(occ, edge):
+def reservoir_mask(occ0, edge):
+    """Border band sites that are occupied at t0 (a wound touching the border stays open there)."""
+    m = np.zeros(occ0.shape, bool)
     if edge > 0:
-        occ[:edge] = occ[-edge:] = 1
-        occ[:, :edge] = occ[:, -edge:] = 1
+        m[:edge] = m[-edge:] = True
+        m[:, :edge] = m[:, -edge:] = True
+    return m & (occ0 == 1)
+
+
+def refill(occ, res):
+    occ[res] = 1
 
 
 def step(occ, p: Params, rng):
@@ -103,14 +110,15 @@ def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=4):
     """Run and record. Returns dict matching docs/sim.md (npz-ready)."""
     rng = np.random.default_rng(seed)
     occ = occ0.astype(np.uint8).copy()
-    refill(occ, p.edge)
+    res = reservoir_mask(occ, p.edge)
+    refill(occ, res)
     spf = max(1, round(frame_dt / p.dt))
     nf = int(round(hours / frame_dt)) + 1
     occs, dens = [occ.copy()], [coarse_grain(occ, grain)]
     for _ in range(nf - 1):
         for _ in range(spf):
             step(occ, p, rng)
-            refill(occ, p.edge)
+            refill(occ, res)
         occs.append(occ.copy())
         dens.append(coarse_grain(occ, grain))
     occs = np.stack(occs)
