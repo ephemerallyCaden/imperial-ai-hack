@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stitch · glass plate look-dev</title>
+<title>Stitch · two-well look-dev</title>
 <style>
   :root { --ink: #e8ecef; --dim: #8a949c; --line: rgba(232,236,239,.5); --accent: #d9a35b; }
   * { box-sizing: border-box; }
@@ -18,7 +18,7 @@
   .title { padding: 4px 8px 6px 0; top: 28px; left: 32px; letter-spacing: .18em; }
   .title h1 { margin: 0; font-size: 18px; font-weight: 500; }
   .title p { margin: 4px 0 0; color: var(--dim); letter-spacing: .08em; }
-  .panel { top: 96px; left: 32px; width: 320px; border-left: 1px solid var(--line); padding: 8px 12px; }
+  .panel { top: 96px; left: 32px; width: 380px; border-left: 1px solid var(--line); padding: 8px 12px; }
   .panel h2 { margin: 0 0 2px; font-size: 13px; font-weight: 500; letter-spacing: .12em; }
   .panel .src { color: var(--dim); font-size: 10px; margin-bottom: 10px; }
   .row { display: flex; justify-content: space-between; gap: 12px; margin: 7px 0; }
@@ -56,6 +56,17 @@
   svg#leaders line { stroke: var(--line); stroke-width: 1; }
   svg#leaders circle { fill: var(--ink); }
   .help { left: 32px; bottom: 28px; color: var(--dim); max-width: 280px; font-size: 10px; }
+  .pair { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .pair th { text-align: left; color: var(--dim); font-weight: 400; font-size: 10px; letter-spacing: .12em; padding: 4px 6px 4px 0; }
+  .pair td { padding: 5px 6px 5px 0; vertical-align: top; color: var(--accent); }
+  .pair td.k { color: var(--dim); }
+  .legend-box { left: 32px; bottom: 90px; padding: 8px 12px; border-left: 1px solid var(--line); }
+  .st { display: flex; align-items: center; gap: 8px; margin: 3px 0; color: var(--ink); }
+  .st i { width: 12px; height: 12px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); display: inline-block; }
+  #chart .band.cond { fill: rgba(232,236,239,.12); } #chart .band.ctrl { fill: rgba(142,160,200,.12); }
+  #chart .med { fill: none; stroke-dasharray: 4 3; stroke-width: 1.3; } #chart .med.cond { stroke: #E8ECEF; } #chart .med.ctrl { stroke: #8EA0C8; }
+  #chart .obs { fill: none; stroke-width: 1.7; } #chart .obs.cond { stroke: #E8ECEF; } #chart .obs.ctrl { stroke: #8EA0C8; }
+  .legend-box { background: rgba(5,6,7,.62); }
 </style>
 <script type="importmap">
 { "imports": {
@@ -68,38 +79,49 @@
 <canvas id="scene"></canvas>
 <div id="overlay">
   <svg id="leaders"></svg>
-  <div class="callout" id="c-well"><b>WELL B3</b><span id="c-well-sub"></span></div>
-  <div class="callout" id="c-edge"><b>WOUND EDGE</b><span>leading front of cells moving in · simulated</span></div>
+  <div class="callout" id="c-cond"><b>CONDITION</b><span id="c-cond-sub"></span></div>
+  <div class="callout" id="c-ctrl"><b>CONTROL</b><span id="c-ctrl-sub"></span></div>
+  <div class="callout" id="c-edge"><b>LEADING EDGE</b><span>cells with an empty neighbour, moving in · simulated</span></div>
   <div class="callout" id="c-gap"><b>OPEN WOUND</b><span id="c-gap-sub"></span></div>
 </div>
 
 <div class="hud title"><h1>// STITCH</h1><p>Early wound-closure forecast</p></div>
 
 <div class="hud panel">
-  <h2 id="r-well"></h2>
   <div class="src" id="r-src"></div>
-  <div class="row"><span class="k">Wound area</span><span class="v"><span id="r-area"></span> · <span id="r-mode"></span></span></div>
-  <div class="bar"><i id="r-area-bar"></i></div>
-  <div class="row"><span class="k">50% closed</span><span class="v" id="r-t50"></span></div>
-  <div class="row"><span class="k">90% closed</span><span class="v" id="r-t90"></span></div>
-  <div class="row"><span class="k">P(closes)</span><span class="v" id="r-p"></span></div>
-  <div class="flag"><span class="k">Flag</span><span class="v" id="r-flag"></span></div>
-  <div class="row" style="margin-top:14px"><span class="k">Plate</span><span id="r-plate" style="color:var(--dim)"></span></div>
+  <div class="row"><span class="k">Now showing</span><span class="v" id="r-mode"></span></div>
+  <table class="pair">
+    <tr><th></th><th>CONDITION</th><th>CONTROL</th></tr>
+    <tr><td class="k">Wound</td><td id="r-cond-id"></td><td id="r-ctrl-id"></td></tr>
+    <tr><td class="k">Area</td><td><span id="r-cond-area"></span><div class="bar"><i id="r-cond-bar"></i></div></td><td><span id="r-ctrl-area"></span><div class="bar"><i id="r-ctrl-bar"></i></div></td></tr>
+    <tr><td class="k">90% closed</td><td id="r-cond-t90"></td><td id="r-ctrl-t90"></td></tr>
+    <tr><td class="k">P(close by <span id="r-pmin"></span> min)</td><td id="r-cond-p"></td><td id="r-ctrl-p"></td></tr>
+    <tr><td class="k">Flag</td><td id="r-cond-flag"></td><td id="r-ctrl-flag"></td></tr>
+  </table>
 </div>
 
 <div class="hud chips">
-  <div class="views"><button data-view="plate">PLATE</button><button data-view="well">WELL</button><button data-view="cells">CELLS</button></div>
-  <div class="chip">SAMPLE DATA · FLY EMBRYO WOUNDS</div>
+  <div class="views"><button data-view="overview">OVERVIEW</button><button data-view="well">WELL</button><button data-view="cells">CELLS</button></div>
+  <div class="chip">SAMPLE DATA · FLY EMBRYO WOUNDS · PAIRING ILLUSTRATIVE</div>
   <div class="chip">SIMULATED CELLS · NOT TRACKED CELLS</div>
+</div>
+
+<div class="hud legend-box">
+  <div class="k" style="margin-bottom:6px">Cell states</div>
+  <div class="st"><i style="background:#4B4FA8"></i>Intact</div>
+  <div class="st"><i style="background:#F1605D"></i>Leading edge</div>
+  <div class="st"><i style="background:#C0388A"></i>New tissue</div>
+  <div class="st"><i style="background:#FCFDBF"></i>Dividing</div>
+  <div class="st"><i style="background:#06060B;outline:1px solid #3A3F52"></i>Wound</div>
 </div>
 
 <div class="hud chartbox">
   <div class="k"><span>Closure curve</span><span>90% band</span></div>
-  <svg id="chart" viewBox="0 0 340 150"></svg>
-  <div class="legend"><b>— observed</b> · <i>- - forecast median</i> · faint = what really happened</div>
+  <svg id="chart" viewBox="0 0 360 160"></svg>
+  <div class="legend"><b>— condition</b> · <span style="color:#8EA0C8">— control</span> · dashed = forecast median</div>
 </div>
 
-<div class="hud help">Drag to orbit · scroll to zoom. Ranges are 90% conformal bands from the baseline forecaster. Flag thresholds are illustrative.</div>
+<div class="hud help">Drag to orbit · scroll to zoom. Bands are 90% conformal bands from the baseline forecaster. Flag thresholds are illustrative.</div>
 <div class="hud timeline">
   <button id="play">PLAY</button>
   <input id="time" type="range" min="0" max="1" value="0">
