@@ -34,12 +34,14 @@ def curve(df, position):
     return c.frame.values.astype(int), c.wound_frac.values
 
 
-def error_cube(position, df, t_max):
-    """Squared error per (Tm, bias, observed frame <= t_max), mean over seeds."""
+def error_cube(position, df, t_max, occ0=None):
+    """Squared error per (Tm, bias, observed frame <= t_max), mean over seeds. occ0: start lattice at the first
+    frame in df (default: that frame's manual mask)."""
     fr, wf = curve(df, position)
     keep = fr <= t_max
     fr, wf = fr[keep], wf[keep]
-    occ0 = mask_to_lattice(*load_png_mask(position, int(fr[0])), SITE_UM)
+    if occ0 is None:
+        occ0 = mask_to_lattice(*load_png_mask(position, int(fr[0])), SITE_UM)
     err = np.zeros((len(TM_GRID), len(BIAS_GRID), len(fr)))
     for i, Tm in enumerate(TM_GRID):
         for j, b in enumerate(BIAS_GRID):
