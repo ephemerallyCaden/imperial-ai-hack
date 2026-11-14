@@ -3,12 +3,12 @@
 // migration dt/Tm*rho^dens_exp, division dt/Td (Td=null: off), wound bias = up the gradient of
 // blurred emptiness (radius blur), random-priority conflicts, reservoir band `edge` at borders.
 // Grid: Uint8Array(h*w) row-major, 1 = cell. Frame = { occ, t_hours, wound_frac } (same as npz keys).
-// Presets are PLACEHOLDERS until #23 (fit Tm/bias per wound) lands. Division off (WHAD setup);
-// Tm/bias kept inside the NCA training range (Tm 0.03-0.5 h, bias 0.3-0.95).
-
+// Presets = sim/fits/whad_fits.json presets.draw_tool (Agent 1, e6e5125): median fit over all WHAD positions
+// at t0 = 10, division off. Draw tool only (label "simulation, preset parameters"), never for scoring.
+export const PRESET_LABEL = 'simulation, preset parameters';
 export const PRESETS = {
-  CC: { Tm: 0.1, Td: null, bias: 7 / 9 },
-  C61: { Tm: 0.2, Td: null, bias: 7 / 9 },
+  CC: { Tm: 0.7924465962305569, Td: null, bias: 0.65 }, // n = 7
+  C61: { Tm: 0.8779716078773951, Td: null, bias: 0.25 }, // n = 6
 };
 export const DT = 0.05; // hours per step, = cellsim.DT
 export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
