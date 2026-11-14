@@ -1,6 +1,6 @@
 ---
 name: demo
-description: Generate pitch script and demo plan from the actual codebase. Use at hour 20.
+description: Generate pitch script and demo plan from the actual codebase. Use at 07:30 Sunday.
 ---
 
 # Demo Prep
