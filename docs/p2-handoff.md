@@ -29,14 +29,14 @@ These have been tested in Node with a stubbed worker, but not yet in a real brow
 > - **Why:** under the frozen sim rules, closure speed depends on field size, because vacancies leave through the border reservoir. A 120×168 field still holds 81% of its wound at 24 h. The presets and the NCA were fitted and trained at 32×44.
 > - **Other mask sizes:** a `wound` mask of any other size (for example canvas pixels) is resampled nearest-neighbour onto 32×44 in `init`, and frames then carry `resampled_from: [h, w]`. A disc drawn on 320×440 px went from 0.181 on the canvas to 0.182 on the lattice.
 
-**Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, Agent 1 65c035a). Each is the median of the WHAD part II fits at t0 = 10 (manual + auto), with division off:
+**Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, Agent 1 aed3174). Each is the median of the WHAD part II fits at cut-off 9.5 h (manual + auto), with division off:
 
 | Preset | Tm (h) | Tm IQR | Bias | Bias IQR | n (manual) |
 |---|---|---|---|---|---|
-| `CC` | 0.499 | 0.40–0.62 | 0.25 | 0.25–0.45 | 7 (4) |
-| `C61` | 0.477 | 0.45–0.54 | 0.352 | 0.25–0.38 | 7 (3) |
+| `CC` | 0.482 | 0.39–0.63 | 0.25 | 0.25–0.57 | 7 (4) |
+| `C61` | 0.481 | 0.44–0.53 | 0.363 | 0.29–0.41 | 7 (3) |
 
-> **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.024 (CC) and 0.019 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). Agent 1 gets 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
+> **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.022 (CC) and 0.018 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). With the earlier 65c035a presets, Agent 1 got 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
 >
 > **The CC bias of 0.25 sits on the lower edge of the fit range (0.25–0.9), so treat it as poorly identified** (Agent 1's caveat). Don't present it as a measured property of CC cells.
 
