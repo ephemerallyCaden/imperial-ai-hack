@@ -18,3 +18,10 @@ Process:
 3. Report what was merged and any conflicts resolved.
 
 Never force-push. Never delete branches without asking.
+
+## Fix mode
+When the prompt includes reviewer findings (instead of branches to merge), fix them on the **current branch**:
+1. Fix every finding with the smallest change that resolves it. No refactors, no extra features.
+2. Don't merge, switch branches, or push. Don't run build/lint/test (the caller re-reviews and verification runs once at the end).
+3. Commit with a clear message, e.g. `fix: [short summary of findings]`.
+4. Report which findings were fixed and any you couldn't fix, with why.
