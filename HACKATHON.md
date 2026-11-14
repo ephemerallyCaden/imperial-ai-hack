@@ -88,7 +88,6 @@ claude
 | `/verify` | Before merge | Build, types, lint, tests, diff review. PASS/FAIL report. |
 | `/ship` | Feature done | Build, test, commit, push. One command. |
 | `/demo` | Sun 07:30 | Write pitch script from what's actually built |
-| `/unstick` | Claude is looping | Meta-debug: diagnose pattern, recover, retry differently |
 | `/secure` | Before deploying | 5-min security scan: secrets, debug code, exposed endpoints |
 
 ### Speed rules
