@@ -64,7 +64,7 @@ def fit_lookup(fits, pos, cut):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fits", nargs="+", default=[os.path.join(ROOT, "sim/fits/whad_fits.json"), os.path.join(ROOT, "sim/fits/whad_auto_fits.json")])
+    ap.add_argument("--fits", nargs="+", default=None, help="default by the model's sim rule: free -> whad_fits.json + whad_auto_fits.json, follow -> whad_fits_follow.json")
     ap.add_argument("--self-fit", action="store_true", help="fit (Tm, bias) through the NCA instead of Agent 1's fits")
     ap.add_argument("--weights", default=os.path.join(HERE, "weights.pt"))
     ap.add_argument("--out", default=os.path.join(ROOT, "eval", "forecasts"))
@@ -76,8 +76,14 @@ def main():
     net = load(a.weights)
     fits = {}
     if not a.self_fit:
+        rule = "follow" if net.cfg["follow"] else "free"
+        a.fits = a.fits or ([os.path.join(ROOT, "sim/fits/whad_fits_follow.json")] if rule == "follow" else
+                            [os.path.join(ROOT, "sim/fits/whad_fits.json"), os.path.join(ROOT, "sim/fits/whad_auto_fits.json")])
         for fn in a.fits:
-            fits.update(json.load(open(fn))["fits"])
+            fj = json.load(open(fn))
+            fr = fj.get("params", {}).get("rule", "free")
+            assert fr == rule, f"{fn}: fits made with rule {fr!r}, model trained on {rule!r}"
+            fits.update(fj["fits"])
     S = FB.load("whad"); RAW = raw_frames()
     G_all = np.unique(np.concatenate([s["t"] for s in S.values()]))
     T = 19.0

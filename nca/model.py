@@ -9,7 +9,8 @@ Per step (dt = 1/K hour):
   source: division * sigmoid(.) * (1-rho) / K >= 0. Gate 0 in v1 (frozen rules: mass only enters at the reservoir).
           v2 (follower rule) sets the gate to 1: the follower sim fills a front site without leaving a vacancy (the chain
           behind shifts to the reservoir), so at the coarse level mass appears at the front; the source head is that
-          front term (non-negative, capped by the room left after the flux).
+          front term (non-negative, capped by the room left after the flux, and gated by the 3x3 max of rho at the
+          step start so mass can only appear next to cells, never inside an empty wound interior).
   reservoir: rho = max(rho, R), R = coarse-grained sim reservoir mask (sites refilled every step, fixed at t0)
   hidden channels: tanh-bounded
 Everything is 3x3 fixed filters + a small MLP, so the JS port is a few loops.
@@ -74,11 +75,14 @@ class NCA(nn.Module):
         sent = want * F.conv2d(F.pad(scale, (1, 1, 1, 1)), self.gather)
         new = rho - sent.sum(1, keepdim=True) + F.conv2d(F.pad(sent, (1, 1, 1, 1)), self.scatter)
         if self.division:
-            add = self.division * torch.sigmoid(src - 3.0) * (1 - new) / self.K
+            near = F.max_pool2d(rho, 3, stride=1, padding=1)  # cells in the 3x3 neighbourhood (zero pad): front only
+            add = self.division * near * torch.sigmoid(src - 3.0) * (1 - new) / self.K
             new = new + add
         out = torch.maximum(new, R)
         st = getattr(self, "stats", None)  # optional mass accounting (nca/mass_check.py): per-sample sums
         if st is not None:
+            if self.division:  # source added where no cell is in the 3x3 neighbourhood (must be exactly 0)
+                st.setdefault("source_isolated", []).append((add * (near == 0)).sum((1, 2, 3)))
             st.setdefault("source", []).append((add if self.division else torch.zeros_like(new)).sum((1, 2, 3)))
             st.setdefault("reservoir", []).append((out - new).sum((1, 2, 3)))
         hid = torch.tanh(hid + dh / self.K)
