@@ -38,6 +38,12 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ### 5.1 Source of truth [D]
 - **Cell agents are the truth.** A simple cell-agent simulation holds cell positions and gives density and wound outline at every zoom.
 - The density-field **NCA emulates the agents** (trained on their coarse-grained output) and gives fast ensemble forecasts and bands.
+### 5.1b Adopted from Migliaccio et al. 2023 (Cancers 15:5284; PMID 37958456) [D, R9]
+- **Cell-agent rules**: reimplement their 2D lattice rules for P2's cell-agent layer, cited: each step a cell migrates with Pm = (1/Tm)/(1/Tm+1/Td) or proliferates with Pd = (1/Td)/(1/Tm+1/Td); Tm = delta^2/D; quiescent (contact inhibition) when no empty neighbour; wound-directed bias (7 of 9 sites); periodic/refilled boundary. [DER] We extend them with density-dependent movement (Jin 2016) and freehand wound shapes; this is our change, not theirs.
+- **Baseline and sanity check**: closure-rate power law alpha = a * Phi^-b with Phi = Tm/Td (a about 2e-3, b about 0.66 from extracted text; verify in the PDF) is one more baseline; Phi < about 1e-2 (their critical value) is the sanity check that division can be neglected for mitomycin-treated WHAD presets.
+- **Priors**: their Table 2 (doubling times and migration times per cell line) are starting priors for presets before calibration to WHAD.
+- Differences from this prior art that we claim: they calibrate fitted closure curves (r about 0.98) with no held-out forecast, no early-call, no uncertainty, no learned emulator; we forecast with calibrated bands on held-out wounds and add an NCA emulator, continuous zoom and a draw tool. Their code and data are available only on request, so we reimplement.
+
 ### 5.2 Movement and multiplication [D, confirmed R7]
 - Both terms exist in the simulation: movement (cells move/flux into the gap) and multiplication (division adds cells). [DER] NCA update = mass-conserving flux term (movement) + non-negative source/sink head (multiplication/death).
 - Density-dependent movement is required (Jin 2016: effective diffusivity rises with starting density) [F].
@@ -118,7 +124,6 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Cell-simulator parameters (P2, from calibration).
 - Role names; Figma owner (P3 assumed).
 - Boltz: not used; bounty not pursued.
-- Whether to adopt Migliaccio et al. 2023 (Cancers 15:5284; PMID 37958456): its lattice cell-agent rules (migrate vs proliferate with Pm = (1/Tm)/(1/Tm+1/Td), quiescence = contact inhibition), the Phi = Tm/Td closure-rate power law and its Table 2 parameters, for our cell-agent layer, a baseline and presets (see docs/papers/reading-notes.md). Asked in R9.
 - Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
 
 
@@ -136,3 +141,4 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - R6: no sliders in draw tool; readout = no inference, integrate movement and multiplication as model terms; passable = CRPS within 10% and coverage 85 to 95%; gate 19:00; overnight work elsewhere = yes.
 - R7 (14 Nov): both movement and multiplication terms confirmed; draw tool = MCF10A control + CYR61 shRNA presets only; real WHAD frames only in the video's validation segment; user supplied colleagues' extra data sources (6.4) instead of answering the segmentation-scope question.
 - R8 (14 Nov): main benchmark = WHAD MCF10A; Zaritsky 2015 = second test set with held-out treatment, conditional on a first-hour verification; embryo set, WHiM-BC and MDCK strip movies in core as secondary data; auto-segmentation scope = MCF10A exp1 remainder + exp2.
+- R9 (14 Nov): adopt all three parts of Migliaccio 2023 (agent rules, Phi power-law baseline and sanity check, Table 2 priors).
