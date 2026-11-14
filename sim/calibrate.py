@@ -22,7 +22,7 @@ AUTO_CURVES = os.path.join(HERE, "..", "data", "processed", "whad_auto_curves.cs
 AUTO_FITS = os.path.join(HERE, "fits", "whad_auto_fits.json")  # written by sim/forecast.py
 TM_GRID = np.geomspace(0.05, 5.0, 21)  # floor = dt; uniform in log Tm (refine() relies on it)
 BIAS_GRID = np.linspace(0.25, 0.9, 6)  # uniform (refine() relies on it)
-CUTOFFS = [2, 4, 6, 10]  # t0 frame = 10/20/30/50% of 20 hourly frames, same for every position (team-plan P1-5)
+CUTOFFS = [1.9, 3.8, 5.7, 9.5]  # hours = 10/20/30/50% of 19 h, as P1's baselines (eval/forecast_baselines.py); fit on t <= cutoff
 SEEDS, N_BOOT = 3, 50
 FOLDS = {  # name: (train filter, test filter) on (part, condition); fold A dropped in R15 (part II = same wounds)
     "B_CC_to_C61": (lambda p, c: c == "CC", lambda p, c: c == "C61"),
@@ -38,7 +38,7 @@ def error_cube(position, df, t_max, occ0=None):
     """Squared error per (Tm, bias, observed frame <= t_max), mean over seeds. occ0: start lattice at the first
     frame in df (default: that frame's manual mask)."""
     fr, wf = curve(df, position)
-    keep = fr <= t_max
+    keep = fr - fr[0] <= t_max  # series time (hours since the series' first frame), as P1's eval/forecast_baselines.py
     fr, wf = fr[keep], wf[keep]
     if occ0 is None:
         occ0 = mask_to_lattice(*load_png_mask(position, int(fr[0])), SITE_UM)
@@ -68,7 +68,14 @@ def refine(cost):
 
 
 def fit_from_cube(fr, err, t0, rng):
-    """Fit on frames <= t0 only. Members = N_BOOT bootstrap resamples of the observed frames, each minimised off-grid."""
+    """Fit on frames with series time fr - fr[0] <= t0 only."""
+    start_frame = int(fr[0])
+    fr = fr - fr[0]
+    return _fit(fr, err, t0, rng, start_frame)
+
+
+def _fit(fr, err, t0, rng, start_frame):
+    """fr: series times. Members = N_BOOT bootstrap resamples of the observed frames, each minimised off-grid."""
     n = int((fr <= t0).sum())
     if n < 2:
         return None
@@ -79,7 +86,7 @@ def fit_from_cube(fr, err, t0, rng):
     for _ in range(N_BOOT):
         bt, bb, _, _ = refine(e[:, :, rng.integers(1, n, n - 1)].mean(-1))
         members.append([bt, bb])
-    return dict(t0=t0, start_frame=int(fr[0]), n_obs=n, Tm=Tm, bias=bias,
+    return dict(t0=t0, start_frame=start_frame, n_obs=n, Tm=Tm, bias=bias,
                 rmse=float(np.sqrt(cost[i, j])), at_grid_edge=bool(i in (0, len(TM_GRID) - 1)), members=members)
 
 
@@ -114,7 +121,7 @@ def range_check(df, meta, train, preset, seeds=3, tol=0.0):
     return inside / total
 
 
-def add_draw_presets(out, t0="10", part="II"):
+def add_draw_presets(out, t0="9.5", part="II"):
     """Draw-tool presets: per condition, median (and IQR) of the fitted Tm and bias over all WHAD part `part` wounds at
     t0 = 10, manual (out["fits"]) + auto (whad_auto_fits.json, if present). Part-specific because the part I vs II gap is
     far larger than the CC vs C61 gap, and pooling parts hid the condition effect. Display only (UI shows `label`); never
