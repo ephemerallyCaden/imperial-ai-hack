@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stitch/forecast.schema.json",
+  "title": "Stitch forecast file",
+  "description": "One file = one model, one dataset split, one cut-off. P2 (and P1 baselines) write it; P1 scores it; P3 renders it. Area is wound area relative to the first frame: 1 = as wounded, 0 = closed. Closure = 1 - area. Times are hours since the first frame (design.md 5.5).",
+  "type": "object",
+  "required": ["version", "model", "dataset", "fold", "cutoff_hours", "level", "p_close_by_T_hours", "forecasts"],
+  "properties": {
+    "version": {"const": "1.0"},
+    "model": {"type": "string", "description": "e.g. nca_ensemble, nca_deterministic, sim_ensemble, edge_speed, logistic"},
+    "dataset": {"type": "string", "description": "whad, embryo, zaritsky"},
+    "fold": {"type": "string", "description": "e.g. A_partI_to_partII, A_partII_to_partI, B_CC_to_C61, loo (leave-one-wound-out)"},
+    "cutoff_hours": {"type": "number", "minimum": 0, "description": "t0: the model saw frames with t <= cutoff_hours only"},
+    "level": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "nominal band level, 0.9"},
+    "p_close_by_T_hours": {"type": "number", "description": "the T used for p_close_by_T in every forecast"},
+    "notes": {"type": "string"},
+    "forecasts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/forecast"}}
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "description": "Time (hours) when closure first reaches 50% (t50) or 90% (t90). If already observed before the cut-off, median = q05 = q95 = observed time and censored_prob = 0.",
+      "required": ["median", "q05", "q95", "censored_prob"],
+      "properties": {
+        "median": {"type": ["number", "null"], "description": "null if more than half the ensemble never gets there within the horizon"},
+        "q05": {"type": ["number", "null"]},
+        "q95": {"type": ["number", "null"], "description": "null = open-ended (may not close within the horizon)"},
+        "censored_prob": {"type": "number", "minimum": 0, "maximum": 1, "description": "P(not reached by the last forecast time)"}
+      }
+    },
+    "flag": {
+      "type": "object",
+      "required": ["type", "reason"],
+      "properties": {
+        "type": {"enum": ["out_of_band", "stall", "measure_again", "segmentation"]},
+        "reason": {"type": "string", "description": "one plain sentence shown in the UI"}
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "required": ["wound_id", "t_hours", "area_q05", "area_q50", "area_q95", "t50", "t90", "p_close_by_T", "p_stall", "flags", "segmentation_quality", "observed"],
+      "properties": {
+        "wound_id": {"type": "string", "description": "WHAD position id, embryo wound id, or Zaritsky well"},
+        "wound": {"type": "string", "description": "physical wound id (WHAD posNNNN); series of the same wound are resampled together in CIs. Optional, defaults to wound_id"},
+        "condition": {"type": "string", "description": "e.g. CC, C61; optional"},
+        "part": {"type": "string", "description": "WHAD plate part (I or II); optional"},
+        "t_hours": {"type": "array", "items": {"type": "number"}, "minItems": 1, "description": "forecast times, all > cutoff_hours, increasing"},
+        "area_q05": {"type": "array", "items": {"type": "number", "minimum": 0}},
+        "area_q50": {"type": "array", "items": {"type": "number", "minimum": 0}},
+        "area_q95": {"type": "array", "items": {"type": "number", "minimum": 0}},
+        "t50": {"$ref": "#/$defs/event"},
+        "t90": {"$ref": "#/$defs/event"},
+        "p_close_by_T": {"type": "number", "minimum": 0, "maximum": 1, "description": "P(90% closed by p_close_by_T_hours)"},
+        "p_stall": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "null until the stall rule is defined (P1-12)"},
+        "flags": {"type": "array", "items": {"$ref": "#/$defs/flag"}},
+        "segmentation_quality": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["ok", "flagged", "refused", "manual_mask"]},
+            "reasons": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "observed": {
+          "type": "object",
+          "description": "Observed curve for drawing (solid line). Include ALL frames; the viewer greys out frames after the cut-off for held-out validation.",
+          "required": ["t_hours", "area"],
+          "properties": {
+            "t_hours": {"type": "array", "items": {"type": "number"}},
+            "area": {"type": "array", "items": {"type": "number", "minimum": 0}}
+          }
+        },
+        "members": {
+          "type": "array",
+          "description": "Optional: a few ensemble trajectories (same t_hours) for the 'ensemble disagreement' view. Keep to <= 10.",
+          "items": {"type": "array", "items": {"type": "number"}}
+        }
+      }
+    }
+  }
+}

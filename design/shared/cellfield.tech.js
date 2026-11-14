@@ -34,12 +34,12 @@
       const he=c.eN.some(Boolean),edge=he&&c.rnd<0.9,fresh=c.wasEmpty,div=(edge||fresh)&&c.rnd>0.935;
       c.state=div?'dividing':edge?'edge':fresh?'fresh':'intact';stats[c.state]++;});
     ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
-    const rad=opt.flat?opt.r*1.04:opt.r*0.93;
+    const rad=opt.r*0.93;
     cells.forEach(c=>{hexPath(ctx,c.x,c.y,rad);
-      if(c.empty){ctx.fillStyle=PAL.wound;ctx.fill();if(!opt.flat&&opt.r>=5){ctx.lineWidth=.5;ctx.strokeStyle=PAL.grid;ctx.stroke();}}
+      if(c.empty){ctx.fillStyle=PAL.wound;ctx.fill();if(opt.r>=5){ctx.lineWidth=.5;ctx.strokeStyle=PAL.grid;ctx.stroke();}}
       else{ctx.fillStyle=PAL[c.state];ctx.fill();}});
     cells.forEach(c=>{if(c.empty||opt.r<6)return;
-      if(opt.flat){if(c.state==='edge'){ctx.fillStyle='#fff';ctx.fillRect(c.x-rad*.3,c.y-.8,rad*.6,1.6);}}else if(c.state==='edge'||(c.state==='dividing'&&c.eN.some(Boolean))){ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.beginPath();
+      if(c.state==='edge'||(c.state==='dividing'&&c.eN.some(Boolean))){ctx.strokeStyle='#fff';ctx.lineWidth=1.4;ctx.beginPath();
         c.eN.forEach((e,k)=>{if(!e)return;const d=D(c)[k],n=grid.get((c.i+d[0])+','+(c.j+d[1]));const mx=(c.x+n.x)/2,my=(c.y+n.y)/2,dx=n.x-c.x,dy=n.y-c.y,L=Math.hypot(dx,dy)||1,px=-dy/L,py=dx/L,hl=rad*0.5;
           ctx.moveTo(mx-px*hl,my-py*hl);ctx.lineTo(mx+px*hl,my+py*hl);});ctx.stroke();}
       if(c.state==='dividing'){ctx.fillStyle='#1A0F00';ctx.beginPath();ctx.arc(c.x,c.y,Math.max(1.6,rad*.2),0,6.283);ctx.fill();}
@@ -79,10 +79,10 @@
     const siteUm2=2.598*opt.r*opt.r*UM_PER_PX*UM_PER_PX;
     return {stats,geometry:geo,W,n:cells.length-stats.wound,woundPct:100*stats.wound/Math.max(1,w0),woundUm2:stats.wound*siteUm2};
   }
-  function swatch(key,size,flat){size=size||20;const c=size/2,r=c-1,P=PAL;let pts=ANG.map(a=>(c+r*Math.cos(a)).toFixed(1)+','+(c+r*Math.sin(a)).toFixed(1)).join(' ');
-    let s='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><polygon points="'+pts+'" fill="'+P[key]+'"'+(key==='wound'&&!flat?' stroke="#3A3F52" stroke-width=".8"':'')+'/>';
+  function swatch(key,size){size=size||20;const c=size/2,r=c-1,P=PAL;let pts=ANG.map(a=>(c+r*Math.cos(a)).toFixed(1)+','+(c+r*Math.sin(a)).toFixed(1)).join(' ');
+    let s='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><polygon points="'+pts+'" fill="'+P[key]+'"'+(key==='wound'?' stroke="#3A3F52" stroke-width=".8"':'')+'/>';
     if(key==='dividing')s+='<circle cx="'+c+'" cy="'+c+'" r="2" fill="#1A0F00"/>';
-    if(key==='edge')s+='<line x1="'+(c-r*.3)+'" x2="'+(c+r*.3)+'" y1="'+(flat?c:size-2.5)+'" y2="'+(flat?c:size-2.5)+'" stroke="#fff" stroke-width="1.4"/>';
+    if(key==='edge')s+='<line x1="'+(c-r*.5)+'" x2="'+(c+r*.5)+'" y1="'+(size-2.5)+'" y2="'+(size-2.5)+'" stroke="#fff" stroke-width="1.4"/>';
     if(key==='fresh')s+=[0,2.09,4.18].map(a=>'<circle cx="'+(c+Math.cos(a)*r*.4)+'" cy="'+(c+Math.sin(a)*r*.4)+'" r=".9" fill="#FFD6EE"/>').join('');
     return s+'</svg>';}
   global.TechField={render,RULES,swatch,PAL,UM_PER_PX};
