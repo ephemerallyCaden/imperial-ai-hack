@@ -136,3 +136,11 @@ Idea (from the team): besides forecasting closure, split each wound's closure in
 
 **Added to the evaluation:** recovery error and coverage for D and lambda on simulated wounds; agreement with the mitomycin and CK666 arms; fraction of wounds flagged "cannot tell".
 **Added to the open checks:** confirm what is inside the 4991621 zips (cell type, frame interval, whether mitomycin vs control are paired); look for any open scratch-assay set with diabetic or patient-derived cells, infection or fibrosis conditions (none found so far).
+
+## Training defaults to start from (from a training-recipe scan; spot-check before relying)
+- Start from Growing-CA / Mixtures-of-NCA settings: grid 35x35 to 64x64; 6-16 channels; hidden width 128; 35-96 steps; Adam, lr about 1e-3; batch 8-32; sample pool 600-1024 to keep long rollouts stable; fire-rate mask 0.5; parameters (D, lambda) broadcast as extra input channels.
+- Teacher data: about 200 simulated realisations (Mixtures-NCA tissue) up to about 350 trajectories per setting (traffic NCA); a few hundred runs per setting across the parameter sweep.
+- Cell-number conservation: use a flux-form "donate then collect" update for movement (exactly conserves mass, no extra parameters); add non-negative source and sink heads for division and death.
+- Ensembles: stochastic latent per step trained with an energy score or CRPS on coarse summaries (edge profile, density per bin, area vs time), checked with rank histograms; conformal wrapper on closure curves. No NCA paper was found using these losses, so this is our own design.
+- Inversion for the movement-vs-proliferation readout: simulation-based inference (sbi, Apache-2.0) on summary statistics with simulation-based calibration checks; inspect the joint posterior for the D-lambda trade-off.
+- Starter code: PWhiddy PyTorch Growing-CA (Apache-2.0) and NCAtorch (MIT) as references; re-implement rather than copy repos with no licence.
