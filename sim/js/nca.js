@@ -136,10 +136,12 @@ export class NCA {
   }
 
   // stochastic ensemble -> wound_frac (= 1 - mean rho) quantile band per hour
-  band(rho0, h, w, Tm, bias, nFrames, { members = 20, seed = 1, q = [0.05, 0.5, 0.95], R = null } = {}) {
+  // params: optional [[Tm, bias], ...] fit members (e.g. bootstrap); member m uses params[m % length], else (Tm, bias)
+  band(rho0, h, w, Tm, bias, nFrames, { members = 20, seed = 1, q = [0.05, 0.5, 0.95], R = null, params = null } = {}) {
     const wf = [];
     for (let m = 0; m < members; m++) {
-      const fr = this.rollout(rho0, h, w, Tm, bias, nFrames, randn(seed + 7919 * m), R);
+      const [tm, b] = params && params.length ? params[m % params.length] : [Tm, bias];
+      const fr = this.rollout(rho0, h, w, tm, b, nFrames, randn(seed + 7919 * m), R);
       wf.push(fr.map((a) => { let s = 0; for (const v of a) s += v; return 1 - s / a.length; }));
     }
     const key = (p) => `q${String(Math.round(p * 100)).padStart(2, '0')}`;
