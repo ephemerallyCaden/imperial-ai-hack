@@ -9,8 +9,9 @@ JSON: {name, H, W, grain, t_hours[F], wound_frac[F],
                     frames (only with --fine-frames): [base64 uint8 row-major, round(smoothed occupancy*255)]}
                     Without frames the viewer recomputes it from agents (sim/smooth_view.py == sim/js/smooth.js).
        outline (optional, --fine K): {units: "sites", rule: "area-matched", levels: [F],
-                    display: {fade_above_level: 0.85, min_loop_sites: 4} (fade the outline when the level is above it;
-                    drop loops enclosing fewer sites), frames (only with --fine-frames):
+                    display: {fade_from_level: 0.85, fade_to_level: 0.95, min_loop_area_sites: 4}
+                    (opacity = clamp((to - level) / (to - from), 0, 1); drop closed loops with shoelace area < 4 sites,
+                    keep open border lines; = displayOutline() in sim/js/smooth.js), frames (only with --fine-frames):
                     [[flat [x0,y0,x1,y1,...] polyline, ...] per frame]}; outlined area = wound_frac.
 Agents decoding: site i = y*W + x is occupied iff (bytes[i >> 3] >> (7 - (i & 7))) & 1.
 The last frame is always included, whatever the stride.
@@ -57,7 +58,7 @@ if a.fine:
     if a.fine_frames:
         out["density_fine"]["frames"] = [b64(np.round(f * 255).astype(np.uint8)) for f in fine]
     out["outline"] = {"units": "sites", "rule": "area-matched", "levels": [None if l is None else round(l, 4) for l, _ in lines],
-                      "display": {"fade_above_level": 0.85, "min_loop_sites": 4}}
+                      "display": {"fade_from_level": 0.85, "fade_to_level": 0.95, "min_loop_area_sites": 4}}
     if a.fine_frames:
         out["outline"]["frames"] = [ls for _, ls in lines]
 os.makedirs(a.outdir, exist_ok=True)
