@@ -25,7 +25,6 @@ cp .env.example .env
   agents/
     reviewer.md            Demo-focused code review (opus)
     explorer.md            Fast codebase search (haiku)
-    test-runner.md         Build/test failure reporter (haiku)
     integrator.md          Branch merging assistant (sonnet)
   skills/
     spec/SKILL.md          /spec: idea -> SPEC.md via interview
