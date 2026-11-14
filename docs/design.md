@@ -114,19 +114,20 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
 
 ## 9. Stack and repo [D]
-- Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (deck.gl/WebGL); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
+- Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (three.js/WebGL; deck.gl replaced in R20); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
 - Public GitHub repo, MIT licence; no raw data, no PDFs committed; reimplement code from papers with no licence.
 
 ## 9b. Agent layer [D, R19; replaces the R10 LLM roles]
 - [D] The product is agentic (event theme). The team agreed; P3 builds it.
 - [D, kept from R10] Code does the science. The LLM plans, picks tools and explains; it never makes a number. Plain-code policy decides every action; a human approves anything that cannot be undone (stopping a plate). Research use only.
-- [DER] Demo runs are recorded once with the Claude API and shipped as JSON, so the public repo and the video need no keys (R10 rule). A live run is optional (R12).
+- [D, R20] Back end: a Python script runs the agent and records each run to JSON; the UI plays the runs back. A FastAPI server is added only if a live run is wanted. The public repo and the video need no keys (R10 rule).
+- [D, R20] Every model call goes through one `call_model()` wrapper, so the provider can be swapped in one file. Credentials, account IDs and profile names stay in local config (`.env`, git-ignored, or local cloud config), never in the repo. The runs used in the video are re-recorded on the final account before submission.
 - **Lead agent** [DER]: reads the situation and picks which helper (sub-agent) and which tool to call next. Helpers and the existing code they call:
   - **Intake:** protocol text to settings (cell line, seeding density, mitomycin, frame interval, pixel scale). Code checks units and maps them to a preset. Model: the 9c fine-tune if it passes, else Claude.
   - **QC and forecast:** `data/upload.py` (`check_frame`, `run`): frame checks, the 5.5 refusal rules, segmentation and the calibrated edge-speed forecast with its 90% band (the shipped forecaster, R18).
   - **Flags:** thresholds from `eval/flags.py`. Stall ships. Out-of-band is shown as an observation only. Measure-again is not shipped (R16).
   - **Simulation:** `sim/upload.py` (`forecast_upload`): simulator ensemble from the wound mask; NCA output labelled "emulator" (R18).
-  - **Investigator** [should]: when a wound goes off track, reruns the simulation with other starting conditions (for example a lower starting density, Jin 2016) and ranks them by fit. Shown as hypotheses, never as causes.
+  - **Investigator** [D, should]: when a wound goes off track, reruns the simulation with other starting conditions (for example a lower starting density, Jin 2016) and ranks them by fit. Shown as hypotheses, never as causes.
   - **Critic:** removes any number in a message that does not trace to a tool output.
   - **Reporter:** plain-English summary and the decision card.
 - Decisions the agent can propose [DER]: continue; stall flagged, ask a human; data refused, ask a human; "more frames will narrow the band" (backed by the measured error vs fraction-observed curve, section 7, not by the measure-again signal).
@@ -182,11 +183,9 @@ Resolved by the user on 14 Nov (R12):
 - Jin supplement licence: the team has permission to use it. Still cite Jin 2016; the BINNs repo numpy copy has no licence, so do not re-host it.
 
 Open from R19 (agent layer), owner P3 unless stated:
-- Agent back end: FastAPI service, or a script that writes the recorded runs only (no server). Proposed: script first, FastAPI only if a live run is wanted.
-- Agent loop: Claude API Tool Runner (proposed) or a hand-written loop. Model: `claude-opus-5-5` with effort set per helper (proposed).
-- Claude API account and spend for recording runs: whose key, and a spending cap.
-- UI: three modes in one app (9b), confirm. Web stack: design 9 says deck.gl; the P3 look prototypes use three.js. Pick one.
-- Investigator: should or stretch.
+- Agent loop: Claude Tool Runner (proposed) or a hand-written loop; model and effort per helper set in config (proposed: the current Opus model, effort set per helper).
+- Final account for the recorded runs and a spending cap (R20: swap before the video is recorded).
+- UI: three modes in one app (9b), confirm.
 - Adaption task (9c step 1): Intake settings (proposed) or another task (P2 decides).
 - Evaluation costs: values for one plate-hour and one image in the agent scoreboard.
 
@@ -210,7 +209,7 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
 - P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader; own the upload pipeline (4.4): frames to mask to simulator start state, with bad-mask refusal.
 - P2 (model): implement the cell-agent simulation with density-dependent movement and optional division; reimplement Fisher-KPP / Porous-Fisher baselines; mass-conserving NCA prototype.
-- P3 (viewer/video): deck.gl continuous-zoom prototype from a fake agent cloud; Figma flows for the draw tool; README skeleton; upload screen and sample-frame fallback (4.4).
+- P3 (viewer/video): three.js continuous-zoom prototype from a fake agent cloud; Figma flows for the draw tool; README skeleton; upload screen and sample-frame fallback (4.4).
 
 ## 16. Decision log
 - R1 (14 Nov): headline = forecaster; user = assay scientist; 3 people; prizes AI for Science + Figma (+ AI on Campus mention, later dropped).
@@ -233,3 +232,4 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R17 (14 Nov, P1): WHAD cut-offs aligned with the NCA files to 2, 4, 6, 10 h (same frames seen by every model); scorer accepts fold names loo / B_CC_to_C61 and looks up physical wounds. Dry-run gate 22:40: NCA ensemble FAILS (4 h: quantile score 0.082 vs edge speed 0.035; coverage 0.11, band width 0.06) because its band has no conformal step (5.4).
 - R18 (14 Nov, gate, P1 scored P2's files): WHAD cut-offs back to 1.9/3.8/5.7/9.5 h (P2's gate files use them; R17's 2/4/6/10 superseded). Gate compares against statistical baselines only. **NCA not passable at the headline cut-off** (loo_all 3.8 h: 0.0495 vs edge speed 0.0385, ratio 1.29, coverage 0.93); passes 4/12 (all splits at 9.5 h, CC_to_C61 5.7 h); simulator 3/12; NCA within 7% of the simulator. Per 5.3: calibrated edge-speed forecaster ships for forecasts; NCA ships as the draw-tool emulator, labelled 'emulator'. Raw NCA/sim coverage 0.14/0.21, calibrated 0.93. Tables: docs/results.md.
 - R19 (14 Nov, team agreed): the product is agentic. 9b replaces the R10 LLM roles: a lead agent and helpers that call existing code (`data/upload.py`, `eval/flags.py`, `sim/upload.py`), recorded runs, a run log with monitoring, agent replay evaluation, security, ethics and legality rules, and a three-mode UI (to confirm). P3 builds it. 9c adds the Adaption fine-tune plan (P2). Notifications are an add-on. Open choices listed in 15; new risks in 15c.
+- R20 (14 Nov, P3): agent back end = recording script first (FastAPI only for a live run); all model calls behind one `call_model()` wrapper, credentials only in local config, video runs re-recorded on the final account; web viewer uses three.js (deck.gl dropped); Investigator is a should.
