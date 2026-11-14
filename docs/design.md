@@ -109,6 +109,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 13. Prior art to cite [F]
 - Cai et al. 2025 (Regen Ther): WHAD segmentation + group-mean closure-curve regression, no held-out wounds or uncertainty. Nardini and Gevertz (arXiv 2606.10873): Jin-data PDE vs ABM, forecasts scored by final-time MSE only. MNCA (2506.20486), NeuralCPM (2502.02129), Richardson 2024: synthetic-only NCA/CPM work. Clinical baselines: Sheehan 2003 (53% area reduction at 4 weeks), Warriner 2011, Cardinal 2009.
+- Berezo et al. 2022 (Adv Wound Care; 1,220,576 wounds, gradient-boosted trees, AUC 0.85 for 4/8/12-week non-healing; proprietary EHR data) and Dallmann et al. 2025 (Adv Wound Care; 620,356 wounds, AUC 0.90 after 4 weeks and 0.92 after 5 weeks, changes in wound dimensions most influential): clinical EHR-scale prior art for early healing prediction.
 - Do not claim "first".
 
 ## 14. Acceptance criteria [DER]
