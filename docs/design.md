@@ -118,32 +118,33 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Public GitHub repo, MIT licence; no raw data, no PDFs committed; reimplement code from papers with no licence.
 
 ## 9b. Agent layer [D, R19; replaces the R10 LLM roles]
-- Principle (kept from R10): deterministic code does the science. The LLM plans, picks tools and explains; it never produces a number. Plain-code policy has the final say on actions; a human approves anything irreversible (e.g. stop a plate). Research use only.
-- Build owner: P3. Stack: Python FastAPI service + Claude API tool use (Tool Runner, `claude-opus-5-5`, effort set explicitly). Recorded runs ship as JSON for the demo and the public repo (no keys); live mode runs locally with a key.
-- **Lead agent** (orchestrator) chooses which sub-agent and skill to call for each situation. Sub-agents and the code they wrap:
-  - Intake: pasted protocol text to config (cell line, seeding density, mitomycin, interval, scale); the Adaption model (9c) or Claude; code checks units and maps to a preset.
-  - QC: `data/upload.py` `check_frame`, `data/segment.py` `segment`, `sim/upload.py` `refusal`.
-  - Forecaster: `eval/bands.py` (calibrated edge-speed forecaster, ships per R18), output in the 5.5 forecast JSON contract.
-  - Flags: `eval/flags.py` thresholds; stall ships; out-of-band is an observation only; measure-again is not shipped (R16).
-  - Investigator (should): when a wound misbehaves, reruns `sim/cellsim.py` / `nca/api.py` with alternative start states (e.g. lower starting density, Jin 2016) and ranks the hypotheses by fit to the observed curve; labelled hypotheses.
-  - Critic: every number in a message must trace to a tool output; anything untraced is removed.
-  - Reporter: plain-English summary and the decision card.
-- Decisions the agent may propose: continue; stall flagged, ask a human; bad data, ask a human; more frames will narrow the band (from the error-vs-fraction-observed curve, not from the unvalidated measure-again signal).
-- **Traceability and monitoring:** one trace per run, a span per agent step and tool call (inputs as fingerprints, outputs, model version, tokens, cost, time) in a JSON/SQLite run log; the UI reads the same log. Optional: SDK OpenTelemetry or Langfuse for debugging. Monitored: coverage vs the 90% target, flag rates, QC refusals, tool errors, human overrides, cost per run.
-- **Evaluation of the agent:** replay held-out wounds as a simulated lab and compare a fixed schedule, simple rules and the agent on plate-hours saved (stated as simulation), wrong stops, frames used, right sub-agent chosen, hypothesis accuracy on synthetic wounds with a known cause, share of numbers traced (target 100%), guardrail triggers and cost. Rerun on every change; per-version scoreboard.
-- **Security and guardrails:** file and protocol text is data, never instructions (operator instructions only via system messages); fixed tool allowlist; no network for tools; no secrets in model context; upload checks (type, size, dimensions) plus the 5.5 refusal rules; model and data fingerprints checked; append-only audit log; out-of-scope requests (molecule design, clinical questions) refused.
-- **Ethics and legality:** advisory, research use only, intended-purpose statement in the UI and README (clinical use would bring medical-device rules into scope, so it is out of scope); dataset licences and credits as in 6; simulated cells labelled; failures shown.
-- **UI:** one app, three modes. Draw (sandbox: draw a wound, NCA emulator, no agent). Assay (sample or uploaded wound: viewer, decision card, short agent timeline, approve/reject). Ops (full trace waterfall, monitoring tiles, agent scoreboard). The video shows Assay then flips to Ops for proof.
-- Add-on if time: notifications (FYI / heads-up / action needed) so scientists do not have to watch the plate; with no reply the agent does only reversible things.
+- [D] The product is agentic (event theme). The team agreed; P3 builds it.
+- [D, kept from R10] Code does the science. The LLM plans, picks tools and explains; it never makes a number. Plain-code policy decides every action; a human approves anything that cannot be undone (stopping a plate). Research use only.
+- [DER] Demo runs are recorded once with the Claude API and shipped as JSON, so the public repo and the video need no keys (R10 rule). A live run is optional (R12).
+- **Lead agent** [DER]: reads the situation and picks which helper (sub-agent) and which tool to call next. Helpers and the existing code they call:
+  - **Intake:** protocol text to settings (cell line, seeding density, mitomycin, frame interval, pixel scale). Code checks units and maps them to a preset. Model: the 9c fine-tune if it passes, else Claude.
+  - **QC and forecast:** `data/upload.py` (`check_frame`, `run`): frame checks, the 5.5 refusal rules, segmentation and the calibrated edge-speed forecast with its 90% band (the shipped forecaster, R18).
+  - **Flags:** thresholds from `eval/flags.py`. Stall ships. Out-of-band is shown as an observation only. Measure-again is not shipped (R16).
+  - **Simulation:** `sim/upload.py` (`forecast_upload`): simulator ensemble from the wound mask; NCA output labelled "emulator" (R18).
+  - **Investigator** [should]: when a wound goes off track, reruns the simulation with other starting conditions (for example a lower starting density, Jin 2016) and ranks them by fit. Shown as hypotheses, never as causes.
+  - **Critic:** removes any number in a message that does not trace to a tool output.
+  - **Reporter:** plain-English summary and the decision card.
+- Decisions the agent can propose [DER]: continue; stall flagged, ask a human; data refused, ask a human; "more frames will narrow the band" (backed by the measured error vs fraction-observed curve, section 7, not by the measure-again signal).
+- **Run log and monitoring** [DER]: one record per agent step and tool call (inputs as fingerprints, outputs, model version, tokens, cost, time), linked by a run ID. The UI reads the same log. Monitored: coverage against the 90% target, flag rates, refusals, tool errors, human overrides, cost per run. External tracing (Langfuse, Phoenix or SDK OpenTelemetry) is optional, for debugging.
+- **Agent evaluation** [DER]: replay held-out wounds frame by frame as a simulated lab. Compare three policies: fixed schedule, simple rules, the agent. Measures: plate-hours saved (stated as simulation; cost per plate-hour and per image recorded with the numbers), wrong stops, frames used, right helper chosen, hypothesis accuracy on synthetic wounds with a known cause, share of numbers traced (target 100%), guardrail triggers, cost per run. Rerun on every change; per-version scoreboard.
+- **Security and guardrails** [DER]: text inside files and protocols is data, never instructions; a fixed tool list; tools have no network access; no secrets in the model's context; uploads checked for type, size and dimensions before the 5.5 rules; model and data files checked against stored fingerprints; the run log is append-only; out-of-scope requests (molecule design, clinical questions) are refused and logged.
+- **Ethics and legality** [DER]: intended-purpose statement in the UI and README ("research use only, not for diagnosis or treatment"; clinical use would bring medical-device rules into scope, so it is out of scope); dataset licences and credits as in section 6; simulated cells labelled; failures shown (section 11).
+- **UI** [DER, confirm in 15]: one app, three modes. Draw: sandbox, NCA emulator, no agent. Assay: sample or uploaded wound, viewer, decision card, short agent timeline, approve or reject. Ops: full run log, monitoring tiles, agent scoreboard. The video shows Assay, then Ops as proof.
+- Add-on if time [D]: notifications (FYI, heads-up, action needed) so scientists need not watch the plate. With no reply the agent only does things that can be undone.
 
 ## 9c. Adaption fine-tune [D, R19; owner P2]
-1. Task: protocol paragraph to the intake JSON config (fields as in 9b Intake). Clear right answers, so win rate is measurable.
-2. Test set first: 20 to 30 real Methods paragraphs from our dataset papers (WHAD, Zaritsky, Jin, Migliaccio and similar), labelled by hand. Never trained on.
-3. Training data: Adaption Invent and Expand to 1,000+ rows (`instruction_dataset`), varied wording, missing fields, unit variants. Run `estimate=True` first to check credits and time.
-4. Train: AutoScientist, `training_method="instruction"`, a small base model (e.g. Qwen 3.5 0.8B or Gemma 3 4B), set `target_win_rate` and `max_iterations`.
-5. Evaluate on the real test set: per-field accuracy vs the base model and vs Claude; report the win rate. Ship it only if it beats the base on the real set.
-6. Evidence for the prize: leaderboard screenshot, dataset and run IDs, the eval table in the README.
-7. Wire-up: the Intake sub-agent calls the fine-tuned model (check whether Adaption can serve it; otherwise run it locally), with Claude as fallback.
+1. Task [DER, confirm in 15]: protocol paragraph to the Intake settings (9b). It has clear right answers, so the win rate means something.
+2. Test set first: 20 to 30 real Methods paragraphs from our dataset papers (WHAD, Zaritsky, Jin, Migliaccio), labelled by hand and never trained on.
+3. Training data: Adaption Invent and Expand to at least 1,000 rows (`instruction_dataset`) with varied wording, missing fields and unit variants. Run with `estimate=True` first to check credits and time.
+4. Train: AutoScientist, `training_method="instruction"`, a small base model (for example Qwen 3.5 0.8B or Gemma 3 4B), with `target_win_rate` and `max_iterations` set.
+5. Evaluate on the real test set: accuracy per field against the base model and against Claude, plus the win rate. Ship it only if it beats the base model on the real set.
+6. Prize evidence: leaderboard screenshot, dataset and run IDs, and the eval table in the README.
+7. Wire-up: Intake calls the fine-tuned model if Adaption can serve it (check), otherwise run it locally; Claude is the fallback.
 
 ## 10. Schedule [D / F]
 - Now: Sat afternoon. **Gate: 00:00 Sun** (section 5.3; moved in R15). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
@@ -180,6 +181,15 @@ Resolved by the user on 14 Nov (R12):
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence: the team has permission to use it. Still cite Jin 2016; the BINNs repo numpy copy has no licence, so do not re-host it.
 
+Open from R19 (agent layer), owner P3 unless stated:
+- Agent back end: FastAPI service, or a script that writes the recorded runs only (no server). Proposed: script first, FastAPI only if a live run is wanted.
+- Agent loop: Claude API Tool Runner (proposed) or a hand-written loop. Model: `claude-opus-5-5` with effort set per helper (proposed).
+- Claude API account and spend for recording runs: whose key, and a spending cap.
+- UI: three modes in one app (9b), confirm. Web stack: design 9 says deck.gl; the P3 look prototypes use three.js. Pick one.
+- Investigator: should or stretch.
+- Adaption task (9c step 1): Intake settings (proposed) or another task (P2 decides).
+- Evaluation costs: values for one plate-hour and one image in the agent scoreboard.
+
 Still to confirm: overnight work and the demo/video rule with organisers (P3 emails aisociety@imperial.ac.uk); 5.5 defaults are proposals until the team accepts them.
 
 ## 15c. Known risks [DER]
@@ -190,6 +200,11 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - Segmentation error (IoU ~0.74, part II 0.62) propagates to start states and labels.
 - Cell agents are a model: always label "simulated cells, not tracked cells".
 - No live demo: the video's real run must work first time; keep a recorded backup.
+- Agent layer (R19): new scope late in the event. Cut order inside it: notifications, Investigator, live run, external tracing. Never cut: the recorded agent run with its run log and the 100% traced-numbers check.
+- LLM output: may misread a protocol or phrase a decision badly. Mitigations: the Critic, schema-checked tool inputs, code-set decisions, human approval.
+- Model refusals: the Claude safety filters include a biology category, so lab prompts could be declined. Handle refusals and record runs early.
+- Prompt injection through uploaded files or protocol text: treated as data only (9b); test it with one hostile sample file.
+- Adaption: training time and credits unknown; the base model may already do well; the fine-tune ships only if it beats the base on real paragraphs (9c).
 - Coordination: unmerged `feature/data-baselines` also edits HACKATHON.md; mockup choice and Figma authentication pending.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
@@ -217,4 +232,4 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R16 (14 Nov, P1): flags evaluated leave-one-wound-out on WHAD (eval/flags.py, eval/results/flags.csv). Stall ships (AUC 0.79-0.89, precision 0.50-0.80, recall 0.62-0.77; threshold in eval/results/flag_thresholds.json). Out-of-band (2 frames outside band) does not predict an off-track forecast (fires 2-3 of 55): shown as an observation, not a prediction. Measure-again has no validated signal (AUC 0.46-0.73, inconsistent across cut-offs): not shipped; the NCA ensemble spread is tested against the same check.
 - R17 (14 Nov, P1): WHAD cut-offs aligned with the NCA files to 2, 4, 6, 10 h (same frames seen by every model); scorer accepts fold names loo / B_CC_to_C61 and looks up physical wounds. Dry-run gate 22:40: NCA ensemble FAILS (4 h: quantile score 0.082 vs edge speed 0.035; coverage 0.11, band width 0.06) because its band has no conformal step (5.4).
 - R18 (14 Nov, gate, P1 scored P2's files): WHAD cut-offs back to 1.9/3.8/5.7/9.5 h (P2's gate files use them; R17's 2/4/6/10 superseded). Gate compares against statistical baselines only. **NCA not passable at the headline cut-off** (loo_all 3.8 h: 0.0495 vs edge speed 0.0385, ratio 1.29, coverage 0.93); passes 4/12 (all splits at 9.5 h, CC_to_C61 5.7 h); simulator 3/12; NCA within 7% of the simulator. Per 5.3: calibrated edge-speed forecaster ships for forecasts; NCA ships as the draw-tool emulator, labelled 'emulator'. Raw NCA/sim coverage 0.14/0.21, calibrated 0.93. Tables: docs/results.md.
-- R19 (14 Nov, team agreed): agentic layer adopted (9b replaces the R10 LLM roles): lead agent + sub-agents wrapping existing code, recorded runs, run log and monitoring, agent replay evaluation, security and ethics rules, three UI modes (Draw, Assay, Ops). P3 builds it. Adaption intake fine-tune plan added (9c, P2). Notifications are an add-on.
+- R19 (14 Nov, team agreed): the product is agentic. 9b replaces the R10 LLM roles: a lead agent and helpers that call existing code (`data/upload.py`, `eval/flags.py`, `sim/upload.py`), recorded runs, a run log with monitoring, agent replay evaluation, security, ethics and legality rules, and a three-mode UI (to confirm). P3 builds it. 9c adds the Adaption fine-tune plan (P2). Notifications are an add-on. Open choices listed in 15; new risks in 15c.
