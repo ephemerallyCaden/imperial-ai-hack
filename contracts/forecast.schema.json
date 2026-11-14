@@ -41,6 +41,7 @@
       "required": ["wound_id", "t_hours", "area_q05", "area_q50", "area_q95", "t50", "t90", "p_close_by_T", "p_stall", "flags", "segmentation_quality", "observed"],
       "properties": {
         "wound_id": {"type": "string", "description": "WHAD position id, embryo wound id, or Zaritsky well"},
+        "wound": {"type": "string", "description": "physical wound id (WHAD posNNNN); series of the same wound are resampled together in CIs. Optional, defaults to wound_id"},
         "condition": {"type": "string", "description": "e.g. CC, C61; optional"},
         "part": {"type": "string", "description": "WHAD plate part (I or II); optional"},
         "t_hours": {"type": "array", "items": {"type": "number"}, "minItems": 1, "description": "forecast times, all > cutoff_hours, increasing"},
