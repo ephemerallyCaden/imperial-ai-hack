@@ -25,8 +25,8 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 
 | Preset | Tm (h) | Bias |
 |---|---|---|
-| `CC` | 0.792 | 0.65 |
-| `C61` | 0.878 | 0.25 |
+| `CC` | 0.948 | 0.25 |
+| `C61` | 1.052 | 0.383 |
 
 Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
 
