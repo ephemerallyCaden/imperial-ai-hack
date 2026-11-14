@@ -146,12 +146,12 @@ async function compare() { // free (gate) rule vs follow (v2) rule, same wound; 
     ['PANEL SIM: FREE', 'smoothed + outline', `3.8 h cut-off start\n${fit(sim)}`, (t, x, y) => smoothTile(sim, nearest(sim, t), x, y, s), sim.t_hours[0]],
     ['PANEL SIM: FOLLOW', 'smoothed + outline', `3.8 h cut-off start\n${fit(simF)}`, (t, x, y) => smoothTile(simF, nearest(simF, t), x, y, s), simF.t_hours[0]],
     ['ZOOM FIELD: FOLLOW', `synthetic ${zoom.H} x ${zoom.W} sites`, `CC follow preset\n${fit(zoom)}`, (t, x, y) => smoothTile(zoom, nearest(zoom, t), x, y, th / zoom.H)],
-    ['NCA v2 (FOLLOW)', ncaF ? 'emulator, display interp.' : 'pending Agent 2 weights', ncaF ? 'same start + fit as panel' : '', ncaF ? (t, x, y) => ncaSmoothTile(ncaF, nearest(ncaF, t), x, y, s) : null, ncaF ? ncaF.t_hours[0] : 0],
+    ['NCA v2 (FOLLOW)', ncaF ? 'emulator, display interp.' : 'pending Agent 2 weights', ncaF ? `same start + fit as panel\n${fit(ncaF)}` : '', ncaF ? (t, x, y) => ncaSmoothTile(ncaF, nearest(ncaF, t), x, y, s) : null, ncaF ? ncaF.t_hours[0] : 0],
   ];
   cv.width = lab + T.length * (tw + gap); cv.height = top + rows.length * (th + 30) + 386;
   g.fillStyle = C.paper; g.fillRect(0, 0, cv.width, cv.height);
   g.fillStyle = C.ink; g.font = font(18, 600); g.fillText('Stitch P2: free (gate) rule vs follow (v2) rule, exp1_partII_C61_P2, 32x44 sites, 20 um', 12, 28);
-  g.fillStyle = C.ter; g.font = font(12); g.fillText('simulated cells, not tracked cells; draft for the 03:00 rule decision; each rule uses its own fits', 12, 46);
+  g.fillStyle = C.ter; g.font = font(12); g.fillText('simulated cells, not tracked cells; follow rule adopted for the demo (#68, open departure from the pre-declared criterion); each rule uses its own fits', 12, 46);
   rows.forEach(([a, b, c, draw, t0 = 0], r) => {
     const y = top + r * (th + 30) + 18;
     g.fillStyle = C.ink; g.font = font(13, 600); g.fillText(a, 12, y + 20);
@@ -167,8 +167,9 @@ async function compare() { // free (gate) rule vs follow (v2) rule, same wound; 
   chart({ observed: sim.meta.observed, cutoff: nca.meta.cutoff_hours, t_start: nca.meta.t_start,
     curves: [{ t: sim.t_hours, v: sim.wound_frac, color: C.blue, label: 'simulation, free rule (gate)' },
              { t: simF.t_hours, v: simF.wound_frac, color: ORANGE, label: 'simulation, follow rule (v2)' },
-             { t: nca.t_hours, v: nca.wound_frac, color: C.violet, label: ncaF ? 'NCA v1 (free-rule emulator)' : 'NCA v1 (free-rule emulator)' },
-             ...(ncaF ? [{ t: ncaF.t_hours, v: ncaF.wound_frac, color: '#CC79A7', label: 'NCA v2 (follow-rule emulator)' }] : [])] },
+             { t: nca.t_hours, v: nca.wound_frac, color: C.violet, label: 'NCA v1 (free-rule emulator)' },
+             ...(ncaF ? [{ t: ncaF.t_hours, v: ncaF.wound_frac, color: '#CC79A7', label: 'NCA v2 (follow-rule emulator, default)' }] : [])],
+    band: ncaF ? { ...ncaF.meta.band, label: 'NCA v2 ensemble spread (uncalibrated)' } : undefined },
     12, top + rows.length * (th + 30) + 10, cv.width - 24, 360);
 }
 async function frame() { // one layer at one time, for final footage
