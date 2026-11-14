@@ -31,14 +31,19 @@ simulator output.
   shapes enter training), flipped. The other 50% are synthetic WHAD-like scratches and blobs.
 - Loss: per-cell energy score (2 members) + per-cell MSE + wound-area MSE, with a rollout-length curriculum up to 19 h.
 
-## Forecasts (`nca/forecast_whad.py`, #25/#26)
-- Writes `nca/forecasts/whad/{model}_{fold}_t{t0}.json` (contract `contracts/forecast.schema.json`). Models:
-  `nca_ensemble` (50 members) and `nca_deterministic` (ablation). Folds `loo` and `B_CC_to_C61`. Cut-offs t0 = 2, 4, 6, 10 h.
-- Per wound, params are its own fit on frames <= t0 (`sim/fits/whad_fits.json`, 50 bootstrap members). A wound with
-  fewer than 2 frames uses fits of other physical wounds instead.
-- Start is the observed mask at the last frame <= t0; a wound with no frame <= t0 is skipped. The forecast is rescaled
-  to that frame's observed area.
-- `--auto` adds the auto-segmented wounds, using Agent 1's synthetic band start (no masks on this machine).
+## Gate forecasts (`nca/forecast_gate.py`, #25/#26)
+- Writes `eval/forecasts/whad/{loo_all,loo_manual,CC_to_C61}/{nca_ensemble,nca_deterministic,nca_ensemble_raw}_{cut}h.json`.
+  The series, series-time cut-offs (1.9/3.8/5.7/9.5 h), grid, T = 19 h and the leave-one-wound-out conformal come from
+  P1's `eval/forecast_baselines.py`, imported rather than reimplemented. The calibration pool never contains the test
+  series' physical wound.
+- The NCA only supplies the point trajectory that P1's conformal wraps, the same way as for the statistical baselines.
+  - `nca_ensemble`: median of 50 stochastic members, one per bootstrapped (Tm, bias) fit from Agent 1's
+    `sim/fits/whad_*fits.json`, fitted on frames <= cut-off only.
+  - `nca_deterministic`: noise-free NCA at the point fit. This is the #26 ablation.
+  - `nca_ensemble_raw`: raw member quantiles, no calibration.
+- Start state: the observed mask at the last frame <= cut-off. Auto-segmented series use Agent 1's synthetic band with
+  the observed area. The forecast is rescaled to the observed area at that frame.
+- `nca/forecast_whad.py` (old cut-offs 2/4/6/10, folds loo/B) is superseded and its output was deleted.
 - Upload path / other callers: `nca/api.py` `nca_forecast(occ, members, t_obs_hours, area_obs, hours_out)`.
 
 ## Commands
@@ -46,8 +51,7 @@ Setup: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` (tor
 - `python nca/gen_data.py --n 3000 --out /tmp/nca_data.npz` simulator training data (~1-2 min, 8 processes)
 - `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt --steps 2000 --curr 80 --nval 150` (~35 min CPU)
 - `python nca/export.py nca/weights.pt nca/weights.json` weights for the JS port
-- `python nca/forecast_whad.py [--auto]` forecasts into `nca/forecasts/whad/`, then `python contracts/validate.py nca/forecasts/whad`
-- `python nca/quick_score.py nca/forecasts/whad sim/forecasts/whad` coverage / median-error sanity table
+- `python nca/forecast_gate.py` gate forecasts into `eval/forecasts/whad/`, then `python contracts/validate.py eval/forecasts/whad/*` and `python eval/score_forecasts.py eval/forecasts --gate nca_ensemble`
 
 ## Checks
 - `python nca/tests/test_mass.py`: exact mass conservation and bounds.
@@ -55,5 +59,35 @@ Setup: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` (tor
   spread on unseen configs.
 - Torch vs JS: `sim/js/nca_torch_ref.py` + `sim/js/nca_check.mjs` (Agent 3); max abs diff 2.4e-7.
 
-## Results
-(filled in after the final run)
+## Results (14 Nov, 23:00; weights c413a063825e, fits aed3174)
+**#24 emulator check: NOT MET.** `nca/eval_vs_sim.py` uses 24 unseen configs x 8 seeds. The NCA's closure-curve error
+vs the simulator is 0.042 (mean; median 0.034). The simulator's own member spread is 0.014, and 8 of 24 configs pass.
+- Tm > 0.5 h: the NCA error is below the simulator spread.
+- Tm < 0.2 h: the NCA closes fully while the simulator leaves 2-6% open.
+- NCA member spread is about 6x too small (0.002 vs 0.014). The training loss's MSE terms pull members to the mean.
+
+**Gate (design.md 5.3).** Scored by P1's `eval/score_forecasts.py`. "ratio" = qscore of `nca_ensemble` / best
+*statistical* baseline. Passable = ratio <= 1.10 and coverage in [0.85, 0.95].
+
+| split | cut-off | n | nca_ensemble qscore | cov | best statistical baseline | qscore | ratio | result |
+|---|---|---|---|---|---|---|---|---|
+| loo_all | 1.9 | 56 | 0.0782 | 0.93 | edge_speed | 0.0657 | 1.19 | fail |
+| loo_all | 3.8 | 56 | 0.0495 | 0.93 | edge_speed | 0.0385 | 1.29 | fail |
+| loo_all | 5.7 | 55 | 0.0397 | 0.93 | edge_speed | 0.0327 | 1.22 | fail |
+| loo_all | 9.5 | 52 | 0.0304 | 0.92 | linear | 0.0311 | 0.98 | pass |
+| loo_manual | 1.9 | 16 | 0.0559 | 0.87 | edge_speed | 0.0412 | 1.36 | fail |
+| loo_manual | 3.8 | 16 | 0.0458 | 0.87 | gompertz | 0.0393 | 1.17 | fail |
+| loo_manual | 5.7 | 16 | 0.0404 | 0.85 | edge_speed | 0.0362 | 1.12 | fail |
+| loo_manual | 9.5 | 16 | 0.0318 | 0.88 | linear | 0.0330 | 0.97 | pass |
+| CC_to_C61 | 1.9 | 14 | 0.0921 | 0.82 | edge_speed | 0.0794 | 1.16 | fail |
+| CC_to_C61 | 3.8 | 14 | 0.0394 | 0.99 | edge_speed | 0.0345 | 1.14 | fail |
+| CC_to_C61 | 5.7 | 14 | 0.0328 | 0.86 | edge_speed | 0.0344 | 0.95 | pass |
+| CC_to_C61 | 9.5 | 14 | 0.0311 | 0.86 | linear | 0.0305 | 1.02 | pass |
+
+Reading:
+- The calibrated NCA ties the best baseline only with half the frames observed (9.5 h), plus 5.7 h on the held-out
+  condition. At early cut-offs it is 12-36% worse.
+- The raw NCA ensemble covers only 1-24% (qscore 0.050-0.187), so all the calibration comes from P1's conformal step.
+- `nca_deterministic` is within about 5% of `nca_ensemble`, so the stochastic members add little beyond their median.
+- Note: P1's `gate()` counts every non-gated model in a group as a "baseline", so `nca_deterministic` shows up as
+  "best baseline" in some rows. The table above compares against the statistical baselines only.
