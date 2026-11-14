@@ -213,29 +213,26 @@ tbody td.b{font-weight:700}
   }
   function pt(th, rho, p){ const r = boundary(th,p===undefined?PROG:p)*rho; const u=Math.cos(th)*g.A*r, v=Math.sin(th)*g.B*r; return [g.cx+u*g.ca-v*g.sa, g.cy+u*g.sa+v*g.ca]; }
 
-  /* find a fully visible dividing cell by pixel colour */
+  /* find a dividing cell: the pale two-nucleus blob nearest a target (smoothed colour match to the dividing tone) */
   const ctx = cv.getContext('2d');
   const img = ctx.getImageData(0,0,cv.width,cv.height).data;
-  const hex = P.dividing.replace('#',''); const dr=parseInt(hex.slice(0,2),16), dg=parseInt(hex.slice(2,4),16), db=parseInt(hex.slice(4,6),16);
-  const isD = (x,y)=>{ if(x<0||y<0||x>=cv.width||y>=cv.height) return false; const k=(y*cv.width+x)*4; return img[k]===dr&&img[k+1]===dg&&img[k+2]===db; };
-  const cands=[];
-  for(let y=6;y<cv.height-6;y+=3) for(let x=6;x<cv.width-6;x+=3){ if(!isD(x,y)) continue;
-    let n=0; for(let dy=-7;dy<=7;dy+=2) for(let dx=-7;dx<=7;dx+=2) if(isD(x+dx,y+dy)) n++; if(n>=48) cands.push([x,y,n]); }
+  const hx = P.dividing.replace('#',''); const dr=parseInt(hx.slice(0,2),16), dg=parseInt(hx.slice(2,4),16), db=parseInt(hx.slice(4,6),16);
   function dividingNear(tx,ty){
-    let best=null,bd=1e9; cands.forEach(c=>{ const d=Math.hypot(c[0]-tx,c[1]-ty); if(d<bd){bd=d;best=c;} });
-    if(!best) return [tx,ty];
-    let sx=0,sy=0,n=0; for(let dy=-11;dy<=11;dy++) for(let dx=-11;dx<=11;dx++) if(isD(best[0]+dx,best[1]+dy)){sx+=best[0]+dx;sy+=best[1]+dy;n++;}
-    return [sx/n, sy/n];
+    let best=null,bs=1e9;
+    for(let y=Math.max(8,Math.round(ty-70));y<Math.min(cv.height-8,ty+70);y+=2) for(let x=Math.max(8,Math.round(tx-70));x<Math.min(cv.width-8,tx+70);x+=2){
+      let s=0,n=0; for(let dy=-6;dy<=6;dy+=2) for(let dx=-6;dx<=6;dx+=2){ if(dx*dx+dy*dy>40) continue; const k=((y+dy)*cv.width+x+dx)*4; s+=Math.abs(img[k]-dr)+Math.abs(img[k+1]-dg)+Math.abs(img[k+2]-db); n++; }
+      s=s/n + 0.05*Math.hypot(x-tx,y-ty); if(s<bs){bs=s;best=[x,y];} }
+    return best||[tx,ty];
   }
 
   const T = window.__targets = {
-    t1: dividingNear(...pt(-1.05,1.12)),
+    t1: dividingNear(388,323),
     t2: (()=>{ const th=2.35, a=pt(th,1.0); const dx=a[0]-g.cx, dy=a[1]-g.cy, L=Math.hypot(dx,dy); return [a[0]+dx/L*9, a[1]+dy/L*9]; })(),
     t3: (()=>{ const th=0.55, rn=boundary(th,PROG), rp=boundary(th,PROG-WIN), r=rn+0.62*(rp-rn); const u=Math.cos(th)*g.A*r, v=Math.sin(th)*g.B*r; return [g.cx+u*g.ca-v*g.sa, g.cy+u*g.sa+v*g.ca]; })(),
     t4: pt(3.9,0.38),
     t5: [w*0.70, h*0.68]
   };
-  const L = window.__labels = { 1:[T.t1[0]+70,T.t1[1]-62], 2:[T.t2[0]-80,T.t2[1]+30], 3:[T.t3[0]+84,T.t3[1]+44], 4:[T.t4[0]-62,T.t4[1]+54], 5:[T.t5[0]+52,T.t5[1]+30] };
+  const L = window.__labels = { 1:[T.t1[0]-70,T.t1[1]-70], 2:[T.t2[0]-80,T.t2[1]+30], 3:[T.t3[0]+84,T.t3[1]+44], 4:[T.t4[0]-62,T.t4[1]+54], 5:[T.t5[0]+52,T.t5[1]+30] };
 
   const svg = document.getElementById('leaders'); svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
   const NS='http://www.w3.org/2000/svg';
@@ -266,15 +263,7 @@ tbody td.b{font-weight:700}
   const legendOrder=['dividing','edge','fresh','wound','intact'];
   const lg=document.getElementById('legend');
   lg.innerHTML='<h3><span class="kick">Key to Figure 1</span><small>tone: '+tone+'</small></h3>';
-  function swatch(key){
-    const pts=[0,1,2,3,4,5].map(k=>{const a=Math.PI/6+k*Math.PI/3; return [15+13*Math.cos(a),15+13*Math.sin(a)];});
-    const poly=pts.map(p=>p.join(',')).join(' ');
-    let s=`<svg width="30" height="30" viewBox="0 0 30 30"><polygon points="${poly}" fill="${P[key]}" ${key==='wound'?'':`stroke="${P.line}" stroke-opacity=".5" stroke-width=".8"`}/>`;
-    if(key==='dividing') s+=`<circle cx="15" cy="15" r="3" fill="${P.line}"/>`;
-    if(key==='edge') s+=`<path d="M${pts[0][0]} ${pts[0][1]}L${pts[1][0]} ${pts[1][1]}L${pts[2][0]} ${pts[2][1]}" stroke="${P.line}" stroke-width="2" fill="none"/>`;
-    if(key==='fresh') for(let k=0;k<7;k++){const a=k*0.9+.4,rr=k%2?5:9; s+=`<circle cx="${15+Math.cos(a*2.2)*rr}" cy="${15+Math.sin(a*2.2)*rr}" r="1" fill="${P.line}" opacity=".7"/>`;}
-    return s+'</svg>';
-  }
+  const swatch=k=>CellField.swatch(k,tone,30);
   legendOrder.forEach(k=>{ const r=ruleBy[k]; const d=document.createElement('div'); d.className='leg';
     d.innerHTML=`<span class="num">${calloutNo[k]}</span>${swatch(k)}<div><b>${r.name}</b><p>${r.rule.charAt(0).toUpperCase()+r.rule.slice(1)}.<em> Cue: ${r.cue}.</em></p></div>`; lg.appendChild(d); });
   const n=document.createElement('p'); n.className='note'; n.textContent='Precedence: dividing > edge > new tissue > intact. Colours illustrative.'; lg.appendChild(n);

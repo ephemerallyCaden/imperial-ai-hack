@@ -42,7 +42,7 @@ header{grid-column:1/3;display:flex;align-items:baseline;gap:16px;padding:0 24px
 .ov{position:absolute;background:rgba(252,252,250,.94);border:1px solid var(--frame);font:12px/1.3 var(--sans)}
 #chip{left:16px;top:16px;padding:6px 10px;font:600 12px/1 var(--sans);letter-spacing:.04em;color:var(--ink);border-color:var(--ink);border-left:4px solid var(--ink)}
 #ladder{left:16px;top:56px;width:128px;display:flex;flex-direction:column}
-#ladder .k{font:600 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);padding:7px 10px 6px;border-bottom:1px solid var(--rule)}
+#ladder .k{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);padding:7px 10px 6px;border-bottom:1px solid var(--rule)}
 #ladder button{display:flex;justify-content:space-between;align-items:center;border:0;border-bottom:1px solid var(--rule);min-height:30px;padding:0 10px;font:13px var(--sans);color:var(--ink2);text-align:left}
 #ladder button:last-child{border-bottom:0}
 #ladder button span{font:12px var(--mono)}
@@ -78,12 +78,12 @@ header{grid-column:1/3;display:flex;align-items:baseline;gap:16px;padding:0 24px
 #key svg{flex:none}
 /* panel */
 aside{background:var(--panel);border-left:1px solid var(--frame);overflow:hidden;display:flex;flex-direction:column}
-.phead{height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 20px;border-bottom:1px solid var(--rule);font:600 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.phead{height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 20px;border-bottom:1px solid var(--rule);font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
 .phead button{min-height:24px;font:12px var(--sans);display:flex;gap:6px;align-items:center;padding:0 8px;background:#fff;color:var(--ink)}
-section{padding:12px 20px 12px;border-bottom:1px solid var(--rule)}
+section{padding:12px 20px 10px;border-bottom:1px solid var(--rule)}
 section h2{font:600 16px/1.25 var(--serif);margin-bottom:8px}
 section h2 em{font:400 italic 12px/1 var(--serif);color:var(--ink2);margin-left:6px}
-.leg{display:grid;grid-template-columns:30px 1fr;gap:2px 10px;padding:5px 0;border-top:1px solid var(--rule)}
+.leg{display:grid;grid-template-columns:30px 1fr;gap:2px 12px;padding:4px 0;border-top:1px solid var(--rule)}
 .leg:first-of-type{border-top:0}
 .leg svg{grid-row:1/3;margin-top:1px}
 .leg b{font:600 13px/1.25 var(--sans)}
@@ -101,7 +101,7 @@ section h2 em{font:400 italic 12px/1 var(--serif);color:var(--ink2);margin-left:
 .dl dd.v{color:var(--violet)}
 table{width:100%;border-collapse:collapse;font:12.5px/1.3 var(--sans);border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink)}
 th{font-weight:600;text-align:right;padding:4px 0 4px 8px;border-bottom:.75px solid var(--ink);font-size:12px}
-td{text-align:right;padding:3px 0 3px 8px}
+td{text-align:right;padding:4px 0 4px 8px}
 th:first-child,td:first-child{text-align:left;padding-left:0}
 tr.best td{font-weight:600}
 .tnote{font:italic 11.5px/1.4 var(--serif);color:var(--ink2);margin-top:5px}
@@ -234,18 +234,10 @@ tr.best td{font-weight:600}
   el('rect',{x:20.5,y:11.5,width:127,height:73,fill:'none',stroke:'#1F2328','stroke-width':1.25});
 
   // legend with swatches in active tone
-  const P = res.palette, ang=[0,1,2,3,4,5].map(k=>Math.PI/6+k*Math.PI/3);
-  const hex=(cx,cy,r)=>ang.map((a,k)=>(k?'L':'M')+(cx+r*Math.cos(a)).toFixed(2)+' '+(cy+r*Math.sin(a)).toFixed(2)).join('')+'Z';
   const list=document.getElementById('leglist');
   CellField.RULES.forEach(R=>{
-    const c=15, r=13.5; let inner='';
-    const fill = R.key==='wound'? P.wound : P[R.key];
-    inner += `<path d="${hex(c,c,r)}" fill="${fill}" stroke="${R.key==='wound'?P.wound:P.line+'88'}" stroke-width=".8"/>`;
-    if(R.key==='dividing') inner += `<circle cx="${c}" cy="${c}" r="3" fill="${P.line}"/>`;
-    if(R.key==='edge'){ const p=(k)=>[c+r*Math.cos(ang[k]),c+r*Math.sin(ang[k])]; const a=p(5),b=p(0),d=p(1); inner += `<path d="M${a[0]} ${a[1]}L${b[0]} ${b[1]}L${d[0]} ${d[1]}" fill="none" stroke="${P.line}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`; }
-    if(R.key==='fresh'){ [[-5,-4],[2,-6],[6,1],[-1,2],[-6,5],[4,7]].forEach(([x,y])=>inner+=`<circle cx="${c+x}" cy="${c+y}" r="1" fill="${P.line}" fill-opacity=".7"/>`); }
     const d=document.createElement('div'); d.className='leg';
-    d.innerHTML=`<svg width="30" height="30" viewBox="0 0 30 30">${inner}</svg><b>${R.name}</b><p>${R.rule}. <i>Cue: ${R.cue}.</i></p>`;
+    d.innerHTML=`${CellField.swatch(R.key,tone,30)}<b>${R.name}</b><p>${R.rule}. <i>Cue: ${R.cue}.</i></p>`;
     list.appendChild(d);
   });
 

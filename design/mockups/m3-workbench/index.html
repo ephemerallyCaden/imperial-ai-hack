@@ -74,7 +74,7 @@ aside{position:absolute;left:1120px;top:44px;width:320px;height:856px;background
 .sh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
 .sh h3{font:600 13px var(--sans)}
 .sh .mono{color:var(--sec);font-size:11.5px}
-.lg{display:grid;grid-template-columns:36px 1fr;gap:0 10px;padding:4px 0;border-top:1px solid var(--hair)}
+.lg{display:grid;grid-template-columns:36px 1fr;gap:0 12px;padding:4px 0;border-top:1px solid var(--hair)}
 .lg:first-of-type{border-top:0}
 .lg svg{display:block}
 .lg .n{font-weight:600;font-size:13px}
@@ -222,14 +222,7 @@ tr.best td{font-weight:600}
   e.setAttribute('cx',g.cx);e.setAttribute('cy',g.cy);e.setAttribute('rx',g.A);e.setAttribute('ry',g.B);
   e.setAttribute('transform','rotate('+(-0.35*180/Math.PI)+' '+g.cx+' '+g.cy+')');
   // legend
-  const P=out.palette, hex=(R)=>{const pts=[0,1,2,3,4,5].map(k=>{const a=Math.PI/6+k*Math.PI/3;return [18+15*Math.cos(a),18+15*Math.sin(a)]});return pts};
-  const H=hex(); const hp=H.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+'Z';
-  const cue={
-    dividing:`<circle cx="18" cy="18" r="3.4" fill="${P.line}"/>`,
-    edge:`<path d="M${H[3][0]} ${H[3][1]}L${H[4][0]} ${H[4][1]}L${H[5][0]} ${H[5][1]}" fill="none" stroke="${P.line}" stroke-width="2.6"/>`,
-    fresh:[0,1,2,3,4,5,6].map(k=>{const a=k*2.4;const r=k?8:0;return `<circle cx="${(18+Math.cos(a)*r).toFixed(1)}" cy="${(18+Math.sin(a)*r).toFixed(1)}" r="1.2" fill="${P.line}"/>`}).join(''),
-    intact:'', wound:''};
-  document.getElementById('lg').innerHTML=CellField.RULES.map(r=>`<div class="lg"><svg width="36" height="36" viewBox="0 0 36 36"><path d="${hp}" fill="${P[r.key]}" stroke="${r.key==='wound'?P.wound:P.line}" stroke-width=".8"/>${cue[r.key]}</svg><div><div class="n">${r.name}</div><div class="ru">${r.rule[0].toUpperCase()+r.rule.slice(1)}</div><div class="cu">Cue: ${r.cue}</div></div></div>`).join('');
+  document.getElementById('lg').innerHTML=CellField.RULES.map(r=>`<div class="lg">${CellField.swatch(r.key,tone,36)}<div><div class="n">${r.name}</div><div class="ru">${r.rule[0].toUpperCase()+r.rule.slice(1)}</div><div class="cu">Cue: ${r.cue}</div></div></div>`).join('');
 
   // ribbon
   const X0=40,X1=832,YT=4,YB=68,svg=document.getElementById('rib');

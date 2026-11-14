@@ -64,7 +64,7 @@
         d1=Math.sqrt(d1); d2=Math.sqrt(d2); const k1=n1*5; const F=field(X,Y);
         const ww = sstep(-wr, wr, -F.s);                           // wound weight, smooth edge (1 inside)
         // tissue colour: intact tinted per cell, + large-scale mottling
-        const mott = vnoise(X/70,Y/70,3)-0.5, tint = 1 + seeds[k1+2]*0.05 + mott*0.04;
+        const mott = vnoise(X/70,Y/70,3)-0.5, wmix = 0.5+0.5*sstep(0, cs*0.5, d2-d1), tcell = seeds[k1+2]*wmix + seeds[n2*5+2]*(1-wmix), tint = 1 + tcell*0.05 + mott*0.04;
         let r=C.intact[0]*tint, g=C.intact[1]*tint, b=C.intact[2]*tint;
         // new tissue (gradient with age) and leading edge (soft band)
         const fw = Math.min(1, F.f*F.f*(3-2*F.f))*0.9;              // 0..0.9
