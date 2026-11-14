@@ -6,7 +6,8 @@ const wound = new Uint8Array(w * h);
 for (let y = 0; y < h; y++) for (let x = w / 2 - sw / 2; x < w / 2 + sw / 2; x++) wound[y * w + x] = 1;
 const rows = [], t0 = performance.now();
 for (let s = 0; s < n; s++) {
-  const e = new Engine({ w, h, wound, params: { Tm }, seed: s }), r = [];
+  // params = cellsim.Params defaults (bias 7/9, division off), not a draw preset
+  const e = new Engine({ w, h, wound, params: { Tm, bias: 7 / 9, Td: null }, seed: s }), r = [];
   for (let t = 1; t <= 24; t++) { e.advance(1); if (T.includes(t)) r.push(e.wound_frac); }
   rows.push(r);
 }
