@@ -30,7 +30,7 @@ The demo uses the **follower rule everywhere**. This is an *open departure* from
 | Draw tool | `init` with no `rule` means `'follow'`, with `PRESETS_FOLLOW` (CC Tm 4.287 / bias 0.754, C61 Tm 4.707 / bias 0.533) | `rule:'free'` uses `PRESETS` (CC 0.482 / 0.25, C61 0.481 / 0.363) |
 | Draw label (frame `label`) | `"simulation, preset parameters (WHAD part II fits, follow rule)"` | `"simulation, preset parameters (WHAD part II fits)"` |
 | Draw caption (frame `caption`) | **`"bias not identified from these data; Tm carries the signal"`** | none |
-| NCA weights for the band | `web/public/sim/nca_v2_weights.json` + `nca_v2_weights.config.json` (follower emulator), *pending Agent 2's final weights* | `web/public/sim/nca_weights.json` (v1, free-rule emulator, no config) |
+| NCA weights for the band | **Not decided yet** (lead and user are choosing; #67). Candidates: `nca_v2_weights.json` + `nca_v2_weights.config.json` (follower emulator, pending Agent 2's weights), or P1's real-data fine-tuned `nca_realft` (#71). Until decided, the page should pass no config, which means v1. | `web/public/sim/nca_weights.json` (v1, free-rule emulator, no config) |
 | Video run | `whad_partII_C61_P2_follow.json` | `whad_partII_C61_P2.json` |
 | Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` (*pending*) + `meta.observed` | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
 | Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 39 frames at 0.5 h; display only, not scored | none |
