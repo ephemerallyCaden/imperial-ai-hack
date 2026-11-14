@@ -58,5 +58,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED: playback layers: `density_fine` (occupancy upsampled 2x, Gaussian sigma 2.5 sites) and an area-matched outline (outlined area = wound_frac, same area at every zoom); raw agents only at deep zoom. Code in `sim/smooth_view.py`; Agent 3's worker uses the same parameters.
 - DECIDED: zoom view = the real 32x44 WHAD run (exp1_partII_C61_P2); no larger synthetic field for now. Frozen rules close slower in bigger fields (same 12-site scratch, Tm 0.5, bias 0.78: area_norm at 19 h 0.19 in 44x44 vs 0.36 in 44x456; draw_tool CC preset 0.81 at 24 h in 120x168), because vacancies leave through the border reservoir.
 - DECIDED: playback files carry density_fine and outline parameters (sigma, levels, display hints) but no frames; the viewer recomputes both from agents (--fine-frames to include them; sim/js/smooth.js matches sim/smooth_view.py). Outline display: opacity fades from level 0.85 to 0.95; closed loops under 4 sites of area dropped.
+
 ## 2026-11-14 22:40 [randodeh] Flags (R16 in design.md)
 - DECIDED: ship the stall flag (validated). Out-of-band shown as an observation only. No measure-again flag until a signal passes (AUC > 0.7).
