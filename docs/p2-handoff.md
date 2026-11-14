@@ -101,21 +101,30 @@ wk.postMessage({ type: 'band', Tm, bias, hours: 24, members: 20, start: { occ, h
 
 ## 3. Playback files (`web/public/sim/<name>.json`, written by `sim/export_playback.py`)
 
+Example: `web/public/sim/whad_partII_C61_P2.json` (Agent 4, e65e21c), 191 frames, 137 KB.
+
 ```
-{ name, H, W, grain, t_hours[F], wound_frac[F],
+{ name, H, W, grain, t_hours[F], wound_frac[F], meta?,
   density: { h, w, frames: [base64 uint8, h*w row-major, round(density*255)] },
-  agents?: { encoding: "packbits-msb", frames: [base64 of ceil(H*W/8) bytes] } }
+  agents: { encoding: "packbits-msb", frames: [base64 of ceil(H*W/8) bytes] },
+  density_fine: { scale: 2, sigma: 2.5, h, w },            // parameters only, no frames
+  outline: { units: "sites", rule: "area-matched", levels[F],
+             display: { fade_from_level: 0.85, fade_to_level: 0.95, min_loop_area_sites: 4 } } }
 ```
 
-- **Agents:** site `i = y*W + x` is occupied iff `(bytes[i>>3] >> (7-(i&7))) & 1`. The `agents` key is only present if the file was exported with `--agents`.
+- **Agents:** site `i = y*W + x` is occupied iff `(bytes[i>>3] >> (7-(i&7))) & 1`.
+- **Smoothed field and outline:** the file does not store them per frame. Recompute them from the agents with `viewFrame(pb, f)`, which uses the file's `density_fine` and `outline.display` parameters. It returns `{fine, outline}` in the same shape as the draw worker's frame, so one renderer serves both. It takes about 1 ms per frame on 32×44.
+- **Rendering rule:** the same as the draw tool. Draw `fine` plus `outline.display` by default, and raw agents only at deep zoom.
 - **Stride:** the last frame is always included.
-- **Optional `density_fine` and `outline` keys:** written with `--fine`, and they have the same meaning as the worker's `fine` and `outline`. The file stores them per frame as `outline.levels[F]` and `outline.frames[F]`. Decode `density_fine.frames[f]` like `density.frames[f]`. The same rendering rule applies: smoothed plus outline by default, agents only at deep zoom.
-- **Checked:** I exported a real 32×44 run with `sim/export_playback.py` (f5709e4) and decoded it with `playback.js`. All agent sites matched, density matched to within 1e-5 of the 0–255 value, and the decoded `wound_frac` equalled the file's.
+- **`--fine-frames`:** an `export_playback.py --fine-frames` export also stores `density_fine.frames` and `outline.frames`; you don't need them.
+- **Checked against Agent 4's file:**
+  - `viewFrame` reproduces the file's `outline.levels` on all 191 frames to within 5e-5, which is the file's 4-decimal rounding.
+  - On an earlier export, `agentFrame` and `densityFrame` decoded exactly, and the decoded `wound_frac` equalled the file's.
 
 ```js
-import { densityFrame, agentFrame } from './public/sim/js/playback.js';
-const pb = await (await fetch('./public/sim/run_cc.json')).json();
-const rho = densityFrame(pb, f);    // Float32Array(pb.density.h * pb.density.w), 0..1
-const occ = agentFrame(pb, f);      // Uint8Array(pb.H * pb.W), 1 = cell
-// zoom: one density cell = pb.grain x pb.grain agent sites, so mean(occ) == mean(rho) every frame
+import { densityFrame, agentFrame, viewFrame } from './public/sim/js/playback.js';
+const pb = await (await fetch('./public/sim/whad_partII_C61_P2.json')).json();
+const { fine, outline } = viewFrame(pb, f);  // default view: fine.data (Uint8, fine.h x fine.w) + outline.display
+const occ = agentFrame(pb, f);               // deep zoom: Uint8Array(pb.H * pb.W), 1 = cell
+const rho = densityFrame(pb, f);             // coarse density (pb.density.h x w); mean(occ) == mean(rho) every frame
 ```
