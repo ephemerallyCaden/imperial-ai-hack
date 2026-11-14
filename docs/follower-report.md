@@ -1,7 +1,13 @@
 # Follower (sheet-like) rule: prototype report (Agent 4, feature/p2-follower)
 
-Status: PROTOTYPE for the lead's switch decision before 04:00. The frozen rules are unchanged on every agent branch;
-the new rule is `Params(follow=True)` (default False, bit-identical output when off).
+Status: documented finding, NOT switched in tonight (user target: all P2 work done by 00:00; refit, NCA retrain
+and JS re-port do not fit). The frozen rules are unchanged on every agent branch; the new rule is
+`Params(follow=True)` (default False, output bit-identical when off).
+
+**Summary.** The follower rule fixes the visual problem (front-like closure, packed sheet, no holes), removes the
+field-size dependence, and matches the near-linear WHAD part II closure (R^2 0.999 vs data 0.98-0.996). Forecast
+error after t0 = 10 drops for part II wounds (manual median rmse_out 0.0166 -> 0.0089; auto 0.0212 -> 0.0126), is
+similar or slightly better at t0 = 4, and is mixed for part I: their stalls need Tm beyond the 50 h grid edge.
 
 ## Rule
 A mover connected to the reservoir (Moore path through occupied sites to the refilled border band) pulls the chain of
@@ -46,10 +52,42 @@ Frozen closure depends on the field size, because vacancies diffuse out through 
 Follow 0.999 and frozen 0.949 (44x44 scratch); WHAD part II data 0.978-0.996 (C61_P2, CC_P4, N61_P1, CC_P2).
 
 ### 5. Refit (`sim/follower_refit.py`, cost = wound_frac MSE as calibrate.py)
-REFIT_PLACEHOLDER
+Both modes: all 56 WHAD positions (16 manual + 40 auto), 6 bias values, 3 seeds. Frozen: Tm grid 0.05-5 h
+(21 points); follow: 0.05-50 h (31 points, same log spacing). Fit on frames <= t0 (grid argmin, no refine);
+rmse_out = the same fit's error on the frames after t0 (the forecast error); full = best fit on all 19 h.
+Results: `sim/fits/follower_compare_{frozen,follow}.json`; table: `python3 sim/follower_refit.py --table`.
+
+Median (mean) rmse_out of wound_frac:
+
+| group | n | t0 = 4 frozen | t0 = 4 follow | t0 = 10 frozen | t0 = 10 follow | full frozen | full follow |
+|---|---|---|---|---|---|---|---|
+| manual part I | 8 | 0.0297 (0.0493) | 0.0256 (0.0363) | 0.0233 (0.0228) | 0.0200 (0.0245) | 0.0097 | 0.0119 |
+| manual part II | 8 | 0.0270 (0.0295) | 0.0279 (0.0350) | 0.0166 (0.0164) | **0.0089 (0.0099)** | 0.0110 | 0.0083 |
+| auto part I | 20 | 0.0307 (0.0359) | 0.0276 (0.0298) | 0.0190 (0.0229) | 0.0231 (0.0247) | 0.0094 | 0.0120 |
+| auto part II | 19 / 16 | 0.0289 (0.0342) | 0.0246 (0.0397) | 0.0212 (0.0197) | **0.0126 (0.0201)** | 0.0106 | 0.0105 |
+
+(auto part II: n = 19 at t0 = 4, 16 at t0 = 10.) In-sample rmse_in is slightly higher under follow in every group
+(for example manual part II t0 = 10: 0.0070 -> 0.0091). Fitted Tm is about 8-10x larger (part II 4-8 h, part I 8-50 h).
+At t0 = 10, 13 follow fits sit at the Tm = 50 h edge: 2 manual (part I C61_P1, C61_P2) and 11 auto part I. These are
+stalled wounds that a front rule closes too fast even at 50 h, so the grid would need to go higher, or part I needs a
+stall mechanism. Per manual wound at t0 = 10, rmse_out frozen -> follow: C61_P2 0.031 -> 0.008, N61_P1 0.024 -> 0.007,
+CC_P4 0.019 -> 0.010; worse for part I NC_P1 0.028 -> 0.042 and CC_P3 0.008 -> 0.015.
 
 ### 6. Ensemble coverage (`sim/follower_forecast.py` + `/tmp/sanity_keep.py`, loo)
-COVERAGE_PLACEHOLDER
+PENDING: the job was still running at the 23:15 cut-off (nice 19, 4 workers, behind the gate's NCA jobs). To finish
+or re-run: `nice -n 19 python3 sim/follower_forecast.py /tmp/follower_scratch && python3 /tmp/sanity_keep.py
+/tmp/follower_scratch/forecasts` (writes only under the scratch dir; asserts the frozen fits and forecasts are
+untouched). Frozen baseline (sim/forecasts/whad on 98dae8b, same check): loo t0 = 4 manual MAE 0.127 / cov90 0.18,
+auto 0.118 / 0.14; t0 = 10 manual 0.080 / 0.24, auto 0.077 / 0.18.
+
+## What switching would take
+In order, about 3-5 h of work at today's machine load:
+1. **Rules and fits (Agent 1):** merge `follow=True` as the default; set TM_GRID to 0.05-50 h (31 points, or higher
+   for stalled part I wounds); re-run `calibrate.py --all` and `forecast.py`. About 1 h of CPU.
+2. **NCA (Agent 2):** regenerate the training data under follow and retrain with a front source term (details
+   below). The longest item: hours of training.
+3. **JS (Agent 3):** port the connectivity rule, then run the parity check again. About 30-45 min.
+4. **Playback (Agent 4):** re-run `sim/make_playback.py` + `export_playback.py` with the new fit. Minutes.
 
 ### 7. Impact
 - **JS (Agent 3, `sim/js/engine.js`):** small. Add `follow` to the params, a Moore dilation, `growConnected` (loop to a
