@@ -13,6 +13,9 @@ NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic",
          "lvcf": "typical-wound curve", "nca_ensemble": "NCA ensemble (calibrated)",
          "sim_ensemble": "cell-agent simulator ensemble (calibrated)"}
 STAT = ["lvcf", "linear", "edge_speed", "logistic", "gompertz"]
+VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator", "nca_realft": "NCA real-data",
+       "nca_realplus": "NCA real + Zaritsky"}
+NAMES.update({"nca_realft": "NCA fine-tuned on real frames (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)"})
 MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
 SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
@@ -97,18 +100,24 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "## NCA vs baselines (gate, design.md 5.3)", "",
           "Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator "
           "forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).", "",
-          "| Split | Cut-off | NCA ensemble | coverage | Simulator ensemble | Best statistical | ratio NCA / best | Gate |",
+          "NCA variants: **sim-trained** (Caden's, trained on 3000 simulator runs only), **real-data** (fine-tuned on real WHAD "
+          "frames, 4 wound-level folds: each wound forecast by a model that never trained on it), **real + Zaritsky** (also "
+          "fine-tuned on 6 Zaritsky wells).", "",
+          "| Split | Cut-off | Model | Quantile score | Coverage | Best statistical | Ratio to best | Gate |",
           "|---|---|---|---|---|---|---|---|"] + [
-          f"| {sp} | {cut:g} h | {n.qscore:.4f} | {n.coverage:.2f} | {s_.qscore:.4f} | {b.model.replace('_', ' ')} {b.qscore:.4f} | "
+          f"| {sp} | {cut:g} h | {VAR[n.model]} | {n.qscore:.4f} | {n.coverage:.2f} | {b.model.replace('_', ' ')} {b.qscore:.4f} | "
           f"{n.qscore / b.qscore:.2f} | {'PASS' if n.qscore <= 1.1 * b.qscore and 0.85 <= n.coverage <= 0.95 else 'fail'} |"
           for sp in ("loo_all", "loo_manual", "CC_to_C61") for cut in (1.9, 3.8, 5.7, 9.5)
           for g_ in [S[(S.dataset == "whad") & (S.split == sp) & (S.cutoff_h.round(2) == cut)]]
-          for n in [g_[g_.model == "nca_ensemble"].iloc[0]] for s_ in [g_[g_.model == "sim_ensemble"].iloc[0]]
-          for b in [g_[g_.model.isin(["lvcf", "linear", "edge_speed", "logistic", "gompertz"])].sort_values("qscore").iloc[0]]] + ["",
-          "**Decision (design.md R18): not passable at the headline cut-off (3.8 h: 0.0495 vs 0.0385, 29% worse).** The calibrated "
-          "edge-speed forecaster ships for forecasts; the NCA ships as the fast emulator of the cell-agent simulator for the "
-          "draw tool, labelled 'emulator'. The NCA catches up by 9.5 h. Without the conformal step the NCA and simulator bands "
-          "cover only 14% and 21% of the future (raw ensembles are too narrow); with it, 93%.", "",
+          for b in [g_[g_.model.isin(STAT)].sort_values("qscore").iloc[0]]
+          for _, n in g_[g_.model.isin(list(VAR))].set_index("model").loc[[m for m in VAR if m in set(g_.model)]].reset_index().iterrows()] + ["",
+          "**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (29% worse than edge speed "
+          "at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA "
+          "passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is "
+          "the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition "
+          "(CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step "
+          "is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained "
+          "on that wound (its own forecast never does).", "",
           "## Figures", "",
           "`eval/figures/calibration.png`, `error_vs_history.png`, `reliability.png`, `worst_wounds.png` (regenerate with `python eval/figures.py`)."]
 open(OUT, "w", encoding="utf-8").write("\n".join(lines) + "\n")
