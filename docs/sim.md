@@ -37,6 +37,14 @@ Lattice H and W are rounded to multiples of 4 (`multiple`), so `coarse_grain` ne
 - Spread: 50 bootstrap resamples of the observed frames, each refitted, give `members` = list of `[Tm, bias]`. Ensemble forecasts should combine these with simulator seeds.
 - Presets: median `Tm` and `bias` per condition (CC, C61) over a fold's training positions only (asserted). Folds (P1's names): `A_partI_to_partII`, `A_partII_to_partI`, `B_CC_to_C61`. Fold B has no C61 training data, so it uses the CC preset for C61 test wounds.
 - `in_range_frac`: fraction of frames where the preset's simulated `area_norm` lies inside the training wounds' observed min-max at that frame.
+- `presets.draw_tool` = median over ALL positions per condition at t0 = 10: CC Tm 0.79 h, bias 0.65 (n 7); C61 Tm 0.88 h, bias 0.25 (n 6). Draw tool only, never for scoring (includes test wounds). C61 is bimodal (part II about 0.5 h, part I 1.3-5 h), so the median is a compromise.
+
+**Results (20:20 Sat, `whad_fits.json`).** Per-wound fit RMSE 0.001-0.025 (absolute wound_frac) up to t0. All fits are inside the grid
+except part I C61_P1 and C61_P2, which stall (no closure) and sit at the Tm = 5 h edge from t0 = 4. `in_range_frac` per fold at
+t0 = 2/4/6/10: A_partI_to_partII 0.54/0.61/0.72/0.95; A_partII_to_partI 0.56/0.80/0.81/0.89; B_CC_to_C61 0.77/0.84/0.97/0.92.
+Short cut-offs are noisy (2-3 frames). `bias` is weakly identified (fits jump between 0.25 and 0.9); `Tm` carries the signal.
+Fold A is a large shift: part I presets (CC Tm about 2 h, C61 5 h) are far slower than part II wounds (0.3-0.8 h), so use per-wound
+fits up to t0, with presets only as a prior or fallback.
 
 `whad_fits.json` layout: `params` (grid, cut-offs, dt, site_um); `fits[position][t0]` = `{t0, start_frame, n_obs, Tm, bias, rmse, at_grid_edge, members}` (null when fewer than 2 frames are observed by `t0`); `presets[fold][t0]` = `{CC: {Tm, bias, n}, C61: {...}, in_range_frac}`.
 
