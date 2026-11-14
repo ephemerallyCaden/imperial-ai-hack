@@ -20,7 +20,7 @@ Code: `sim/cellsim.py` (dilate, grow_connected, step, simulate).
 ## Results
 
 ### 1. Front-like closure (frame strip `docs/follower-strip-C61_P2.png`)
-exp1_partII_C61_P2, seed 0. Frozen Tm 0.5 / bias 0.78 (fit); follow Tm 4 / bias 0.78 (hand-picked before the refit).
+exp1_partII_C61_P2, seed 0. Frozen Tm 0.5 / bias 0.78 (fit); follow Tm 4 / bias 0.78 (hand-picked; the refit at t0 = 10 gives Tm 3.97 / bias 0.77, the same).
 Rows: agents frozen, agents follow, smoothed + area-matched outline frozen, the same for follow.
 
 | t (h) | 4 | 8 | 12 | 16 | 19 |
@@ -103,7 +103,7 @@ In order, about 3-5 h of work at today's machine load:
   cells. (a) is the smaller change. Either way: regenerate the 3000 training runs under follow (minutes) and retrain
   (hours under the current load). The density state becomes close to binary, which is easier to learn. The
   parameter channel normalisation `p0` uses ln 5 as the Tm maximum and must change to the new Tm range.
-- **Fits and forecasts (Agent 1):** Tm means something different (about 4-8x larger for the same wound); the Tm grid
+- **Fits and forecasts (Agent 1):** Tm means something different (about 8-10x larger for the same wound); the Tm grid
   becomes 0.05-50 h. whad_fits.json, the auto fits, sim_ensemble forecasts and draw-tool presets all need regenerating
   (`calibrate.py --all` and `forecast.py`, about 1 h of CPU at the current load).
 
