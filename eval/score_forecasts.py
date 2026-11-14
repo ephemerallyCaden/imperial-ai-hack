@@ -97,7 +97,9 @@ def score_file(path):
     doc["fold"] = FOLD_ALIAS.get((doc["dataset"], doc["fold"]), doc["fold"])
     for f in doc["forecasts"]:
         f.setdefault("wound", physical_wound(doc["dataset"], f["wound_id"]))
-    rows = [r for f in doc["forecasts"] if (r := score_series(f, doc["cutoff_hours"], doc["p_close_by_T_hours"]))]
+    from forecast_baselines import EXCLUDE
+    rows = [r for f in doc["forecasts"] if f["wound_id"] not in EXCLUDE
+            and (r := score_series(f, doc["cutoff_hours"], doc["p_close_by_T_hours"]))]
     df = pd.DataFrame(rows)
     s = {"dataset": doc["dataset"], "split": doc["fold"], "cutoff_h": doc["cutoff_hours"], "model": doc["model"],
          "n_series": len(df), "n_wounds": df.wound.nunique() if len(df) else 0}
