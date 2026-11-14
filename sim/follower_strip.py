@@ -9,7 +9,7 @@ from smooth_view import fine_density, outline
 pos, Tm_fz, b_fz, Tm_fo, b_fo, out = sys.argv[1], *map(float, sys.argv[2:6]), sys.argv[6]
 occ0 = mask_to_lattice(*load_png_mask(pos, 0), SITE_UM)
 runs = {"frozen": simulate(occ0, Params(Tm=Tm_fz, bias=b_fz), 19, frame_dt=0.5, seed=0),
-        "follow": simulate(occ0, Params(Tm=Tm_fo, bias=b_fo, follow=True), 19, frame_dt=0.5, seed=0)}
+        "follow": simulate(occ0, Params(Tm=Tm_fo, bias=b_fo, rule="follow"), 19, frame_dt=0.5, seed=0)}
 times = (0, 4, 8, 12, 16, 19)
 fig, ax = plt.subplots(4, 6, figsize=(18, 10))
 for j, x in enumerate(times):

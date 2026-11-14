@@ -1,4 +1,4 @@
-"""PROTOTYPE report checks for Params(follow=True) vs the frozen rules (feature/p2-follower).
+"""PROTOTYPE report checks for Params(rule="follow") vs the frozen rules (feature/p2-follower).
 
   python3 sim/follower_checks.py [Tm_follow]      size independence, packedness, islands, linearity
 Prints tables; no files written.
@@ -10,7 +10,7 @@ from cellsim import Params, simulate, step, reservoir_mask, refill, grow_connect
 from start_state import load_png_mask, mask_to_lattice
 
 TM_F = float(sys.argv[1]) if len(sys.argv) > 1 else 2.0
-FROZEN, FOLLOW = Params(Tm=0.5, bias=7 / 9), Params(Tm=TM_F, bias=7 / 9, follow=True)
+FROZEN, FOLLOW = Params(Tm=0.5, bias=7 / 9), Params(Tm=TM_F, bias=7 / 9, rule="follow")
 CURVES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "processed", "whad_curves.csv")
 
 
@@ -53,7 +53,7 @@ w0 = occ0 == 0
 for name, p in (("frozen Tm 0.5", FROZEN), (f"follow Tm {TM_F:g}", FOLLOW)):
     rng = np.random.default_rng(0)
     occ = occ0.copy(); res = reservoir_mask(occ, p.edge); refill(occ, res)
-    conn = grow_connected(res.copy(), occ) if p.follow else None
+    conn = grow_connected(res.copy(), occ) if p.rule == "follow" else None
     fills = vacs = 0
     out = {}
     for k in range(1, int(19 / p.dt) + 1):
@@ -62,7 +62,7 @@ for name, p in (("frozen Tm 0.5", FROZEN), (f"follow Tm {TM_F:g}", FOLLOW)):
         fills += int((~before.astype(bool) & occ.astype(bool)).sum())
         vacs += int((before.astype(bool) & ~occ.astype(bool)).sum())
         refill(occ, res)
-        if p.follow:
+        if p.rule == "follow":
             grow_connected(conn, occ)
         t = k * p.dt
         if any(abs(t - x) < p.dt / 2 for x in (4, 8, 12, 19)):

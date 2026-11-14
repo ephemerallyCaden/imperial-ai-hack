@@ -2,7 +2,7 @@
 
 Status: documented finding, NOT switched in tonight (user target: all P2 work done by 00:00; refit, NCA retrain
 and JS re-port do not fit). The frozen rules are unchanged on every agent branch; the new rule is
-`Params(follow=True)` (default False, output bit-identical when off).
+`Params(rule="follow")` (default False, output bit-identical when off).
 
 **Summary.** The follower rule fixes the visual problem (front-like closure, packed sheet, no holes), removes the
 field-size dependence, and matches the near-linear WHAD part II closure (R^2 0.999 vs data 0.98-0.996). Forecast
@@ -100,7 +100,7 @@ Re-run: `nice -n 19 python3 sim/follower_forecast.py /tmp/follower_scratch && py
 
 ## What switching would take
 In order, about 3-5 h of work at today's machine load:
-1. **Rules and fits (Agent 1):** merge `follow=True` as the default; set TM_GRID to 0.05-50 h (31 points, or higher
+1. **Rules and fits (Agent 1):** merge `rule="follow"` as the default; set TM_GRID to 0.05-50 h (31 points, or higher
    for stalled part I wounds); re-run `calibrate.py --all` and `forecast.py`. About 1 h of CPU.
 2. **NCA (Agent 2):** regenerate the training data under follow and retrain with a front source term (details
    below). The longest item: hours of training.
