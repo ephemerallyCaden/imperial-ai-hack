@@ -1,5 +1,6 @@
 """Run in a checkout with torch + Agent 2's nca/: deterministic torch reference rollouts for sim/js/nca_check.mjs.
-python3 sim/js/nca_torch_ref.py nca/v2/weights.pt /tmp/ref_v2.json   (or nca/weights.pt for v1; run from the repo root)
+cd <checkout with Agent 2's nca/ (e.g. .sandboxes/p2-v2-nca)> && /tmp/p2venv/bin/python <this file> nca/v2/weights.pt /tmp/ref_v2.json
+(cwd decides which nca/model.py is imported: run it from the branch that produced the weights)
 Builds the net from nca/model.py load_config(weights) (v2: division 1, Tm encoding to tm_max, clip to the trained range,
 as nca/api.py rollout) and writes several cases: in-range Tm, a high Tm (v2 encoding) and an out-of-range Tm (clip).
 Then: node sim/js/nca_check.mjs <weights.json> /tmp/ref_v2.json <weights.config.json>  -> maxAbsDiff ~1e-6 per case."""
@@ -15,7 +16,7 @@ net.load_state_dict(torch.load(wpath, map_location="cpu")); net.eval()
 rho, R = test_input(); H, W = rho.shape
 t = lambda a: torch.from_numpy(a.astype(np.float32))[None, None]
 cases = []
-for Tm, bias in [(0.5, 7 / 9), (20.0, 0.5), (80.0, 0.95)]:  # last one is outside [tm_max, bias_max] for both versions
+for Tm, bias in [(0.5, 7 / 9), (20.0, 0.5), (80.0, 0.95), (800.0, 0.1)]:  # 80 h clips under v1; 800 h and the biases clip under v2
     tm_c, b_c = float(np.clip(Tm, cfg["tm_min"], cfg["tm_max"])), float(np.clip(bias, cfg["bias_min"], cfg["bias_max"]))
     par = torch.tensor([encode(cfg, tm_c, b_c)], dtype=torch.float32)
     with torch.no_grad():

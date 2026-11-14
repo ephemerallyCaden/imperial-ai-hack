@@ -17,7 +17,8 @@ const KERN = [
 import { hashSeed } from './engine.js';
 
 // = nca/model.py norm_params: log Tm mapped over [TM_MIN, TM_MAX] to [-1, 1]
-// v1 (nca/weights.json): Tm in [0.05, 5]. v2 (nca/v2/weights.config.json, follower rule): tm_max 50, division 1.
+// v1 (nca/weights.json): Tm in [0.05, 5]. v2 (nca/v2/weights.config.json, follower rule): tm_max from the config
+// (500 h as of the retrain), division 1 with the near-cell source gate.
 export const TM_MIN = 0.05, TM_MAX = 5.0;
 export function normParams(Tm, bias, tmMin = TM_MIN, tmMax = TM_MAX) {
   const lo = Math.log(tmMin), hi = Math.log(tmMax);
@@ -128,7 +129,15 @@ export class NCA {
     }
     for (let i = 0; i < hw; i++) {
       let v = nr[i];
-      if (this.division) v += (this.division * sigmoid(src[i] - 3) * (1 - v)) / K;
+      if (this.division) {
+        // v2 source gate: near = 3x3 max of rho at the START of the substep (incl. centre, outside = 0), so mass only
+        // appears next to cells (= F.max_pool2d(rho, 3, 1, 1) in nca/model.py)
+        const y = (i / w) | 0, x = i - y * w;
+        let near = 0;
+        for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; if (xx < 0 || xx >= w) continue; if (rho[yy * w + xx] > near) near = rho[yy * w + xx]; } }
+        v += (this.division * near * sigmoid(src[i] - 3) * (1 - v)) / K;
+      }
       nr[i] = Math.max(v, R[i]); // reservoir floor
     }
     return [nr, nhd];
