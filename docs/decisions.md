@@ -64,3 +64,7 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 
 ## 2026-11-14 22:45 [randodeh] Gate (R18 in design.md)
 - DECIDED: NCA not passable at 3.8 h (29% worse than edge speed). Edge-speed + conformal ships as the forecaster; NCA = draw-tool emulator. NCA ties/beats baselines at 9.5 h. Cut-offs are 1.9/3.8/5.7/9.5 h.
+
+## 2026-11-14 23:45 [randodeh] NCA fine-tuned on real frames (R26 in design.md)
+- RESULT: real-data NCA passes the gate (9/12; 3.8 h within 4% of edge speed; best at 9.5 h). Zaritsky extra data hurt; not used.
+- OPEN for P2/P3: use the real-data NCA in the upload/agent path, or keep edge speed (marginally better early, no torch).

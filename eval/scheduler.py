@@ -9,6 +9,7 @@ Usage: python eval/scheduler.py   -> eval/results/scheduler.csv, eval/results/sc
 """
 import json, os
 import numpy as np, pandas as pd
+from forecast_baselines import EXCLUDE
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = f"{HERE}/forecasts/whad/loo_all"
@@ -21,6 +22,8 @@ def load(model):
     for c in CHECKS:
         doc = json.load(open(f"{SRC}/{model}_{c:g}h.json"))
         for f in doc["forecasts"]:
+            if f["wound_id"] in EXCLUDE:
+                continue
             a = np.array(f["observed"]["area"]); t = np.array(f["observed"]["t_hours"])
             hit = np.nonzero(a <= 0.1)[0]
             closed = bool(len(hit) and t[hit[0]] <= END)
@@ -47,7 +50,7 @@ def simulate(rows, lo, hi):
 
 def main():
     res, widths = [], []
-    for model in ("edge_speed", "nca_ensemble"):
+    for model in ("edge_speed", "nca_ensemble", "nca_realft"):
         if not os.path.exists(f"{SRC}/{model}_3.8h.json"):
             continue
         rows = load(model)
