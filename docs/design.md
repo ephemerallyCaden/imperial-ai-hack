@@ -185,7 +185,7 @@ Resolved by the user on 14 Nov (R12):
 
 Open from R19 (agent layer):
 - Adaption task (9c step 1): Intake settings (proposed) or another task. Owner P2.
-- Final account for the recorded runs and a spending cap (R20: swap before the video is recorded). Owner P3.
+- Final account for the recorded runs (R20: swap before the video is recorded); no spending cap (P3 decision). Owner P3.
 
 Still to confirm: overnight work and the demo/video rule with organisers (P3 emails aisociety@imperial.ac.uk); 5.5 defaults are proposals until the team accepts them.
 
