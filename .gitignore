@@ -34,3 +34,4 @@ data/processed/whad_masks/
 secrets/
 *.pem
 *.key
+upload_out/
