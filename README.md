@@ -1,53 +1,59 @@
-# Imperial AI Hack
+# ClosureCall
 
-Claude Code setup for a 3-person team at Imperial AI Hack (12:00 14 Nov to 12:00 15 Nov 2026, 24 hours).
+Forecast the rest of a wound-closure time-lapse from its first part, with an honest uncertainty band.
 
-## Quick start
+> Research prototype. Advisory only. Not a medical device. No clinical or drug-effect claims.
+
+## Problem
+
+Scratch-assay and wound-healing experiments are measured after they finish. An assay scientist watching a plate has no calibrated early answer to "will this well close, and when?" ClosureCall forecasts the closure curve from the first 20-30% of the series, gives time to 50% / 90% closed with ranges, and flags wells that look off-track.
+
+## What we built
+
+_TODO: fill in as features land._
+
+## How it works
+
+_TODO: NCA ensemble + conformal calibration; cell layer; viewer._
+
+## Results
+
+_TODO: scorecard vs baselines, calibration, failure cases._ Baseline numbers: `eval/results/`.
+
+## Repo layout
+
+```
+data/     fetch.py (downloads raw data), build_curves.py (raw -> data/processed/*.csv)
+eval/     baselines.py (simple forecasters), run_baselines.py (scoring), results/
+model/    NCA ensemble + calibration
+sim/      cell-layer simulator
+web/      viewer / report page
+```
+
+## Reproduce
 
 ```bash
-cp .env.example .env
-# Add sponsor/API keys to .env
+pip install -r requirements.txt
+export CLOSURECALL_DATA=/path/outside/repo   # raw data is ~2.5 GB; default is data/raw
+python data/fetch.py
+python -I data/build_curves.py
+python eval/run_baselines.py
 ```
 
-## First 30 minutes
+## Datasets
 
-1. Pick one main track and at most one sub-bounty (see HACKATHON.md)
-2. Run `/spec` to turn the idea into a buildable spec
-3. Choose the stack, fill in CLAUDE.md
-4. Each teammate: `git checkout -b feature/[name]`
-5. Design the core screens in Figma first (cross-cutting track: Best Designed AI Product)
+| Dataset | Licence | Use |
+|---|---|---|
+| Drosophila embryo laser wounds, Zenodo [10.5281/zenodo.7660424](https://doi.org/10.5281/zenodo.7660424) | CC BY 4.0 | Wound-area curves (62 sequences) |
+| Zaritsky et al. 2015, *GigaScience* 4:8, GigaDB [10.5524/100118](https://doi.org/10.5524/100118) | CC0 | Scratch-assay gap curves, DA3 and MDCK, +/- HGF/SF, Met inhibitor |
+| Jin et al. 2016 PC-3 scratch-assay density profiles, via [jlager/BINNs](https://github.com/jlager/BINNs) | not stated; cited, not re-hosted | 1D density profiles, 6 initial densities |
 
-## What's included
+Derived curves in `data/processed/` are redistributed under each source's licence with attribution above. Jin data is not committed.
 
-```
-.claude/
-  settings.json            Auto-approved commands, desktop notifications
-  agents/
-    reviewer.md            Demo-focused code review (opus)
-    explorer.md            Fast codebase search (haiku)
-    integrator.md          Branch merging assistant (sonnet)
-  skills/
-    spec/SKILL.md          /spec: idea -> SPEC.md via interview
-    fix/SKILL.md           /fix: paste error, get fix
-    verify/SKILL.md        /verify: build + types + lint + tests + diff review
-    ship/SKILL.md          /ship: build, test, commit, push
-    demo/SKILL.md          /demo: generate pitch script from codebase
-CLAUDE.md                  Fill in at kickoff (with agent auto-routing rules)
-HACKATHON.md               Timeline, tactics, sponsor API reference
-```
+## Open-source libraries
 
-## Workflow
+numpy, scipy, pandas, tifffile. _TODO: add as used._
 
-```
-/spec -> build features -> /fix when broken -> /verify before merge -> /ship -> /demo for the pitch
-```
+## Models / APIs
 
-## Agent auto-routing
-
-Claude uses agents proactively without being asked:
-- After writing code: auto-runs `/verify`
-- On build failure: auto-runs `/fix`
-- Before commits: scans diff for debug code and secrets
-- When exploring: uses the `explorer` agent
-
-Read `HACKATHON.md` for the full playbook.
+_TODO._
