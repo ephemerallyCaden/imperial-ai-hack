@@ -80,23 +80,31 @@ def main():
             if not h.any():
                 continue
             if k in own:
-                mem = own[k][1]
+                point, mem = own[k]
             else:  # no own fit: other physical wounds' fits (never the same wound)
                 v = np.array([own[c][0] for c in own if S[c]["wound"] != s["wound"]])
                 mem = v[rng.integers(len(v), size=N_MEM)]
+                point = np.array([np.exp(np.median(np.log(v[:, 0]))), np.median(v[:, 1])])
             i = int(np.nonzero(h)[0][-1])
             ts, a0 = float(s["t"][i]), float(s["a"][i])
             Rz = Z[f"{zi[k]}__R"]
             rho, R = Z[f"{zi[k]}__density"][i], (Rz[i] if Rz.ndim == 3 else Rz)
             n = int(np.ceil(H_LONG - ts))
             wf = rollout(nets[fold[k]], rho, R, mem[np.arange(N_MEM) % len(mem)], n, stochastic=True, seed=zlib.crc32(f"{k}{cut}".encode()))
-            traj[k] = dict(grid=ts + np.arange(n + 1), A=a0 * wf / wf[:, :1], src="fit" if k in own else "preset")
+            wd = rollout(nets[fold[k]], rho, R, point[None], n, stochastic=False)  # deterministic point (Agent 3: noise shifts the mean)
+            traj[k] = dict(grid=ts + np.arange(n + 1), A=a0 * wf / wf[:, :1], det=(a0 * wd / wd[:, :1])[0],
+                           src="fit" if k in own else "preset")
         fp = {S[k]["a"][S[k]["t"] <= cut + 1e-9].round(8).tobytes(): k for k in traj}
 
         def f_median(t_h, a_h, Gq):
             tr = traj[fp[np.asarray(a_h).round(8).tobytes()]]
             return np.interp(Gq, tr["grid"], np.median(tr["A"], 0))
         BASELINES[a.model] = f_median
+
+        def f_det(t_h, a_h, Gq):
+            tr = traj[fp[np.asarray(a_h).round(8).tobytes()]]
+            return np.interp(Gq, tr["grid"], tr["det"])
+        BASELINES[f"{a.model}_deterministic"] = f_det
         for split, (test, pool) in FB.splits("whad", S).items():
             test = {k for k in test if k in traj}; pool = {k for k in pool if k in traj}
             d = f"{a.out}/whad/{split}"; os.makedirs(d, exist_ok=True)
@@ -107,6 +115,9 @@ def main():
                             f"<= cut-off; start = observed mask at the last frame <= cut-off (auto: synthetic band); "
                             f"{n_pre} series used other wounds' fits; {fold_note}")
             json.dump(doc, open(f"{d}/{a.model}_{cut:g}h.json", "w"))
+            ddoc = FB.forecast_file("whad", split, f"{a.model}_deterministic", cut, S, test, pool, G, G_long, T)
+            ddoc["notes"] = doc["notes"].replace("median of 50 stochastic members", "deterministic rollout at the point fit")
+            json.dump(ddoc, open(f"{d}/{a.model}_deterministic_{cut:g}h.json", "w"))
             # raw ensemble on the same series and grid, no calibration (as forecast_gate's nca_ensemble_raw)
             raw = json.loads(json.dumps(doc))
             raw["model"] = f"{a.model}_raw"
