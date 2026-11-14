@@ -1,12 +1,12 @@
 # Stitch: design doc (single source of truth)
 
-Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is decided. Everything else is in section 15 (OPEN) or in research notes (`docs/research-report.md`, `docs/wound-plan.md`, `docs/papers/reading-notes.md`), which are background and do not override this file. Tags: [D] decided by the user; [F] verified fact; [DER] derived from a [D] and a [F] (confirm if wrong). Change a decision by editing here and adding a line to section 16.
+Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is decided. Everything else is in section 15 (OPEN) or in research notes (kept on branch `session/research-docs`: `docs/research-report.md`, `docs/wound-plan.md`, `docs/papers/reading-notes.md`), which are background and do not override this file. Tags: [D] decided by the user; [F] verified fact; [DER] derived from a [D] and a [F] (confirm if wrong). Change a decision by editing here and adding a line to section 16.
 
 ## 1. Goal
-- [D] Build **Stitch**, the headline product: an early wound-closure forecaster with calibrated uncertainty, stall / "measure again" flags and an honest scorecard against simple baselines. (Name "for now"; user may rename.)
+- [D] Build **Stitch**, the headline product: an early wound-closure forecaster with calibrated uncertainty, stall / "measure again" flags and a scorecard against simple baselines. (Name "for now"; user may rename.)
 - [D] Named user in the video's first 15 s: an **assay scientist** deciding whether to stop, extend or repeat a scratch/wound-assay plate. Clinical use is a "later" slide only.
 - [D] Track: **AI for Science**. Extra prize: **Figma** (design). Reply "AI on Campus" dropped. No Boltz bounty (see 15).
-- [D] Wow feature: **draw a wound on screen and watch it heal**, with a **continuous zoom** from individual (simulated) cells to the whole wound.
+- [D] Demo feature: **draw a wound on screen and watch it heal**, with a **continuous zoom** from individual (simulated) cells to the whole wound.
 - Non-goals [D/DER]: clinical claims, drug-effect prediction, claims that simulated cells are observed cells, a proliferation-vs-movement inference feature.
 
 ## 2. Event constraints [F]
@@ -31,13 +31,21 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - [D] Presets shipped: **MCF10A control (CC) and CYR61 shRNA (C61)**, calibrated from WHAD with division OFF (mitomycin-treated assays). Everything else (other WHAD conditions, a Jin PC-3 division-ON preset) is stretch.
 ### 4.3 Viewer [D]
 - **One continuous zoom** (no scene switch): zoomed in shows **simulated cells**; zoomed out shows density/wound outline and the forecast with its band. All levels derive from the same state; wound area is identical at every zoom; one time slider.
+- [D, R11] **Tissue rendering style:** organic irregular cells, **no outlines anywhere on the grid, no hexagons**, and smooth colour gradients between states instead of hard thresholds (leading edge = soft shaded band, new tissue = gradient with fading speckle, wound = smooth gradient darkest at the centre, dividing = pale cell with two small nuclei). State rules and non-colour cues are unchanged except the leading-edge cue (shaded band instead of an outline).
 - Honesty labels [D from earlier + DER]: "simulated cells, not tracked cells"; observed vs predicted visually distinct; ensemble disagreement shown as separate trajectories; colour-blind-safe palette; keyboard zoom.
 - [D] Real WHAD frames appear **only in the validation segment of the video**; the viewer itself is fully simulated.
+- [D, R11] **Tissue tone switcher ships** (light / medium / deep): a display setting that re-themes the tissue colours only (state rules and cues unchanged); it is not part of the draw tool's controls (shape + preset). This reverses the earlier 'range in mockups only' choice. Colours are illustrative, not clinically calibrated; say so in the UI help.
 
 ## 5. Models
 ### 5.1 Source of truth [D]
 - **Cell agents are the truth.** A simple cell-agent simulation holds cell positions and gives density and wound outline at every zoom.
 - The density-field **NCA emulates the agents** (trained on their coarse-grained output) and gives fast ensemble forecasts and bands.
+### 5.1b Adopted from Migliaccio et al. 2023 (Cancers 15:5284; PMID 37958456) [D, R9]
+- **Cell-agent rules**: reimplement their 2D lattice rules for P2's cell-agent layer, cited: each step a cell migrates with Pm = (1/Tm)/(1/Tm+1/Td) or proliferates with Pd = (1/Td)/(1/Tm+1/Td); Tm = delta^2/D; quiescent (contact inhibition) when no empty neighbour; wound-directed bias (7 of 9 sites); periodic/refilled boundary. [DER] We extend them with density-dependent movement (Jin 2016) and freehand wound shapes; this is our change, not theirs.
+- **Baseline and sanity check**: closure-rate power law alpha = a * Phi^-b with Phi = Tm/Td (a about 2e-3, b about 0.66 from extracted text; verify in the PDF) is one more baseline; Phi < about 1e-2 (their critical value) is the sanity check that division can be neglected for mitomycin-treated WHAD presets.
+- **Priors**: their Table 2 (doubling times and migration times per cell line) are starting priors for presets before calibration to WHAD.
+- Differences from this prior art that we claim: they calibrate fitted closure curves (r about 0.98) with no held-out forecast, no early-call, no uncertainty, no learned emulator; we forecast with calibrated bands on held-out wounds and add an NCA emulator, continuous zoom and a draw tool. Their code and data are available only on request, so we reimplement.
+
 ### 5.2 Movement and multiplication [D, confirmed R7]
 - Both terms exist in the simulation: movement (cells move/flux into the gap) and multiplication (division adds cells). [DER] NCA update = mass-conserving flux term (movement) + non-negative source/sink head (multiplication/death).
 - Density-dependent movement is required (Jin 2016: effective diffusivity rises with starting density) [F].
@@ -90,6 +98,12 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (deck.gl/WebGL); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
 - Public GitHub repo, MIT licence; no raw data, no PDFs committed; reimplement code from papers with no licence.
 
+## 9b. LLM roles [D, R10]
+- Principle: deterministic code does the science; the LLM never forecasts and never produces a number. LLM output ships as cached JSON (run offline with the Claude API on the demo inputs; no live API call and no keys in the repo).
+- **Assay intake**: pasted protocol text to a structured config (cell line, seeding density, mitomycin yes/no, scratch tool, imaging interval, plate part). Code maps the config to a preset and applies rules (mitomycin means division off; Phi = Tm/Td < about 1e-2 check) and checks consistency; the LLM extraction is shown next to the source text for review.
+- **Anomaly triage**: code detects suspicious wounds first (observed leaves its 90% band, stall probability above threshold, flat area over a stated window, blank or out-of-focus frames); the LLM then reads the flagged wound's curve summary, metadata and (optionally) frame overlays and writes a short triage note with candidate causes (for example plate-part batch effect, edge damage, debris) labelled as hypotheses. It never raises or clears a flag by itself. Thresholds are set by P2/P1 and recorded here once chosen (OPEN).
+- Not included: Reviewer 2 audit, report/caption writer, segmentation QC as a separate role, free-form chat.
+
 ## 10. Schedule [D / F]
 - Now: Sat afternoon. **Gate: 19:00 Sat** (section 5.3). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
 
@@ -103,6 +117,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 13. Prior art to cite [F]
 - Cai et al. 2025 (Regen Ther): WHAD segmentation + group-mean closure-curve regression, no held-out wounds or uncertainty. Nardini and Gevertz (arXiv 2606.10873): Jin-data PDE vs ABM, forecasts scored by final-time MSE only. MNCA (2506.20486), NeuralCPM (2502.02129), Richardson 2024: synthetic-only NCA/CPM work. Clinical baselines: Sheehan 2003 (53% area reduction at 4 weeks), Warriner 2011, Cardinal 2009.
+- Berezo et al. 2022 (Adv Wound Care; 1,220,576 wounds, gradient-boosted trees, AUC 0.85 for 4/8/12-week non-healing; proprietary EHR data) and Dallmann et al. 2025 (Adv Wound Care; 620,356 wounds, AUC 0.90 after 4 weeks and 0.92 after 5 weeks, changes in wound dimensions most influential): clinical EHR-scale prior art for early healing prediction.
 - Do not claim "first".
 
 ## 14. Acceptance criteria [DER]
@@ -116,6 +131,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Whether overnight work outside the building is permitted (ask organisers).
 - Demo video rule conflict (site: no demo video; Devpost rules: 2-minute video required): follow Devpost, confirm.
 - Cell-simulator parameters (P2, from calibration).
+- Anomaly-detector thresholds (band exceedance, stall window, flat-area rule) and the LLM prompt/output schema (P1/P2).
 - Role names; Figma owner (P3 assumed).
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
@@ -135,3 +151,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - R6: no sliders in draw tool; readout = no inference, integrate movement and multiplication as model terms; passable = CRPS within 10% and coverage 85 to 95%; gate 19:00; overnight work elsewhere = yes.
 - R7 (14 Nov): both movement and multiplication terms confirmed; draw tool = MCF10A control + CYR61 shRNA presets only; real WHAD frames only in the video's validation segment; user supplied colleagues' extra data sources (6.4) instead of answering the segmentation-scope question.
 - R8 (14 Nov): main benchmark = WHAD MCF10A; Zaritsky 2015 = second test set with held-out treatment, conditional on a first-hour verification; embryo set, WHiM-BC and MDCK strip movies in core as secondary data; auto-segmentation scope = MCF10A exp1 remainder + exp2.
+- R9 (14 Nov): adopt all three parts of Migliaccio 2023 (agent rules, Phi power-law baseline and sanity check, Table 2 priors).
+- R10 (14 Nov): LLM roles = assay intake (protocol text to config) + anomaly triage (code flags, LLM explains with hypotheses); Claude API run offline, outputs cached; Reviewer 2, report writer and segmentation QC not included. UI direction: journal-figure look, realistic tissue palette, full-bleed canvas with collapsible panels, skin-tone range shown in mockups only; five mockups built in design/mockups (selection pending).
+- R11 (14 Nov): tissue tone switcher ships (display setting); starting-point mockup not yet chosen: user will supply one more reference/mockup to build before choosing among M1 to M5.
+- R11b (14 Nov): tissue rendering = no outlines, no hexagons, gradient state blends; shared renderer rewritten (design/shared/cellfield.js v2); mockups M1 to M5 being updated; M6 night-plate in progress.
