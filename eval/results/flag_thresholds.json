@@ -1,22 +1,22 @@
 {
  "1.9": {
-  "p_stall": 0.278,
+  "p_stall": 0.283,
   "measure_again_signal": "width_h",
   "measure_again": 0.4068
  },
  "3.8": {
-  "p_stall": 0.315,
-  "measure_again_signal": "width_h",
-  "measure_again": 0.4972
+  "p_stall": 0.321,
+  "measure_again_signal": "nca_ensemble_spread",
+  "measure_again": 0.101825
  },
  "5.7": {
-  "p_stall": 0.566,
-  "measure_again_signal": "width_h",
-  "measure_again": 0.4904
+  "p_stall": 0.558,
+  "measure_again_signal": "nca_ensemble_spread",
+  "measure_again": 0.06977857142857144
  },
  "9.5": {
-  "p_stall": 0.122,
-  "measure_again_signal": "ambiguity",
-  "measure_again": 0.137
+  "p_stall": 0.245,
+  "measure_again_signal": "nca_realft_spread",
+  "measure_again": 0.03624000000000001
  }
 }

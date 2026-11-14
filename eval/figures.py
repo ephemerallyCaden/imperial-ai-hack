@@ -34,7 +34,7 @@ def label_end(ax, x, y, text, color, dy=0):
 
 def calibration(S):
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.8), sharey=True)
-    panels = [("whad", [("loo_all", "held-out wounds (28)"), ("CC_to_C61", "held-out condition: CC to C61")], 19.0, "WHAD MCF10A"),
+    panels = [("whad", [("loo_all", "held-out wounds (27)"), ("CC_to_C61", "held-out condition: CC to C61")], 19.0, "WHAD MCF10A"),
               ("whimbc", [("loo", "held-out wells (24)"), ("Monolayer_to_Sphere", "held-out condition: ordinary to stem-cell")], 27.0, "WHiM-BC MCF-7")]
     for ax, (ds, splits, span, title) in zip(axes, panels):
         ax.axhline(0.90, color=MUTED, lw=1, ls=(0, (4, 3)), zorder=1)
@@ -63,14 +63,14 @@ def calibration(S):
 def error_vs_history(S):
     g = S[(S.dataset == "whad") & (S.split == "loo_all")]
     names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "typical-wound curve",
-             "nca_ensemble": "NCA ensemble (calibrated)"}
-    SL = SLOTS + ["#008300"]
+             "nca_ensemble": "NCA sim-trained (calibrated)", "nca_realft": "NCA real-data (calibrated)"}
+    SL = SLOTS + ["#008300", "#6250d6"]
     fig, ax = plt.subplots(figsize=(7, 4))
     ends = []
-    for i, m in enumerate([m for m in ["edge_speed", "linear", "logistic", "gompertz", "lvcf", "nca_ensemble"] if (g.model == m).any()]):
+    for i, m in enumerate([m for m in ["edge_speed", "linear", "logistic", "gompertz", "lvcf", "nca_ensemble", "nca_realft"] if (g.model == m).any()]):
         d = g[g.model == m].sort_values("cutoff_h")
         ax.plot(d.cutoff_h, d.qscore, color=SL[i], marker="o", mec=SURF, mew=1.5, label=names[m],
-                ls=(0, (5, 2)) if m == "nca_ensemble" else "-")
+                ls=(0, (5, 2)) if m.startswith("nca") else "-")
         ends.append((d.qscore.iloc[-1], names[m], SL[i], d.cutoff_h.iloc[-1]))
     ends.sort()
     ys = [e[0] for e in ends]; gap = 0.0042
@@ -83,9 +83,10 @@ def error_vs_history(S):
     ax.set_xlim(0, 14.5); ax.set_ylim(0, None)
     ax.set_xlabel("history seen before forecasting (hours, of a 19 h series)")
     ax.set_ylabel("quantile score (CRPS approx.), lower is better")
-    ax.set_title("More history, better forecasts; simple edge-speed is the one to beat", loc="left", fontsize=11.5, fontweight="bold")
-    ax.legend(frameon=False, fontsize=9, loc="upper right")
-    fig.text(0.125, -0.03, "WHAD MCF10A, leave-one-wound-out, 56 series from 28 wounds.", fontsize=8.5, color=MUTED)
+    ax.set_title("Fine-tuned on real frames, the NCA catches the simple edge-speed model", loc="left", fontsize=11.5, fontweight="bold")
+    ax.legend(frameon=False, fontsize=9, loc="lower left")
+    fig.text(0.125, -0.03, "WHAD MCF10A, leave-one-wound-out, 55 series from 27 wounds. NCA real-data: fine-tuned on real frames, "
+             "4 wound-level folds.", fontsize=8.5, color=MUTED)
     fig.savefig(f"{OUT}/error_vs_history.png"); plt.close(fig)
 
 

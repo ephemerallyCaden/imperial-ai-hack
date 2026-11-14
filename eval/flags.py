@@ -38,6 +38,20 @@ def signals(path):
     return pd.DataFrame(rows)
 
 
+NCA_RAW = ["nca_ensemble_raw", "nca_realft_raw", "nca_realplus_raw"]
+
+
+def nca_spread(cut):
+    """Per series: mean width of each NCA's RAW (uncalibrated) 90% band over the forecast; its own uncertainty."""
+    out = {}
+    for m in NCA_RAW:
+        p = f"{SRC}/{m}_{cut:g}h.json"
+        if os.path.exists(p):
+            out[m.replace("_raw", "_spread")] = {f["wound_id"]: float(np.mean(np.array(f["area_q95"]) - np.array(f["area_q05"])))
+                                                for f in json.load(open(p))["forecasts"]}
+    return out
+
+
 def auc(score, label):
     s, l = np.asarray(score, float), np.asarray(label, bool)
     if l.all() or (~l).all():
@@ -79,7 +93,10 @@ def main():
         rows.append(dict(cut_h=cut, flag="stall", signal="p_stall", auc=auc(df.p_stall, df.stall_true), **st))
         rows.append(dict(cut_h=cut, flag="out_of_band", signal="next 2 frames outside band", auc=np.nan,
                          **prf(df.oob_flag.to_numpy(), df.off_track.to_numpy())))
-        aucs = {s: auc(df[s].fillna(0), df.off_track) for s in ("width_h", "fit_rmse", "ambiguity")}
+        cands = ["width_h", "fit_rmse", "ambiguity"]
+        for col, d in nca_spread(cut).items():
+            df[col] = df.id.map(d); cands.append(col)
+        aucs = {s: auc(df[s].fillna(0), df.off_track) for s in cands}
         best = max(aucs, key=lambda s: -1 if np.isnan(aucs[s]) else aucs[s])
         rows.append(dict(cut_h=cut, flag="measure_again", signal=f"{best} (AUCs: " + ", ".join(f"{k} {v:.2f}" for k, v in aucs.items()) + ")",
                          auc=aucs[best], **prf(loo_flags(df.fillna(0), best, "off_track"), df.off_track.to_numpy())))
