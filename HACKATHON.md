@@ -1,6 +1,6 @@
 # Imperial AI Hack Playbook (24 hours, 3 people)
 
-**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: [TBC]. Venue: [TBC]. Team name: [TBC].
+**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: 10:00 Sun 15 Nov. Venue: Huxley Building, Imperial College London. Team name: [TBC].
 
 ## Tracks
 
@@ -28,19 +28,24 @@ Because we are targeting Best Designed AI Product: design the 3 demo screens in 
 
 ## Timeline
 
-| Hour | Activity | Who |
+Start 12:00 Sat 14 Nov. **Submission deadline 10:00 Sun 15 Nov** (22h of build time). Event ends 12:00.
+
+| Time | Activity | Who |
 |------|----------|-----|
-| 0:00-0:30 | Idea finalized. Run `/spec` to write SPEC.md | All together |
-| 0:30-1:00 | Choose stack, scaffold project, fill in CLAUDE.md | One person |
-| 1:00-2:00 | Build 3 demo screens with hardcoded data | Design + frontend person |
-| 1:00-2:00 | Set up backend skeleton + sponsor API integration | Backend person |
-| 2:00-8:00 | Parallel feature work on branches | Everyone on own branch |
-| 8:00-9:00 | First merge. Run `/integrator` or merge manually | One person |
-| 9:00-16:00 | Wire real data into demo screens. Integrate sponsor API | Everyone |
-| 16:00-18:00 | Second merge. Polish demo path only | One person merging |
-| 18:00-20:00 | Deploy. Test on production URL | One person |
-| 20:00-22:00 | Presentation prep. Record backup demo video | All together |
-| 22:00-24:00 | Buffer for last-minute fixes. Practice demo | All together |
+| Sat 12:00-12:30 | Idea + track chosen. Run `/spec` to write SPEC.md | All together |
+| Sat 12:30-13:00 | Choose stack, scaffold project, fill in CLAUDE.md | One person |
+| Sat 13:00-14:00 | Design 3 demo screens in Figma | Design + frontend person |
+| Sat 13:00-14:00 | Backend skeleton + sponsor/model API integration | Backend person |
+| Sat 14:00-20:00 | Parallel feature work on branches (build to the Figma) | Everyone on own branch |
+| Sat 20:00-21:00 | First merge. Run `/integrator` or merge manually. Dinner | One person |
+| Sat 21:00-01:00 | Wire real data into demo screens. Integrate sponsor API | Everyone |
+| Sun 01:00-04:00 | Sleep in shifts: at least one person awake and merging | Rotate |
+| Sun 04:00-06:00 | Second merge. Polish demo path and design only | One person merging |
+| Sun 06:00-07:30 | Deploy. Test on production URL | One person |
+| Sun 07:30-09:00 | Presentation prep. Record backup demo video | All together |
+| Sun 09:00-09:30 | Submit everything. Do not wait for the deadline | All together |
+| Sun 09:30-10:00 | Buffer. **10:00 deadline** | All together |
+| Sun 10:00-12:00 | Demos/judging, practise the pitch | All together |
 
 ## Team branches
 
@@ -78,11 +83,11 @@ claude
 ### Skills cheat sheet
 | Command | When | What it does |
 |---------|------|-------------|
-| `/spec` | Hour 0 | Interview -> SPEC.md with demo script and team split |
+| `/spec` | Sat 12:00 | Interview -> SPEC.md with demo script and team split |
 | `/fix` | Something breaks | Paste error, get fix. Max 3 cycles. |
 | `/verify` | Before merge | Build, types, lint, tests, diff review. PASS/FAIL report. |
 | `/ship` | Feature done | Build, test, commit, push. One command. |
-| `/demo` | Hour 20 | Write pitch script from what's actually built |
+| `/demo` | Sun 07:30 | Write pitch script from what's actually built |
 | `/unstick` | Claude is looping | Meta-debug: diagnose pattern, recover, retry differently |
 | `/secure` | Before deploying | 5-min security scan: secrets, debug code, exposed endpoints |
 
