@@ -115,7 +115,7 @@ function updateColumns(f, dt) {
   const ease = Math.min(1, dt * 6);
   for (let k = 0; k < COUNT; k++) {
     const st = stateOf(f, k); states[k] = st;
-    const tgt = targetH(f, k, st);
+    const tgt = targetH(f, k, st) * (st === 'intact' ? 0.92 + 0.16 * rnd[k] : 1);   // subtle unevenness
     hNow[k] += (tgt - hNow[k]) * ease;
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
     m4.makeScale(1, h, 1).setPosition(x, 0, z);
