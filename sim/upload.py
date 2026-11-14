@@ -154,7 +154,7 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     return out
 
 
-def nca_band(occ0, members, t_obs, a_obs, grid):
+def nca_band(occ, members, t_obs, a_obs, grid):
     """Agent 2's NCA (nca/api.py): occ = lattice at the LAST observed frame. Returns (members, len(grid)) areas, or None
     (with a message) if the NCA code or weights are not available here."""
     try:
