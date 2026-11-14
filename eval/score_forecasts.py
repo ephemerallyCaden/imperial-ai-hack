@@ -74,6 +74,7 @@ def wilson(x, n, z=1.96):
     return c - h, c + h
 
 
+STATISTICAL = {"lvcf", "linear", "edge_speed", "logistic", "gompertz"}
 FOLD_ALIAS = {("whad", "loo"): "loo_all", ("whad", "B_CC_to_C61"): "CC_to_C61"}
 _WOUND = None
 
@@ -119,7 +120,7 @@ def gate(S, model):
     print(f"\nGATE for '{model}' (qscore within 10% of best baseline AND coverage 0.85-0.95):")
     for (ds, sp, cut), g in S.groupby(["dataset", "split", "cutoff_h"]):
         m = g[g.model == model]
-        b = g[g.model != model]
+        b = g[g.model.isin(STATISTICAL)]  # only the statistical baselines count (not sim / other NCA variants)
         if m.empty or b.empty:
             continue
         best = b.loc[b.qscore.idxmin()]
