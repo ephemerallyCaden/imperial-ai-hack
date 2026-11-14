@@ -19,7 +19,7 @@ Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is 
 - `python -I data/build_curves.py` to build `data/processed/*.csv` from raw data
 - `python eval/run_baselines.py [embryo|zaritsky ...]` to score the baselines (results in `eval/results/`)
 - `python contracts/validate.py contracts/example_forecast.json` to check forecast JSON against `contracts/forecast.schema.json` (test substitute; exit 1 on failure). Note: `web/data/*.json` currently use an older format (minutes, `wounds`) and fail this schema
-- Viewer dev: `python3 -m http.server 8000 --directory web` once `web/index.html` exists; design mockups: `python3 -m http.server 8000 --directory design`, then open `/mockups/m8-technical/`
+- Viewer dev: `python3 -m http.server 8000 --directory web` once `web/index.html` exists; design mockups were removed (archived at git tag `archive/mockups-2026-11-15`)
 - Lint: none configured; check syntax with `python -m compileall -q data eval contracts sim nca`
 - P2 sim (sim/, docs/sim.md): `python sim/calibrate.py` (fits), `python sim/forecast.py` (sim_ensemble gate files), `python sim/upload.py` (masks -> forecast JSON)
 - P2 NCA (nca/, see docs/nca.md; needs torch from requirements.txt): `python nca/gen_data.py --out /tmp/nca_data.npz`, `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt`, `python nca/forecast_gate.py` (nca_* gate files)
