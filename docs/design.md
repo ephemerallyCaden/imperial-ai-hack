@@ -59,7 +59,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ### 5.3 NCA vs statistical forecaster [D]
 - Primary model: density-field NCA ensemble (stochastic, energy-score/CRPS-style training; mass-conserving; parameters broadcast as channels).
 - Baselines (all evaluated): persistence; linear healing-rate extrapolation; logistic; Gompertz; Fisher-KPP / Porous-Fisher; Nardini Model 4 (reimplement; repo unlicensed); small MLP/LSTM on scalar features; deterministic NCA ablation.
-- **Gate at 00:00 Sun [D, moved from 19:00 in R15]:** NCA is "passable" if on held-out wounds its CRPS is within 10% of the best statistical forecaster AND empirical 90% coverage is between 85% and 95%. Passable: ship NCA as the forecaster. Not passable: ship the statistical forecaster as the forecaster and keep the NCA as the draw-tool emulator (labelled "emulator").
+- **Gate at 00:00 Sun [D, moved from 19:00 in R15]:** NCA is "passable" if on held-out wounds its CRPS is within 10% of the best statistical forecaster AND empirical 90% coverage is between 85% and 95%. Passable: ship NCA as the forecaster. Not passable: ship the statistical forecaster as the forecaster and keep the NCA as the draw-tool emulator (labelled "emulator"). Result (R18): not passable. In practice (P2 handoff) the draw tool runs the cell-agent engine, and the NCA band is used only on real or uploaded wounds, labelled "emulator" and uncalibrated.
 ### 5.4 Uncertainty [D]
 - Ensemble spread + conformal calibration across wounds (leave-one-wound-out jackknife+ or split conformal across wounds; wound is the exchangeable unit). Report coverage with confidence interval, CRPS, reliability plot.
 
