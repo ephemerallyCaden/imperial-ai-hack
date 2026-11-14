@@ -13,21 +13,26 @@ Rules:
   - Refused -> no forecast: seg_quality.status == "refused", missing scale, or any mask covering <1% or >70% of the field.
   - 1 frame -> members drawn from the fitted (Tm, bias) of WHAD wounds of that condition at t0 = 10 (an empirical prior, so a
     wider band), never including exclude_wound; flagged "measure_again" as preset-based.
-  - 2+ frames -> fit Tm and bias on the observed areas (grid as sim/calibrate.py, frames interval_h apart) + 50 bootstrap members.
+  - 2+ frames -> fit Tm and bias on the observed areas (follower grid as sim/v2.py, frames interval_h apart) + 50 bootstrap members.
+  - Rule: Params(rule="follow") (P2 v2, adopted for physical realism); prior and fits from sim/fits/whad_fits_follow.json.
   - Forecast grid hourly from the last frame to 19 h (the WHAD horizon the models were validated on).
   - Field size: fitted Tm depends on the field of view (vacancies leave through the border reservoir), so every upload is
     mapped onto the WHAD field extent (32 x 44 sites = 640 x 880 um): a window centred on the first frame's wound, padded with
     cells if the image is smaller. Uploads whose field differs from WHAD by more than 5% are flagged.
-  - NCA band: Agent 2's nca/api.py nca_forecast (start = lattice of the LAST frame), from $NCA_DIR (default <repo>/nca).
+  - NCA band: Agent 2's nca/api.py nca_forecast (start = lattice of the LAST frame), from $NCA_DIR (default <repo>/nca), with the
+    follower-trained weights $NCA_WEIGHTS (default $NCA_DIR/weights_follow.pt); skipped if absent (never the free-rule weights).
 """
 import sys, os, json, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
-import calibrate, forecast as F
+import forecast as F, v2
 from cellsim import Params, simulate, SITE_UM
 from start_state import mask_to_lattice, area_error
 
 NCA_DIR = os.environ.get("NCA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nca"))
+NCA_WEIGHTS = os.environ.get("NCA_WEIGHTS", os.path.join(NCA_DIR, "weights_follow.pt"))
+RULE = "follow"
+FITS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fits", "whad_fits_follow.json")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "forecasts", "upload")
@@ -75,7 +80,7 @@ def prior_members(condition, exclude_wound, rng):
     """(Tm, bias) of WHAD training wounds' fits at t0 = 10, same condition if known, sampled with replacement."""
     df = F.load_curves()
     meta = df.drop_duplicates("position").set_index("position")[["wound", "condition"]].to_dict("index")
-    fits = {**json.load(open(calibrate.OUT))["fits"], **json.load(open(F.AUTO_FITS))["fits"]}
+    fits = json.load(open(FITS))["fits"]  # follower fits, manual + auto
     pool = [[fits[p][PRIOR_T0]["Tm"], fits[p][PRIOR_T0]["bias"]] for p in fits
             if fits[p].get(PRIOR_T0) and meta[p]["wound"] != exclude_wound
             and (condition is None or meta[p]["condition"] == condition)]
@@ -86,14 +91,14 @@ def prior_members(condition, exclude_wound, rng):
 def fit_members(occ0, wf, interval_h, rng):
     """Grid fit of (Tm, bias) on observed wound fractions wf (frames interval_h apart) + bootstrap members."""
     hours = (len(wf) - 1) * interval_h
-    err = np.zeros((len(calibrate.TM_GRID), len(calibrate.BIAS_GRID), len(wf)))
-    for i, Tm in enumerate(calibrate.TM_GRID):
-        for j, b in enumerate(calibrate.BIAS_GRID):
-            for s in range(calibrate.SEEDS):
-                r = simulate(occ0, Params(Tm=Tm, bias=b), hours, frame_dt=interval_h, seed=s)
-                err[i, j] += (r["wound_frac"] - wf) ** 2 / calibrate.SEEDS
-    fr = np.arange(len(wf))  # fit_from_cube counts frames with index <= t0
-    return calibrate.fit_from_cube(fr, err, len(wf) - 1, rng)
+    g = v2.GRIDS[RULE]
+    err = np.zeros((len(g), len(v2.BIAS), len(wf)))
+    for i, Tm in enumerate(g):
+        for j, b in enumerate(v2.BIAS):
+            for s in range(v2.SEEDS):
+                r = simulate(occ0, Params(Tm=Tm, bias=b, rule=RULE), hours, frame_dt=interval_h, seed=s)
+                err[i, j] += (r["wound_frac"] - wf) ** 2 / v2.SEEDS
+    return v2.boot_fit(err, len(wf), g, rng)  # near-tie break + off-grid refine, as the WHAD follower fits
 
 
 def build_doc(model, wound_id, condition, t_obs, a_obs, grid, trajs, seg_quality, flags, notes):
@@ -144,17 +149,17 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     t_last, a_last = float(t_obs[-1]), float(a_obs[-1])
     trajs = []
     for i, (Tm, bias) in enumerate(members):
-        r = simulate(occ_last, Params(Tm=Tm, bias=bias), HORIZON - t_last, seed=1000 + i)  # hourly from t_last
+        r = simulate(occ_last, Params(Tm=Tm, bias=bias, rule=RULE), HORIZON - t_last, seed=1000 + i)  # hourly from t_last
         a = a_last * r["wound_frac"] / r["wound_frac"][0]
         trajs.append(np.interp(grid, t_last + np.arange(len(a)), a))
     notes = (f"Upload forecast (sim/upload.py). Lattice {occ0.shape} at {SITE_UM:g} um/site, area error {lat_err:.2%}. "
-             f"Parameters: {how}. Forecast starts from the last frame's mask, rescaled to its observed area.")
+             f"Rule: {RULE}. Parameters: {how}. Forecast starts from the last frame's mask, rescaled to its observed area.")
     out = {"sim_ensemble": build_doc("sim_ensemble", wound_id, condition, t_obs, a_obs, grid, np.array(trajs),
                                      seg_quality, flags, notes)}
     nca = nca_band(occ_last, members, t_obs, a_obs, grid)
     if nca is not None:
         import hashlib
-        sha = hashlib.sha256(open(os.path.join(NCA_DIR, "weights.pt"), "rb").read()).hexdigest()[:12]
+        sha = hashlib.sha256(open(NCA_WEIGHTS, "rb").read()).hexdigest()[:12]
         out["nca_ensemble"] = build_doc("nca_ensemble", wound_id, condition, t_obs, a_obs, grid, nca, seg_quality, flags,
                                         notes + f" NCA emulator band from the same members; weights sha256 {sha}.")
     return out
@@ -167,7 +172,7 @@ def nca_band(occ, members, t_obs, a_obs, grid):
         sys.path.insert(0, NCA_DIR)
         from api import nca_forecast
         return np.asarray(nca_forecast(occ, members, t_obs, a_obs, grid, stochastic=True, seed=0,
-                                       weights=os.path.join(NCA_DIR, "weights.pt")))
+                                       weights=NCA_WEIGHTS))
     except Exception as e:  # missing module, torch or weights: emit the sim file only
         print(f"NCA band skipped ({type(e).__name__}: {e})")
         return None
