@@ -1,5 +1,11 @@
 # P2 results and caveats (cell simulator, calibration, sim ensemble)
 
+> **Scope.** Stitch's simulator is a mechanistic lattice model of collective epithelial migration in 2D in-vitro scratch assays
+> (MCF10A cells, WHAD dataset). It forecasts the closure of the assay's cell-free gap; it does **not** model skin wounds in patients. In-vivo healing
+> adds haemostasis, inflammation, granulation tissue, contraction and remodelling, and none of these is modelled. Cell division is switched off for
+> WHAD (our modelling choice for a 19 h migration assay; whether WHAD used a proliferation inhibitor is not verified here). The wound-bias
+> parameter is not identified from these data, so Tm carries the signal. All tuning and evaluation are on WHAD only.
+
 Branch `feature/p2-agent1` (on main f51bb86). Details: `docs/sim.md`. Gate numbers are from P1's scorer
 (`python eval/score_forecasts.py eval/forecasts --gate sim_ensemble`, Sat 22:25). qscore = mean pinball loss over q05/q50/q95,
 a CRPS approximation, lower is better. cov = 90% band coverage. The gate requires qscore within 10% of the best baseline AND
@@ -118,4 +124,8 @@ edge_speed at 1.9 h: sim_follow_shrink at loo_manual (0.0403 vs 0.0412) and CC_t
 They were chosen after looking at WHAD errors, so treat them as a hypothesis for an external test, not a result.
 
 ### Judge question on v2
+- **Is this how skin heals?** No. It models one ingredient: an epithelial sheet migrating into a scratch in a dish (MCF10A, WHAD), with division off
+  and no immune cells, blood, matrix or contraction. Real skin wounds go through haemostasis, inflammation, proliferation with granulation tissue, and
+  remodelling over days to weeks. Our claim is limited to forecasting in-vitro scratch-assay closure from a few frames, scored against simple
+  baselines on held-out wounds.
 - **Why use the follower rule if it didn't pass your own criterion?** We chose it for physical realism, and say so openly. v1 left scattered single-site holes and its fitted speed depended on the field size (area 0.19 vs 0.36 at 19 h for the same scratch in a 44 x 44 vs 44 x 456 field). v2 closes as a front with no size dependence. On forecast skill the two are a wash: 6 of 12 groups better, worse on the held-out condition, and both lose to a fitted edge speed at early cut-offs. We pre-declared an adopt rule, it failed, and we report that alongside both rows rather than hiding v1. All of this is tuned and evaluated on WHAD only; WHiM-BC is the external check.
