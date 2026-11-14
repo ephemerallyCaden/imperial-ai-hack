@@ -24,6 +24,17 @@ def load_gray(path):
     return a
 
 
+FOCUS_FLOOR = 1.0  # texture_p90 of real WHAD frames >= 1.10 (n=48); Gaussian blur sigma 4 px -> 0.92, 8 px -> 0.64
+
+
+def texture_p90(img, win=WIN):
+    """Focus score: 90th percentile of local std of the z-scored image (blank or blurred frames score low)."""
+    a = img[::DOWN, ::DOWN].astype(np.float32)
+    a = (a - a.mean()) / (a.std() + 1e-6)
+    m = ndi.uniform_filter(a, win)
+    return float(np.percentile(np.sqrt(np.maximum(ndi.uniform_filter(a * a, win) - m * m, 0)), 90))
+
+
 def segment(img, frac=FRAC, win=WIN):
     """img: 2D float array at full resolution. Returns bool wound mask at 1/DOWN resolution."""
     a = img[::DOWN, ::DOWN]
