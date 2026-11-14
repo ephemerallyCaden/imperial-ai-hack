@@ -13198,16 +13198,37 @@
   },
   "draw_tool": {
    "CC": {
-    "Tm": 0.9484537290187908,
+    "Tm": 0.4992915536685413,
     "bias": 0.25,
-    "n": 7
+    "Tm_iqr": [
+     0.3986070799165522,
+     0.6225048560588196
+    ],
+    "bias_iqr": [
+     0.25,
+     0.4482056055680616
+    ],
+    "part": "II",
+    "n": 7,
+    "n_manual": 4
    },
    "C61": {
-    "Tm": 1.051866168904568,
-    "bias": 0.38290860479362177,
-    "n": 6
+    "Tm": 0.47723316718734726,
+    "bias": 0.35173446026944655,
+    "Tm_iqr": [
+     0.4467019072636682,
+     0.541277982014438
+    ],
+    "bias_iqr": [
+     0.25,
+     0.38386573551212916
+    ],
+    "part": "II",
+    "n": 7,
+    "n_manual": 3
    },
-   "note": "all positions, t0=10; draw tool only, not for scoring"
+   "label": "simulation, preset parameters (WHAD part II fits)",
+   "note": "median of part II fits at t0=10, manual + auto; draw tool only, not for scoring"
   }
  }
 }
