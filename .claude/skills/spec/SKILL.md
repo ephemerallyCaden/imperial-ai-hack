@@ -39,11 +39,10 @@ Turn a hackathon idea into a buildable spec through rapid-fire questions.
 ## Architecture
 [Simple diagram: user -> frontend -> backend -> sponsor API/DB]
 
-## Team split (4 people, 24 hours)
+## Team split (3 people, 24 hours)
 - Person A: [scope] - branch: feature/[name]
 - Person B: [scope] - branch: feature/[name]
 - Person C: [scope] - branch: feature/[name]
-- Person D: [scope] - branch: feature/[name]
 
 ## Sponsor API integration
 - API: [which endpoints]

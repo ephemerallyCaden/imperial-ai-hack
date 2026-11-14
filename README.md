@@ -1,22 +1,21 @@
-# Hackathon Template
+# Imperial AI Hack
 
-Pre-configured Claude Code orchestration for a 4-person, 24-hour hackathon.
+Claude Code setup for a 3-person team at Imperial AI Hack (12:00 14 Nov to 12:00 15 Nov 2026, 24 hours).
 
 ## Quick start
 
 ```bash
-git clone [this-repo]
-cd [repo-name]
 cp .env.example .env
-# Add your sponsor/API keys to .env
+# Add sponsor/API keys to .env
 ```
 
 ## First 30 minutes
 
-1. Run `/spec` to turn your idea into a buildable spec
-2. Choose your tech stack, fill in CLAUDE.md
-3. Each teammate: `git checkout -b feature/[name]`
-4. Start building
+1. Pick one main track and at most one sub-bounty (see HACKATHON.md)
+2. Run `/spec` to turn the idea into a buildable spec
+3. Choose the stack, fill in CLAUDE.md
+4. Each teammate: `git checkout -b feature/[name]`
+5. Design the core screens in Figma first (cross-cutting track: Best Designed AI Product)
 
 ## What's included
 

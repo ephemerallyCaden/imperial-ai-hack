@@ -1,6 +1,8 @@
-# [PROJECT NAME]
+# [PROJECT NAME] — Imperial AI Hack
 
-> [One sentence: what it does and who it's for]
+> [One sentence: what it does and who it is for]
+
+Event: Imperial AI Hack, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026 (24h). See HACKATHON.md for tracks and judging.
 
 ## Stack
 <!-- Fill in at kickoff -->
@@ -54,7 +56,7 @@ Use these agents and skills proactively without being asked:
 - When exploring unfamiliar code: use the `explorer` agent, don't read files one by one
 
 ## Team
-Four developers working in parallel on feature branches.
+Three developers working in parallel on feature branches.
 - Merge to `main` only when your feature works and builds.
 - Coordinate with teammates before touching shared files.
 - Each person owns their branch. Don't edit others' branches.
