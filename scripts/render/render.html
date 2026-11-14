@@ -1,0 +1,105 @@
+<!doctype html><meta charset="utf-8"><title>render</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+// Offline renderer for P2 playback JSON (video footage). Opened by render.mjs in headless Chrome over file://
+// (needs --allow-file-access-from-files). Query: ?mode=sheet  -> contact sheet of all layers
+//                                               ?mode=frame&layer=smooth|agents|nca|panel&file=..&t=..  -> one frame
+import { viewFrame, agentFrame, densityFrame } from '../../sim/js/playback.js';
+const C = { paper: '#000', panel: '#0A0A0A', hair: '#2B2B2B', ink: '#ECECEC', sec: '#B4B4B4', ter: '#7E7E7E', blue: '#56B4E9', violet: '#B8A9E8' };
+const q = new URLSearchParams(location.search), SIM = '../../web/public/sim/';
+const load = async (n) => (await fetch(SIM + n)).json();
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const nearest = (pb, t) => { let b = 0; pb.t_hours.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(pb.t_hours[b] - t)) b = i; }); return b; };
+const font = (px, w = 400) => `${w} ${px}px ui-monospace, Menlo, monospace`;
+
+function field(x0, y0, W, H, data, fw, fh, lo = '#000000', hi = [190, 190, 190]) { // 0..1 grid -> grey ramp
+  const sx = W / fw, sy = H / fh;
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+    const v = data[y * fw + x]; const k = v > 1 ? v / 255 : v;
+    g.fillStyle = `rgb(${hi.map((c) => Math.round(c * k)).join(',')})`;
+    g.fillRect(x0 + x * sx, y0 + y * sy, Math.ceil(sx), Math.ceil(sy));
+  }
+}
+function lines(x0, y0, s, ls, color, alpha = 1, lw = 2) {
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = lw; g.lineJoin = 'round';
+  for (const l of ls) { g.beginPath(); for (let i = 0; i < l.length; i += 2) g[i ? 'lineTo' : 'moveTo'](x0 + l[i] * s, y0 + l[i + 1] * s); g.stroke(); }
+  g.restore();
+}
+function smoothTile(pb, f, x0, y0, s) { // smoothed occupancy + area-matched outline (default view)
+  const v = viewFrame(pb, f);
+  field(x0, y0, pb.W * s, pb.H * s, v.fine.data, v.fine.w, v.fine.h);
+  lines(x0, y0, s, v.outline.display.lines, C.blue, v.outline.display.opacity, 2);
+}
+function agentTile(pb, f, x0, y0, s, crop) { // deep zoom: raw agents as cells, outline on top
+  const occ = agentFrame(pb, f), v = viewFrame(pb, f), [cy, cx, ch, cw] = crop;
+  g.save(); g.beginPath(); g.rect(x0, y0, cw * s, ch * s); g.clip();
+  g.fillStyle = C.paper; g.fillRect(x0, y0, cw * s, ch * s);
+  g.fillStyle = C.sec;
+  for (let y = cy; y < cy + ch; y++) for (let x = cx; x < cx + cw; x++) if (occ[y * pb.W + x]) {
+    g.beginPath(); g.arc(x0 + (x - cx + 0.5) * s, y0 + (y - cy + 0.5) * s, s * 0.42, 0, 2 * Math.PI); g.fill();
+  }
+  lines(x0 - cx * s, y0 - cy * s, s, v.outline.display.lines, C.blue, v.outline.display.opacity, 2.5);
+  g.restore();
+}
+function ncaTile(pb, f, x0, y0, s) { // NCA density field (coarse, grain x grain sites per cell)
+  field(x0, y0, pb.W * s, pb.H * s, densityFrame(pb, f), pb.density.w, pb.density.h, '#000', [184, 169, 232]);
+}
+function panel(sim, nca, x0, y0, W, H, tMax = 19) { // data vs sim vs NCA wound fraction, same start and fit
+  const o = nca.meta.observed, b = nca.meta.band, ymax = Math.max(...o.wound_frac) * 1.08, pad = 48;
+  const X = (t) => x0 + pad + (t / tMax) * (W - pad - 16), Y = (v) => y0 + H - 32 - (v / ymax) * (H - 56);
+  g.fillStyle = C.panel; g.fillRect(x0, y0, W, H);
+  g.strokeStyle = C.hair; g.lineWidth = 1; g.font = font(12); g.fillStyle = C.ter;
+  for (let t = 0; t <= tMax; t += 2) { g.beginPath(); g.moveTo(X(t), Y(0)); g.lineTo(X(t), Y(ymax)); g.stroke(); g.fillText(`${t}`, X(t) - 6, Y(0) + 16); }
+  for (let v = 0; v <= ymax; v += 0.05) { g.beginPath(); g.moveTo(X(0), Y(v)); g.lineTo(X(tMax), Y(v)); g.stroke(); g.fillText(v.toFixed(2), x0 + 6, Y(v) + 4); }
+  g.fillText('hours', X(tMax) - 40, Y(0) + 30); g.fillText('wound fraction of field', x0 + pad, y0 + 16);
+  const tc = nca.meta.t_start; g.setLineDash([4, 4]); g.strokeStyle = C.ter; g.beginPath(); g.moveTo(X(tc), Y(0)); g.lineTo(X(tc), Y(ymax)); g.stroke(); g.setLineDash([]);
+  g.fillText(`start ${tc} h (last frame <= ${nca.meta.cutoff_hours} h cut-off)`, X(tc) + 6, Y(ymax) + 14);
+  g.fillStyle = 'rgba(184,169,232,0.22)'; g.beginPath();
+  b.t_hours.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(b.q95[i])));
+  for (let i = b.t_hours.length - 1; i >= 0; i--) g.lineTo(X(b.t_hours[i]), Y(b.q05[i]));
+  g.fill();
+  const curve = (ts, vs, color, lw) => { g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); ts.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(vs[i]))); g.stroke(); };
+  curve(sim.t_hours, sim.wound_frac, C.blue, 2.5); curve(nca.t_hours, nca.wound_frac, C.violet, 2.5);
+  g.fillStyle = C.ink; o.t_hours.forEach((t, i) => { g.beginPath(); g.arc(X(t), Y(o.wound_frac[i]), 3.5, 0, 2 * Math.PI); g.fill(); });
+  const lg = [[C.ink, 'data (WHAD, manual mask)'], [C.blue, 'cell-agent simulation'], [C.violet, 'NCA emulator'], ['rgba(184,169,232,0.5)', 'NCA ensemble spread (uncalibrated)']];
+  lg.forEach(([c, s], i) => { g.fillStyle = c; g.fillRect(X(tMax) - 280, y0 + 26 + i * 18, 14, 8); g.fillStyle = C.sec; g.fillText(s, X(tMax) - 260, y0 + 34 + i * 18); });
+}
+
+async function sheet() {
+  const [vid, sim, nca] = await Promise.all(['whad_partII_C61_P2.json', 'whad_partII_C61_P2_sim38.json', 'whad_partII_C61_P2_nca.json'].map(load));
+  const T = [0, 3, 6, 9, 12, 15, 19], s = 5, tw = vid.W * s, th = vid.H * s, gap = 12, lab = 250, top = 64;
+  const rows = [['VIDEO RUN', 'sim, smoothed + outline', 'frame-0 start, t0=10 fit'], ['DEEP ZOOM', 'same run, raw agents', '14 x 18 sites'],
+    ['PANEL: SIM', 'smoothed + outline', 'start = 3.8 h cut-off'], ['PANEL: NCA', 'emulator density 16 x 22', 'same start + fit']];
+  cv.width = lab + T.length * (tw + gap); cv.height = top + rows.length * (th + 30) + 386;
+  g.fillStyle = C.paper; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = C.ink; g.font = font(18, 600); g.fillText('Stitch P2 footage: contact sheet (exp1_partII_C61_P2, 32x44 sites, 20 um)', 12, 28);
+  g.fillStyle = C.ter; g.font = font(12); g.fillText('simulated cells, not tracked cells; draft render, colours/layout to be agreed with P3', 12, 46);
+  const crop = [9, 13, 14, 18], zs = Math.min(tw / crop[3], th / crop[2]);
+  rows.forEach(([a, b, c], r) => {
+    const y = top + r * (th + 30) + 18;
+    g.fillStyle = C.ink; g.font = font(13, 600); g.fillText(a, 12, y + 20);
+    g.fillStyle = C.sec; g.font = font(11); g.fillText(b, 12, y + 40); g.fillStyle = C.ter; g.fillText(c, 12, y + 56);
+    T.forEach((t, i) => {
+      const x = lab + i * (tw + gap);
+      g.fillStyle = C.ter; g.font = font(11); g.fillText(`t = ${t} h`, x, y - 4);
+      if (r === 0) smoothTile(vid, nearest(vid, t), x, y, s);
+      else if (r === 1) agentTile(vid, nearest(vid, t), x, y, zs, crop);
+      else if (t < sim.t_hours[0] - 1e-6) { g.strokeStyle = C.hair; g.strokeRect(x, y, tw, th); g.fillStyle = C.ter; g.fillText('before start', x + 8, y + 18); }
+      else if (r === 2) smoothTile(sim, nearest(sim, t), x, y, s);
+      else ncaTile(nca, nearest(nca, t), x, y, s);
+    });
+  });
+  panel(sim, nca, 12, top + rows.length * (th + 30) + 10, cv.width - 24, 360);
+}
+async function frame() { // one layer at one time, for final footage
+  const pb = await load(q.get('file')), t = +q.get('t'), layer = q.get('layer'), s = +(q.get('scale') || 20);
+  if (layer === 'panel') { const [sim, nca] = await Promise.all([q.get('sim'), q.get('nca')].map(load)); cv.width = 1280; cv.height = 720; panel(sim, nca, 0, 0, 1280, 720); return; }
+  cv.width = pb.W * s; cv.height = pb.H * s; const f = nearest(pb, t);
+  if (layer === 'smooth') smoothTile(pb, f, 0, 0, s);
+  else if (layer === 'agents') agentTile(pb, f, 0, 0, s, [0, 0, pb.H, pb.W]);
+  else if (layer === 'nca') ncaTile(pb, f, 0, 0, s);
+}
+try { await (q.get('mode') === 'frame' ? frame() : sheet()); document.title = 'done'; }
+catch (e) { document.title = 'error'; g.fillStyle = '#f66'; g.font = font(16); g.fillText(String(e), 10, 30); console.error(e); }
+</script>
