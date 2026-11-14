@@ -8,7 +8,7 @@ Models (one file per model x fold x cut-off, named {model}_{fold}_t{t0}.json, co
 Per held-out wound and cut-off t0 (frames t <= t0 observed; t0 in hours = frame index):
   params: fits[position][t0] from sim/calibrate.py (fitted on that wound's frames <= t0 only, so nothing leaks
           across folds); null fit (too few frames) -> the fold's training-set preset for the wound's condition.
-  start:  the observed mask at t0 -> lattice (sim/start_state.py, SITE_UM) -> density grid (GRAIN) + reservoir R.
+  start:  the observed mask at the last frame <= t0 (none -> wound skipped) -> lattice (sim/start_state.py, SITE_UM) -> density grid (GRAIN) + reservoir R.
   area:   area_norm(t) = observed area_norm(start) * wound(t) / wound(start), forecast hourly from t0+1 to 19 h.
 """
 import argparse, json, os, sys
@@ -28,8 +28,15 @@ FOLDS = {  # fold -> held-out predicate on (part, condition). design.md R15: fol
 }
 
 
-def start(position, frame):
-    occ = mask_to_lattice(*load_png_mask(position, int(frame)), SITE_UM)
+def start(position, frame, source="manual", wound_frac=None):
+    """manual: observed mask at `frame`. auto (no masks on this machine): Agent 1's synthetic band with the observed
+    wound_frac (sim/forecast.py band_start), same seed rule as the sim ensemble."""
+    if source == "manual":
+        occ = mask_to_lattice(*load_png_mask(position, int(frame)), SITE_UM)
+    else:
+        import zlib
+        from forecast import band_start
+        occ = band_start(wound_frac, zlib.crc32(position.encode()))
     p = Params()
     R = reservoir_mask(occ, p.edge).astype(np.uint8)
     return occ, coarse_grain(occ, GRAIN), coarse_grain(R, GRAIN)
@@ -101,6 +108,7 @@ if __name__ == "__main__":
     ap.add_argument("--weights", default=os.path.join(HERE, "weights.pt"))
     ap.add_argument("--fits", default=os.path.join(ROOT, "sim/fits/whad_fits.json"))
     ap.add_argument("--curves", default=os.path.join(ROOT, "data/processed/whad_curves.csv"))
+    ap.add_argument("--auto", action="store_true", help="also forecast auto-segmented positions (whad_auto_curves.csv + sim/fits/whad_auto_fits.json)")
     ap.add_argument("--cutoffs", type=int, nargs="+", default=None, help="t0 (hours = frame index); default = the fits file's cut-offs")
     ap.add_argument("--T", type=float, default=12.0, help="p_close_by_T horizon (hours)")
     ap.add_argument("--out", default=os.path.join(HERE, "forecasts", "whad"))
@@ -109,7 +117,10 @@ if __name__ == "__main__":
     torch.set_num_threads(4)
     net = NCA(); net.load_state_dict(torch.load(a.weights, map_location="cpu")); net.eval()
     fits = json.load(open(a.fits))
-    cur = pd.read_csv(a.curves)
+    cur = pd.read_csv(a.curves).assign(source="manual", qc="ok")
+    if a.auto:
+        cur = pd.concat([cur, pd.read_csv(os.path.join(ROOT, "data/processed/whad_auto_curves.csv"))], ignore_index=True)
+        fits["fits"].update(json.load(open(os.path.join(ROOT, "sim/fits/whad_auto_fits.json")))["fits"])
     pos = cur.groupby("position").first().reset_index()
     cutoffs = a.cutoffs or fits["params"]["cutoffs"]
     for fold, test in FOLDS.items():
@@ -121,10 +132,13 @@ if __name__ == "__main__":
             for k, r in enumerate(held):
                 d = cur[cur.position == r.position].sort_values("t_hours")
                 obs_t, obs_a = d.t_hours.tolist(), d.area_norm.tolist()
-                # start = last observed frame <= t0; if none (first annotated frame after t0), the first frame
-                ic = max([i for i, t in enumerate(obs_t) if t <= t0], default=0)
+                # start = last usable (qc ok) frame <= t0; none -> skip (a later frame would be future data)
+                ok = [i for i, (t, q) in enumerate(zip(obs_t, d.qc)) if t <= t0 and q != "fail"]
+                if not ok:
+                    src[r.position] = "skipped"; continue
+                ic = ok[-1]
                 ts, a_start = float(obs_t[ic]), float(obs_a[ic])
-                occ, rho, R = start(r.position, d.frame.iloc[ic])
+                occ, rho, R = start(r.position, d.frame.iloc[ic], r.source, float(d.wound_frac.iloc[ic]))
                 n = int(T_END - ts)
                 times = ts + np.arange(n + 1)
                 sel = [list(times).index(t) for t in t_fc]
@@ -133,15 +147,23 @@ if __name__ == "__main__":
                 for model, (pp, sto) in {"nca_ensemble": (mem, True), "nca_deterministic": (point[None], False)}.items():
                     wf = nca_rollout(net, rho, R, pp, n, sto, seed)
                     A = (a_start * wf / wf[:, :1])[:, sel]
-                    out[model].append(entry(r, obs_t, obs_a, t0, ts, a_start, t_fc, A, a.T, sto))
+                    f = entry(r, obs_t, obs_a, t0, ts, a_start, t_fc, A, a.T, sto)
+                    if r.source != "manual":
+                        bad = bool((d.qc[d.t_hours <= t0] == "fail").any())
+                        f["segmentation_quality"] = dict(status="flagged" if bad else "ok", reasons=[
+                            "auto-segmented (P1 texture segmenter); start state = synthetic band with the observed area"]
+                            + (["a frame <= t0 failed QC and was not used"] if bad else []))
+                    out[model].append(f)
             for model, fcs in out.items():
                 note = {"nca_ensemble": "NCA emulator of the cell-agent sim; 50 members = bootstrapped (Tm, bias) fits (sim/fits/whad_fits.json) x NCA noise",
                         "nca_deterministic": "NCA ablation: no noise, point (Tm, bias) fit, so the band has zero width"}[model]
                 n_pre = sum(v == "preset" for v in src.values())
+                skipped = sorted(k for k, v in src.items() if v == "skipped")
                 doc = dict(version="1.0", model=model, dataset="whad", fold=fold, cutoff_hours=float(t0), level=LEVEL,
                            p_close_by_T_hours=a.T,
                            notes=f"{note}; start = observed mask at the last frame <= t0, rescaled to its observed area; "
-                                 f"{n_pre} wound(s) have < 2 frames by t0 and use fits of other physical wounds (preset)",
+                                 f"{n_pre} wound(s) have < 2 frames by t0 and use fits of other physical wounds (preset)"
+                                 + (f"; skipped (no frame <= t0): {', '.join(skipped)}" if skipped else ""),
                            forecasts=fcs)
                 fn = f"{a.out}/{model}_{fold}_t{t0}.json"
                 json.dump(doc, open(fn, "w"))
