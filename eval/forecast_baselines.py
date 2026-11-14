@@ -67,8 +67,8 @@ def prepare(S, ids, f, cut, G, G_long):
     base = {}
     for k in ids:
         s = S[k]; t, a = s["t"], s["a"]; h = t <= cut + 1e-9
-        if h.sum() < 2 or (~h).sum() == 0 or a[h][-1] <= 0.1:
-            continue
+        if h.sum() < 2 or ((~h).sum() == 0 and not s.get("no_truth")) or a[h][-1] <= 0.1:
+            continue  # uploads (no_truth) have no future frames but still get a forecast
         pred = f(t[h], a[h], G)
         b = dict(pred=pred, res=np.interp(G, t, a) - pred)
         for lvl, key in EVENTS:
@@ -96,7 +96,7 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
         R = np.stack([o["res"] for o in others])
         E = np.clip(b["pred"][None, :] + R, 0, None)
         lq, hq = q_levels(len(R))
-        keep = G <= s["t"][-1] + 1e-9
+        keep = G <= (G[-1] if s.get("no_truth") else s["t"][-1]) + 1e-9
         lo, med, hi = np.quantile(E, [lq, 0.5, hq], axis=0, method="inverted_cdf")
         ev = {}
         for lvl, key in EVENTS:
