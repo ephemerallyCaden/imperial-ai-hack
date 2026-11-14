@@ -1,10 +1,10 @@
-# Imperial AI Hack Playbook (24 hours, 3 people)
+# Imperial AI Hack Playbook (about 11 in-building hours, 1-4 students)
 
-**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: 12:00 Sun 15 Nov (aim for 11:30; confirmed with organisers). Venue: Huxley Building, Imperial College London. Team name: [TBC].
+**Runs:** Sat 14 Nov to Sun 15 Nov 2026. Building starts 12:10 Sat (pre-existing projects not eligible). **Submissions close 12:00 sharp Sun 15 Nov**: Devpost entry = public GitHub repo + demo video up to 2 minutes; video AND last commit must be before 12:00. Building closes 21:00 Sat (no overnight hacking), reopens 10:00 Sun. Venue: Huxley Building, Imperial College London. Teams of 1-4 students. Team name: [TBC]. Verified rules: docs/event-rules.md.
 
 ## Tracks
 
-Pick ONE main track and at most ONE sub-bounty (organisers recommend one of each for a solid product).
+Pick ONE main track; up to 2 bounties from that track; the Figma and Adaption prizes are open to every track and do not count toward the 2 (show in your presentation how you qualify).
 
 Main tracks:
 1. Autonomous Agents (Adaption fine-tuning optional)
@@ -17,10 +17,25 @@ Cross-cutting (enter regardless of main track):
 - **Best Designed AI Product**: as well designed as it is smart. Designed in Figma (not Figma Make). **Leaning towards this.**
 - **Best use of Adaption**: fine-tune a model with Adaption; ranked on Adaption's leaderboard by win rate vs the base model.
 
-Chosen main track: [TBC, leaning towards the least-applied track]
-Chosen sub-bounty: [TBC]
+Chosen main track: AI for Science (GBP 700: 1st 500, 2nd 200). Project: wound healing forecaster (see docs/wound-plan.md, docs/decisions.md).
+Chosen sub-bounty: none yet (Boltz bounty only if a compound-labelled closure table is found; Figma prize is open to every track).
 
-Track details, judging criteria, sponsor APIs and rules: [TBC, fill in when received]
+AI for Science marks (0-3 each, weighted): scientific rigour 30, technical execution 25, path to the lab 20, novelty 15, video and answers 10. Bounties judged on how central the partner tool is. Judging Sun 13:00-16:30, 10-minute slot: 2-minute video, 6 minutes of judge questions, no slides and no live demo. Track winners present at 17:00. Full details: docs/event-rules.md.
+
+## Tech partners we have access to
+Listed on the event's tech partners slide. Credits/keys and exact offers: [TBC, fill in when received].
+
+| Partner | Area | Possible use |
+|---------|------|--------------|
+| fal | Generative media API (image/video/audio models) | Fast image/video generation |
+| ElevenLabs | Voice AI (TTS, speech, voice agents) | Voice output/input, narration |
+| Tavily | Web search/extract API for agents | Live web research and grounding |
+| Lovable | AI app builder | Rapid UI prototyping |
+| Synthesia | AI avatar video generation | Presenter/avatar videos |
+| Anam | Real-time AI avatars/personas | Conversational avatar |
+| Boltz | Biomolecular structure prediction | Bio/chem workflows |
+| MongoDB | Database (Atlas, vector search) | Storage, vector search |
+| Tamarind Bio | Hosted bio/protein modelling tools | Bio/chem workflows |
 
 ## Design (Figma)
 Because we are targeting Best Designed AI Product: design the 3 demo screens in Figma in hour 0:30-2:00 (one person), then build to the Figma. Keep the file link here: [Figma link]. Reserve time at 16:00-18:00 for design polish, not just feature work.
@@ -28,24 +43,19 @@ Because we are targeting Best Designed AI Product: design the 3 demo screens in 
 
 ## Timeline
 
-Start 12:00 Sat 14 Nov. **Submission deadline 12:00 Sun 15 Nov** (aim for 11:30). The table below was drafted for a 10:00 deadline; everything after 09:00 has 2 extra hours of slack.
+Building starts 12:10 Sat 14 Nov. **Building closes 21:00 Sat (no overnight hacking); reopens 10:00 Sun. Submissions close 12:00 sharp Sun** (video and last commit before 12:00). Working elsewhere overnight is allowed (confirmed, design.md R12); see docs/team-plan.md for the overnight timeline.
 
 | Time | Activity | Who |
 |------|----------|-----|
-| Sat 12:00-12:30 | Idea + track chosen. Run `/spec` to write SPEC.md | All together |
-| Sat 12:30-13:00 | Choose stack, scaffold project, fill in CLAUDE.md | One person |
-| Sat 13:00-14:00 | Design 3 demo screens in Figma | Design + frontend person |
-| Sat 13:00-14:00 | Backend skeleton + sponsor/model API integration | Backend person |
-| Sat 14:00-20:00 | Parallel feature work on branches (build to the Figma) | Everyone on own branch |
-| Sat 20:00-21:00 | First merge. Run `/integrator` or merge manually. Dinner | One person |
-| Sat 21:00-01:00 | Wire real data into demo screens. Integrate sponsor API | Everyone |
-| Sun 01:00-04:00 | Sleep in shifts: at least one person awake and merging | Rotate |
-| Sun 04:00-06:00 | Second merge. Polish demo path and design only | One person merging |
-| Sun 06:00-07:30 | Deploy. Test on production URL | One person |
-| Sun 07:30-09:00 | Presentation prep. Record backup demo video | All together |
-| Sun 09:00-09:30 | Submit everything. Do not wait for the deadline | All together |
-| Sun 09:30-10:00 | Buffer. **10:00 deadline** | All together |
-| Sun 10:00-12:00 | Demos/judging, practise the pitch | All together |
+| Sat 12:10-12:40 | Confirm plan, first-hour data checks (docs/wound-plan.md section "Checks to do first"), write SPEC.md | All together |
+| Sat 12:40-14:00 | Figma: 3 demo screens (design person). Data loading + simple baselines + scoring (data person). Cell simulator skeleton (model person) | Split |
+| Sat 14:00-18:00 | Parallel feature work on own branches (NCA ensemble, calibration, viewer) | Everyone on own branch |
+| Sat 18:00-19:30 | First merge. End-to-end run on real data | One person merging |
+| Sat 19:30-21:00 | Failure analysis, polish, record a first backup video. Dinner. Building closes 21:00 | All |
+| Sun 10:00-11:00 | Fix issues, final merge, README, repo clean-clone check | All |
+| Sun 11:00-11:30 | Record/trim the 2-minute video (one real run on screen), submit on Devpost | All together |
+| Sun 11:30-12:00 | Buffer. **12:00 hard deadline** | All together |
+| Sun 13:00-16:30 | Judging: 10-minute slot (video + 6 min questions). Track winners 17:00, prizes 17:30 | All together |
 
 ## Team branches
 
@@ -87,7 +97,6 @@ claude
 | `/fix` | Something breaks | Paste error, get fix. Max 3 cycles. |
 | `/verify` | Before merge | Build, types, lint, tests, diff review. PASS/FAIL report. |
 | `/ship` | Feature done | Build, test, commit, push. One command. |
-| `/demo` | Sun 07:30 | Write pitch script from what's actually built |
 | `/secure` | Before deploying | 5-min security scan: secrets, debug code, exposed endpoints |
 
 ### Speed rules

@@ -73,7 +73,7 @@ Cut order if late (15c): LLM roles, then secondary datasets, then Zaritsky, then
 | 20:00 | P1-2 Must | Write `contracts/forecast.schema.json` + example file; agree in the 20:00 meeting | P2 and P3 say yes |
 | 20:15 | P1-3 Must | Merge prep: rename to Stitch, `model/` to `nca/`, README handed to P3, resolve README conflict | merged at 20:45 |
 | 21:00 | P1-4 Must | WHAD curves + masks per the interface table (drop all-zero t20; hours; part; condition) | 19 positions x 20 frames; example rows posted |
-| 21:45 | P1-5 Must | WHAD baselines with the doc's splits: fold A (part I to II and back), fold B (CC to C61); cut-offs 10/20/30/50% of frames (same for every position, so no leakage); add Migliaccio power-law baseline | per-fold table, never pooled only |
+| 21:45 | P1-5 Must | WHAD baselines with the R15 splits: leave-one-wound-out (part I + II of a wound stay together), CC to C61, WHiM-BC monolayer to sphere; cut-offs 10/20/30/50% of frames; add Migliaccio power-law baseline | per-fold table, never pooled only |
 | 22:45 | P1-6 Must | Conformal per 5.5: jackknife+ on the normalised max-over-horizon residual; coverage with n, Wilson CI and wound-bootstrap CI | per-fold coverage table |
 | 23:30 | P1-7 Must | Make the forecast export follow the schema; generic scorer that takes any forecast JSON folder | baselines and P2's files score with one command |
 | **00:00** | P1-8 Must | **Gate:** score P2's forecasts vs the best baseline; write the decision | gate row in design.md section 16 |
