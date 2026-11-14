@@ -9,7 +9,7 @@ point serves every cut-off (the start state does not depend on t0). Bootstrap ov
   python3 sim/calibrate.py --all             all positions x cut-offs -> sim/fits/whad_fits.json + range check
   python3 sim/calibrate.py --draw-presets    add draw-tool presets to an existing whad_fits.json
 """
-import sys, os, json
+import sys, os, json, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
 from cellsim import Params, simulate, SITE_UM
@@ -18,13 +18,11 @@ from start_state import load_png_mask, mask_to_lattice
 HERE = os.path.dirname(os.path.abspath(__file__))
 CURVES = os.path.join(HERE, "..", "data", "processed", "whad_curves.csv")
 OUT = os.path.join(HERE, "fits", "whad_fits.json")
-TM_GRID = np.geomspace(0.05, 5.0, 11)  # floor = dt
-BIAS_GRID = np.array([0.25, 0.5, 0.65, 7 / 9, 0.9])
+TM_GRID = np.geomspace(0.05, 5.0, 21)  # floor = dt; uniform in log Tm (refine() relies on it)
+BIAS_GRID = np.linspace(0.25, 0.9, 6)  # uniform (refine() relies on it)
 CUTOFFS = [2, 4, 6, 10]  # t0 frame = 10/20/30/50% of 20 hourly frames, same for every position (team-plan P1-5)
 SEEDS, N_BOOT = 3, 50
-FOLDS = {  # name: (train filter, test filter) on (part, condition)
-    "A_partI_to_partII": (lambda p, c: p == "I", lambda p, c: p == "II"),
-    "A_partII_to_partI": (lambda p, c: p == "II", lambda p, c: p == "I"),
+FOLDS = {  # name: (train filter, test filter) on (part, condition); fold A dropped in R15 (part II = same wounds)
     "B_CC_to_C61": (lambda p, c: c == "CC", lambda p, c: c == "C61"),
 }
 
@@ -51,19 +49,35 @@ def error_cube(position, df, t_max, occ0=None):
     return fr, err
 
 
+def _vertex(cm, c0, cp):
+    """Offset (in grid steps, within +-0.5) of the parabola vertex through three neighbouring costs; 0 if not convex."""
+    d = cm - 2 * c0 + cp
+    return 0.0 if d <= 0 else float(np.clip(0.5 * (cm - cp) / d, -0.5, 0.5))
+
+
+def refine(cost):
+    """Off-grid minimum of a (Tm, bias) cost grid: grid argmin, then a parabolic vertex along each axis (log Tm, bias),
+    kept inside the argmin's cell. Returns (Tm, bias, i, j)."""
+    i, j = np.unravel_index(cost.argmin(), cost.shape)
+    di = _vertex(cost[i - 1, j], cost[i, j], cost[i + 1, j]) if 0 < i < len(TM_GRID) - 1 else 0.0
+    dj = _vertex(cost[i, j - 1], cost[i, j], cost[i, j + 1]) if 0 < j < len(BIAS_GRID) - 1 else 0.0
+    lt = np.log(TM_GRID)
+    return float(np.exp(lt[i] + di * (lt[1] - lt[0]))), float(BIAS_GRID[j] + dj * (BIAS_GRID[1] - BIAS_GRID[0])), i, j
+
+
 def fit_from_cube(fr, err, t0, rng):
+    """Fit on frames <= t0 only. Members = N_BOOT bootstrap resamples of the observed frames, each minimised off-grid."""
     n = int((fr <= t0).sum())
     if n < 2:
         return None
     e = err[:, :, :n]
     cost = e[:, :, 1:].mean(-1)  # frame 0 is the start state (error ~0)
-    i, j = np.unravel_index(cost.argmin(), cost.shape)
+    Tm, bias, i, j = refine(cost)
     members = []
     for _ in range(N_BOOT):
-        ci = e[:, :, rng.integers(1, n, n - 1)].mean(-1)
-        a, b = np.unravel_index(ci.argmin(), ci.shape)
-        members.append([float(TM_GRID[a]), float(BIAS_GRID[b])])
-    return dict(t0=t0, start_frame=int(fr[0]), n_obs=n, Tm=float(TM_GRID[i]), bias=float(BIAS_GRID[j]),
+        bt, bb, _, _ = refine(e[:, :, rng.integers(1, n, n - 1)].mean(-1))
+        members.append([bt, bb])
+    return dict(t0=t0, start_frame=int(fr[0]), n_obs=n, Tm=Tm, bias=bias,
                 rmse=float(np.sqrt(cost[i, j])), at_grid_edge=bool(i in (0, len(TM_GRID) - 1)), members=members)
 
 
@@ -107,15 +121,21 @@ def add_draw_presets(out, meta, t0=10):
     print("draw_tool", pr)
 
 
+def _fit_position(args):
+    p, df = args
+    fr, err = error_cube(p, df, max(CUTOFFS))
+    rng = np.random.default_rng(zlib.crc32(p.encode()))  # per position: independent of run order
+    return p, {str(t0): fit_from_cube(fr, err, t0, rng) for t0 in CUTOFFS}
+
+
 def run_all():
+    from concurrent.futures import ProcessPoolExecutor
     df = pd.read_csv(CURVES)
     meta = df.drop_duplicates("position").set_index("position")[["part", "condition"]].apply(tuple, axis=1).to_dict()
-    rng = np.random.default_rng(0)
-    fits = {}
-    for p in sorted(meta):
-        fr, err = error_cube(p, df, max(CUTOFFS))
-        fits[p] = {str(t0): fit_from_cube(fr, err, t0, rng) for t0 in CUTOFFS}
-        print(p, {t0: (round(f["Tm"], 3), round(f["bias"], 2)) if f else None for t0, f in fits[p].items()}, flush=True)
+    with ProcessPoolExecutor() as ex:
+        fits = dict(ex.map(_fit_position, [(p, df) for p in sorted(meta)]))
+    for p, fp in fits.items():
+        print(p, {t0: (round(f["Tm"], 3), round(f["bias"], 2)) if f else None for t0, f in fp.items()}, flush=True)
     out = dict(params=dict(site_um=SITE_UM, seeds=SEEDS, n_boot=N_BOOT, dt=Params().dt, dens_exp=Params().dens_exp,
                            Tm_grid=TM_GRID.tolist(), bias_grid=BIAS_GRID.tolist(), cutoffs=CUTOFFS),
                fits=fits, presets={})
