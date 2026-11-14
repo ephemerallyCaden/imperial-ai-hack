@@ -60,7 +60,7 @@ def start_state(c, source):
 
 def fit_auto(args):
     pos, c = args
-    fit_df = c[c.qc == "ok"]
+    fit_df = c[c.wound_frac <= 0.70]  # P1's filter (eval/forecast_baselines.py load); <1% late is real closure
     fr, err = calibrate.error_cube(pos, fit_df, max(CUTOFFS), occ0=start_state(c, "auto"))
     rng = np.random.default_rng(zlib.crc32(pos.encode()))
     return pos, {str(t0): calibrate.fit_from_cube(fr, err, t0, rng) for t0 in CUTOFFS}
@@ -136,7 +136,7 @@ def preset(fits, meta, t0, test_pos, fold):
     return [float(np.median([x["Tm"] for x in xs])), float(np.median([x["bias"] for x in xs]))], len(xs)
 
 
-def main(reuse_fits=False):
+def main(reuse_fits=False, fits_only=False):
     df = load_curves()
     groups = {p: c for p, c in df.groupby("position")}
     meta = {p: dict(wound=c.wound.iloc[0], condition=c.condition.iloc[0], part=c.part.iloc[0], source=c.source.iloc[0])
@@ -153,6 +153,8 @@ def main(reuse_fits=False):
                        fits=auto_fits), open(AUTO_FITS, "w"), indent=1)
     fits = {**fits, **auto_fits}
     print(f"fits: {len(fits)} positions ({len(auto_fits)} auto)", flush=True)
+    if fits_only:
+        return
     os.makedirs(OUT_DIR, exist_ok=True)
     for fold, f in FOLDS.items():
         jobs, n_fallback = [], 0
@@ -192,4 +194,4 @@ def main(reuse_fits=False):
 
 
 if __name__ == "__main__":
-    main(reuse_fits="--reuse-fits" in sys.argv)
+    main(reuse_fits="--reuse-fits" in sys.argv, fits_only="--fits-only" in sys.argv)
