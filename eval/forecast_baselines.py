@@ -32,6 +32,11 @@ def q_levels(m, level=LEVEL):
     return max(0.0, np.floor((m + 1) * a) / m), min(1.0, np.ceil((m + 1) * (1 - a)) / m)
 
 
+# exp1_partII_NC_P3 was built from two imaging positions spliced together (fixed in data/build_whad_auto.py);
+# P2's simulator fits and gate files used the spliced curve, so it is excluded from evaluation for every model.
+EXCLUDE = {"exp1_partII_NC_P3"}
+
+
 def load(dataset):
     if dataset == "whad":
         man = pd.read_csv(f"{PROC}/whad_curves.csv").assign(qc="ok")
@@ -56,6 +61,8 @@ def load(dataset):
         key = "position"
     series = {}
     for sid, g in df.groupby(key):
+        if sid in EXCLUDE:
+            continue
         g = g.sort_values("t_hours")
         t = g.t_hours.to_numpy(float); a = g.wound_frac.to_numpy(float)
         if len(t) < 5 or a[0] <= 0.01:
