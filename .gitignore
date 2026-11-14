@@ -25,6 +25,11 @@ out/
 .DS_Store
 Thumbs.db
 
+# Data (raw is large; Jin data is not ours to re-host)
+data/raw/
+data/processed/jin_*
+data/processed/whad_masks/
+
 # Secrets
 secrets/
 *.pem
