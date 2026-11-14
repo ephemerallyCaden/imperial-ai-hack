@@ -38,21 +38,25 @@ These have been tested in Node with a stubbed worker, but not yet in a real brow
 
 > **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.022 (CC) and 0.018 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). With the earlier 65c035a presets, Agent 1 got 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
 >
-**Follow-rule presets** (`PRESETS_FOLLOW`, used automatically when `init` has `rule:'follow'`; from `sim/fits/whad_fits_follow.json` → `presets.draw_tool`, Agent 1 1d88802). Part II medians at cut-off 9.5 h under the follow rule:
+**Follow-rule presets** (`PRESETS_FOLLOW`, used automatically when `init` has `rule:'follow'`; from `sim/fits/whad_fits_follow.json` → `presets.draw_tool`, Agent 1 490b4c7, sha256 `b5859c8c0993`). Part II medians at cut-off 9.5 h under the follow rule:
 
 | Preset | Tm (h) | Tm IQR | Bias | Bias IQR | n (manual) |
 |---|---|---|---|---|---|
-| `CC` | 4.287 | 4.06–7.38 | 0.90 | 0.70–0.90 | 7 (4) |
-| `C61` | 4.602 | 4.34–5.04 | 0.467 | 0.36–0.54 | 7 (3) |
+| `CC` | 4.287 | 4.06–7.34 | 0.754 | 0.64–0.90 | 7 (4) |
+| `C61` | 4.707 | 4.42–5.04 | 0.533 | 0.43–0.66 | 7 (3) |
 
-The label is `"simulation, preset parameters (WHAD part II fits, follow rule)"` (`PRESET_LABEL_FOLLOW`; frames carry `label`). Tm is about 9× the free-rule value, so never mix the two preset sets.
+Show both of these strings, which frames also carry:
+- the label `"simulation, preset parameters (WHAD part II fits, follow rule)"` (`label`);
+- the caption **`"bias not identified from these data; Tm carries the signal"`** (`caption`, Agent 1).
+
+Tm is about 9× the free-rule value, so never mix the two preset sets.
 
 On the drawn disc (0.18 at the start, 10 seeds), wound fraction at 6/12/18/24 h:
 
 | Preset | JS | Python |
 |---|---|---|
-| CC | 0.110 / 0.054 / 0.016 / 0.000 | 0.112 / 0.056 / 0.014 / 0.000 |
-| C61 | 0.116 / 0.059 / 0.021 / 0.002 | 0.117 / 0.064 / 0.022 / 0.001 |
+| CC | 0.110 / 0.053 / 0.015 / 0.000 | 0.112 / 0.055 / 0.016 / 0.000 |
+| C61 | 0.116 / 0.061 / 0.022 / 0.001 | 0.118 / 0.067 / 0.025 / 0.001 |
 
 The disc closes fully, and CC is slightly faster than C61. Reproduce with `node sim/js/draw_check.mjs follow`.
 
