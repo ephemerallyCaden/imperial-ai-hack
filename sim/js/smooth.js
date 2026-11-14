@@ -2,7 +2,20 @@
 // fineDensity: occupancy upsampled k x (nearest), Gaussian blur sigma sites (symmetric reflect at borders), 0..1.
 // outline: contour at the area-matched level (fraction of fine pixels below it = wound_frac), so the outlined area
 // equals the agent wound area. Polylines are flat [x0,y0,x1,y1,...] in site coords (x = col, y = row, lattice [0,W]x[0,H]).
-export const SMOOTH_K = 2, SMOOTH_SIGMA = 2.5; // = Agent 4 defaults (96ef78f), same as playback files
+export const SMOOTH_K = 2, SMOOTH_SIGMA = 2.5;
+// display rule (Agent 4): fade the outline once the level rises above FADE_LO (wound mostly dissolved into the sheet),
+// fully gone at FADE_HI; drop closed loops enclosing fewer than MIN_LOOP_SITES sites (single-site holes)
+export const FADE_LO = 0.85, FADE_HI = 0.95, MIN_LOOP_SITES = 4;
+
+const loopArea = (l) => { let a = 0; for (let i = 0; i + 3 < l.length; i += 2) a += l[i] * l[i + 3] - l[i + 2] * l[i + 1]; return Math.abs(a) / 2; };
+const isClosed = (l) => l.length >= 6 && l[0] === l[l.length - 2] && l[1] === l[l.length - 1];
+
+// outline -> what to draw: { opacity 0..1, lines without tiny closed loops }
+export function displayOutline(o) {
+  if (o.level == null) return { opacity: 0, lines: [] };
+  const opacity = Math.min(1, Math.max(0, (FADE_HI - o.level) / (FADE_HI - FADE_LO)));
+  return { opacity, lines: o.lines.filter((l) => !isClosed(l) || loopArea(l) >= MIN_LOOP_SITES) };
+} // = Agent 4 defaults (96ef78f), same as playback files
 
 function kernel(s) {
   const r = Math.max(1, Math.ceil(3 * s)), w = new Float64Array(2 * r + 1);

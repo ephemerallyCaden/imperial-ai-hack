@@ -17,7 +17,9 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 
 **Scale:** one lattice site is one cell, `SITE_UM = 20` µm. A WHAD-sized field is **32 rows × 44 cols** (`h = 32`, `w = 44`). Grids are row-major (`i = y*w + x`).
 
-> **Canvas size: use `h = 32, w = 44`, the WHAD field, for now.** Under the frozen sim rules, vacancies mostly leave through the border reservoir, so healing speed depends on canvas size. Agent 4 measured it: a 120×168 canvas keeps about 81% of its wound area at 24 h, while WHAD-sized runs close to about 0.1–0.2. The presets were fitted at 32×44. Draw at that size and scale the canvas up visually rather than adding sites. The lead and Agent 1 have not yet decided how to handle larger canvases.
+> **The lattice is locked to the WHAD field: 32×44 sites (`FIELD_H`, `FIELD_W`) at `SITE_UM = 20`.** Scale the canvas up visually, never the lattice.
+> - **Why:** under the frozen sim rules, closure speed depends on field size, because vacancies leave through the border reservoir. A 120×168 field still holds 81% of its wound at 24 h. The presets and the NCA were fitted and trained at 32×44.
+> - **Other mask sizes:** a `wound` mask of any other size (for example canvas pixels) is resampled nearest-neighbour onto 32×44 in `init`, and frames then carry `resampled_from: [h, w]`. A disc drawn on 320×440 px went from 0.181 on the canvas to 0.182 on the lattice.
 
 **Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, division off):
 
@@ -48,6 +50,12 @@ Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. *
 | `fine` | `{scale: 2, sigma: 2.5, h: 2h, w: 2w, data: Uint8Array}`. Smoothed occupancy, `round(v*255)`, row-major. Each site is `scale × scale` fine px. |
 | `outline` | `{units:'sites', rule:'area-matched', level, lines}`. `lines` is a list of flat `[x0,y0,x1,y1,...]` polylines in site coords (`x` = col, `y` = row, the lattice spans `[0,w]×[0,h]`). The outlined area equals `wound_frac`. When there is no wound, `level` is null and `lines` is empty. |
 
+**Outline display rule (Agent 4):** draw `outline.display.lines` at alpha `outline.display.opacity`. The worker computes both, using `displayOutline()` in `smooth.js`:
+- The outline fades out as `level` rises from 0.85 to 0.95. A high level means the wound has dissolved into the sheet, so there is no clear front.
+- Closed loops that enclose fewer than 4 sites are dropped; these are single-site holes.
+
+`outline.lines` keeps every loop and is the area-matched set.
+
 `fine` and `outline` use the same parameters as Agent 4's playback files (`density_fine`, `outline`), so live and precomputed views look identical. Turn them off with `smooth:false` in `init`.
 
 > **Rendering rule:** draw `fine` plus `outline` by default. Use raw `occ` agents only at deep zoom. The raw lattice shows scattered single-site holes after a few hours, which is the sheet thinning, not a wound front.
@@ -56,9 +64,10 @@ Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. *
 
 ```js
 const wk = new Worker(new URL('./public/sim/js/worker.js', import.meta.url), { type: 'module' });
-const w = 44, h = 32, wound = new Uint8Array(w * h);           // fill 1s where the user drew
+const w = 44, h = 32, wound = new Uint8Array(w * h);           // fill 1s where the user drew (other sizes get resampled)
 wk.onmessage = ({ data: m }) => {
-  if (m.type === 'frame') zoomDeep ? drawAgents(m.occ, m.w, m.h) : drawSmooth(m.fine, m.outline);  // + m.t_hours, m.wound_frac
+  if (m.type === 'frame') zoomDeep ? drawAgents(m.occ, m.w, m.h)
+    : drawSmooth(m.fine, m.outline.display.lines, m.outline.display.opacity);  // + m.t_hours, m.wound_frac
 };
 wk.postMessage({ type: 'init', w, h, wound, preset: 'CC', seed: 1 });
 wk.postMessage({ type: 'run', hoursPerFrame: 0.5 });
