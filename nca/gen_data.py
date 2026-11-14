@@ -1,48 +1,93 @@
-"""Generate NCA training data: many simulator runs on random scratches/blobs with random (Tm, bias).
-python nca/gen_data.py --n 400 --out /tmp/nca_data.npz  (WHAD-mask starts from #22 can be added later via --extra)"""
-import sys, os, argparse, numpy as np
+"""NCA training data from the cell-agent simulator (sim/cellsim.py, Agent 1's canonical rules).
+
+Start states: real WHAD mask shapes (any position, frames 0-10, via sim/start_state.py at SITE_UM) and synthetic
+scratches/blobs on a WHAD-sized lattice; parameters sampled over the calibration range (log Tm, bias). Only start
+shapes are taken from WHAD, never the observed dynamics, so held-out wounds' outcomes do not leak into training.
+python nca/gen_data.py --n 1200 --out /tmp/nca_data.npz
+Saves density (N,F,h,w), R (N,h,w) coarse reservoir fraction, params (N,2) [Tm, bias].
+"""
+import argparse, glob, os, sys
+import numpy as np
 from multiprocessing import Pool
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sim"))
-from cellsim import simulate, Params
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.environ.get("SIM_DIR", os.path.join(HERE, "..", "sim"))); sys.path.insert(0, HERE)
+from cellsim import simulate, Params, reservoir_mask, coarse_grain
+from start_state import load_png_mask, mask_to_lattice
+from model import TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX
+
+SITE_UM, GRAIN = 10.0, 4
+MASKS = os.path.join(HERE, "..", "data", "processed", "whad_masks")
+_cache = {}
 
 
-def random_wound(rng, H=120, W=160):
+def whad_shapes():
+    if not _cache:
+        # same loader + resample as sim/calibrate.py (full-res PNG -> 64 x 88 lattice at 10 um)
+        for pos in sorted(os.path.basename(f)[:-4] for f in glob.glob(f"{MASKS}/*.npz")):
+            fr = []
+            for k in range(11):
+                try:
+                    fr.append(mask_to_lattice(*load_png_mask(pos, k), SITE_UM))
+                except (IndexError, ValueError):
+                    pass
+            _cache[pos] = [o for o in fr if (o == 0).any()]
+    return _cache
+
+
+def synthetic(rng, H=64, W=88):  # WHAD lattice at site_um=10 (sim/start_state.py)
     occ = np.ones((H, W), np.uint8)
     yy, xx = np.mgrid[:H, :W]
-    if rng.random() < 0.7:  # scratch: tilted, wobbly band
-        ang = rng.normal(0, 0.25); w = rng.uniform(16, 40)
-        c = W / 2 + rng.normal(0, 8)
-        wob = rng.normal(0, 3) * np.sin(yy / rng.uniform(15, 40) + rng.uniform(0, 6))
+    if rng.random() < 0.75:  # tilted, wobbly scratch crossing the field (like WHAD)
+        ang = rng.normal(0, 0.2); w = rng.uniform(0.1, 0.4) * W
+        c = W / 2 + rng.normal(0, 6)
+        wob = rng.normal(0, 2.5) * np.sin(yy / rng.uniform(8, 25) + rng.uniform(0, 6))
         d = (xx - c) - np.tan(ang) * (yy - H / 2) + wob
         occ[np.abs(d) < w / 2] = 0
-    else:  # blob(s)
+    else:
         for _ in range(rng.integers(1, 3)):
-            cy, cx = rng.uniform(30, H - 30), rng.uniform(40, W - 40)
-            ry, rx = rng.uniform(10, 30), rng.uniform(10, 35)
+            cy, cx = rng.uniform(15, H - 15), rng.uniform(20, W - 20)
+            ry, rx = rng.uniform(6, 20), rng.uniform(6, 25)
             occ[((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2 < 1] = 0
     return occ
 
 
-TM_RANGE, BIAS_RANGE = (0.03, 0.5), (0.3, 0.95)
-
-
 def sample_params(rng):
-    return float(np.exp(rng.uniform(*np.log(TM_RANGE)))), float(rng.uniform(*BIAS_RANGE))
+    return float(np.exp(rng.uniform(np.log(TM_MIN), np.log(TM_MAX)))), float(rng.uniform(BIAS_MIN, BIAS_MAX))
+
+
+def start_state(rng):
+    if rng.random() < 0.6:
+        sh = whad_shapes(); k = sorted(sh)[rng.integers(len(sh))]
+        occ = sh[k][rng.integers(len(sh[k]))].copy()
+        if rng.random() < 0.5: occ = occ[::-1]
+        if rng.random() < 0.5: occ = occ[:, ::-1]
+        return np.ascontiguousarray(occ)
+    return synthetic(rng)
 
 
 def one(args):
-    i, hours = args
-    rng = np.random.default_rng(1000 + i)
-    Tm, bias = sample_params(rng)
-    r = simulate(random_wound(rng), Params(Tm=Tm, bias=bias), hours, seed=i)
-    return r["density"], np.array([Tm, bias], np.float32)
+    i, hours, seed0 = args
+    rng = np.random.default_rng(seed0 + i)
+    occ0 = start_state(rng); Tm, bias = sample_params(rng)
+    p = Params(Tm=Tm, bias=bias)
+    r = simulate(occ0, p, hours, seed=seed0 + i, grain=GRAIN)
+    R = coarse_grain(reservoir_mask(occ0, p.edge, getattr(p, "res_dist", None)).astype(np.uint8), GRAIN)
+    return r["density"], R, np.array([Tm, bias], np.float32)
+
+
+def generate(n, hours=19, seed0=1000, procs=8):
+    whad_shapes()  # load once before forking
+    with Pool(procs) as pool:
+        res = pool.map(one, [(i, hours, seed0) for i in range(n)])
+    return (np.stack([r[0] for r in res]), np.stack([r[1] for r in res]), np.stack([r[2] for r in res]))
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("--n", type=int, default=400); ap.add_argument("--hours", type=int, default=20)
-    ap.add_argument("--out", default="/tmp/nca_data.npz"); ap.add_argument("--procs", type=int, default=8)
+    ap = argparse.ArgumentParser(); ap.add_argument("--n", type=int, default=1200); ap.add_argument("--hours", type=int, default=19)
+    ap.add_argument("--out", default="/tmp/nca_data.npz"); ap.add_argument("--seed0", type=int, default=1000)
     a = ap.parse_args()
-    with Pool(a.procs) as p:
-        res = p.map(one, [(i, a.hours) for i in range(a.n)])
-    np.savez_compressed(a.out, density=np.stack([r[0] for r in res]), params=np.stack([r[1] for r in res]))
-    print("saved", a.out, np.stack([r[0] for r in res]).shape)
+    D, R, P = generate(a.n, a.hours, a.seed0)
+    np.savez_compressed(a.out, density=D, R=R, params=P)
+    A = (1 - D.mean((2, 3))); A = A / A[:, :1]
+    print("saved", a.out, D.shape, "area@19h q10/50/90:", np.round(np.quantile(A[:, -1], [.1, .5, .9]), 3))

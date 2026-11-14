@@ -4,10 +4,11 @@ State per cell: rho (density, 0..1) + NH hidden channels. Parameters (log Tm, bi
 Per step (dt = 1/K hour):
   perception: for each state channel, [identity, sobel_x, sobel_y, laplacian] (fixed 3x3 filters, zero pad)
   MLP (1x1, 2 layers) on [perception, params, noise] -> 9 flux logits (8 neighbours + stay), source logit, hidden delta
-  flux: frac = softmax(logits); cell i sends rho_i*frac_k*(1-rho_j) to neighbour j (contact inhibition); sent mass
-        is subtracted from i and added to j  -> sum(rho) is conserved exactly except through the source and the reservoir
-  source: softplus(.) * (1-rho) * dt >= 0 (division; ~0 for WHAD where division is off)
-  reservoir: border band of `edge` cells is reset to 1 every step (as in the simulator)
+  flux: frac = softmax(logits); cell i wants to send rho_i*frac_k*(1-rho_j) to neighbour j, each target caps its total
+        inflow at its room -> 0 <= rho <= 1 and sum(rho) conserved exactly (except source and reservoir); see step()
+  source: division * sigmoid(.) * (1-rho) / K >= 0 (division gate = 0 for WHAD: hard off)
+  reservoir: rho = max(rho, R), R = coarse-grained sim reservoir mask (sites refilled every step, fixed at t0)
+  hidden channels: tanh-bounded
 Everything is 3x3 fixed filters + a small MLP, so the JS port is a few loops.
 """
 import torch, torch.nn as nn, torch.nn.functional as F
@@ -24,59 +25,76 @@ KERN[3] /= 16.0
 
 
 class NCA(nn.Module):
-    def __init__(self, nh=4, hidden=48, n_params=2, K=2, edge=1, noise=0.1):
+    """State channels: [rho, R, hid_0..hid_{nh-1}]. R = coarse reservoir fraction (fixed at t0, not updated).
+    Layout (JS port must match): perception index = channel*4 + filter (filters: id, sobel_x, sobel_y, laplacian);
+    MLP input = [perception (4*S), params (2), noise (1)]; output = [9 flux logits (NB order, then stay), 1 source, nh hidden]."""
+
+    def __init__(self, nh=4, hidden=48, n_params=2, K=2, noise=0.1, division=0.0):
         super().__init__()
-        self.nh, self.K, self.edge, self.noise, self.n_params = nh, K, edge, noise, n_params
-        S = 1 + nh
+        self.nh, self.K, self.noise, self.n_params, self.division = nh, K, noise, n_params, division
+        S = 2 + nh
         self.S = S
         cin = 4 * S + n_params + 1
         self.l1 = nn.Linear(cin, hidden)
         self.l2 = nn.Linear(hidden, 9 + 1 + nh)
         nn.init.zeros_(self.l2.weight); nn.init.zeros_(self.l2.bias)
         self.register_buffer("kern", KERN[:, None].repeat(S, 1, 1, 1).reshape(4 * S, 1, 3, 3))
+        g = torch.zeros(8, 1, 3, 3); sc = torch.zeros(1, 8, 3, 3)
+        for k, (dy, dx) in enumerate(NB):
+            g[k, 0, 1 + dy, 1 + dx] = 1.0   # out[i] = x[i + d]
+            sc[0, k, 1 - dy, 1 - dx] = 1.0  # out[j] = sum_k x_k[j - d_k]
+        self.register_buffer("gather", g, persistent=False); self.register_buffer("scatter", sc, persistent=False)
 
-    def step(self, rho, hid, par, stochastic=True):
-        # rho (B,1,H,W) hid (B,nh,H,W) par (B,n_params,1,1)
+    def step(self, rho, R, hid, par, stochastic=True):
+        """rho, R (B,1,H,W); hid (B,nh,H,W); par (B,n_params,1,1).
+        Flux: cell i wants to send out_k = rho_i * frac_k * (1 - rho_j) to neighbour j = i + NB[k]; each target scales all
+        its inflows by min(1, room_j / demand_j), room_j = 1 - rho_j (outside the grid: room 0 = wall). So 0 <= rho <= 1
+        without clamping and sum(rho) is conserved exactly by the flux. Then: optional source (division, gated by
+        self.division, 0 for WHAD), and the reservoir floor rho = max(rho, R) (sim: reservoir sites are refilled)."""
         B, _, H, W = rho.shape
-        x = torch.cat([rho, hid], 1)
+        x = torch.cat([rho, R, hid], 1)
         perc = F.conv2d(F.pad(x, (1, 1, 1, 1)), self.kern, groups=self.S)  # (B,4S,H,W)
         z = torch.randn(B, 1, H, W, device=rho.device) if stochastic else torch.zeros(B, 1, H, W, device=rho.device)
-        inp = torch.cat([perc, par.expand(B, -1, H, W), z], 1).permute(0, 2, 3, 1)
-        out = self.l2(torch.relu(self.l1(inp))).permute(0, 3, 1, 2)
+        inp = torch.cat([perc, par.expand(B, -1, H, W), z], 1)
+        hdn = torch.relu(F.conv2d(inp, self.l1.weight[:, :, None, None], self.l1.bias))  # per-cell MLP as 1x1 convs
+        out = F.conv2d(hdn, self.l2.weight[:, :, None, None], self.l2.bias)
         logits, src, dh = out[:, :9], out[:, 9:10], out[:, 10:]
         if stochastic and self.noise > 0:
             logits = logits + self.noise * torch.randn_like(logits)
-        frac = torch.softmax(logits, 1)  # last index = stay
-        rp = F.pad(rho, (1, 1, 1, 1), value=1.0)  # outside counts as full -> no flux through the border
-        new = rho * frac[:, 8:9]
-        for k, (dy, dx) in enumerate(NB):
-            nbr = rp[:, :, 1 + dy:1 + dy + H, 1 + dx:1 + dx + W]
-            sent = rho * frac[:, k:k + 1] * (1 - nbr)  # i -> j
-            new = new + rho * frac[:, k:k + 1] - sent  # keep what was blocked (= rho*frac*nbr)
-            # add inflow at j: sent from i = j - (dy,dx)
-            sp = F.pad(sent, (1, 1, 1, 1))
-            new = new + sp[:, :, 1 - dy:1 - dy + H, 1 - dx:1 - dx + W]
-        # sent mass that would leave the grid is blocked because outside = full, so conservation holds
-        new = new + F.softplus(src - 3.0) * (1 - rho) / self.K
-        hid = hid + dh / self.K
-        e = self.edge
-        m = torch.zeros_like(new); m[:, :, :e] = 1; m[:, :, -e:] = 1; m[:, :, :, :e] = 1; m[:, :, :, -e:] = 1
-        new = new * (1 - m) + m
-        return new.clamp(0, 1), hid
+        frac = torch.softmax(logits, 1)  # index 8 = stay
+        room = (1 - rho).clamp_min(0)  # float guard: rho can exceed 1 by ~1e-7
+        # all 8 neighbour shifts as one conv each: GATHER[k] reads x[i + d_k], SCATTER sums x_k[j - d_k] over k
+        room_t = F.conv2d(F.pad(room, (1, 1, 1, 1)), self.gather)            # (B,8,H,W) room at target i + d_k (0 outside)
+        want = rho * frac[:, :8] * room_t
+        demand = F.conv2d(F.pad(want, (1, 1, 1, 1)), self.scatter)          # (B,1,H,W) total inflow wanted into j
+        scale = torch.where(demand > room, room / demand.clamp_min(1e-12), torch.ones_like(demand))
+        sent = want * F.conv2d(F.pad(scale, (1, 1, 1, 1)), self.gather)
+        new = rho - sent.sum(1, keepdim=True) + F.conv2d(F.pad(sent, (1, 1, 1, 1)), self.scatter)
+        if self.division:
+            new = new + self.division * torch.sigmoid(src - 3.0) * (1 - new) / self.K
+        hid = torch.tanh(hid + dh / self.K)
+        return torch.maximum(new, R), hid
 
-    def forward(self, rho0, par, n_frames, stochastic=True):
-        """rho0 (B,1,H,W); par (B,n_params). Returns (B,n_frames+1,H,W) density frames (frame 0 = input)."""
+    def forward(self, rho0, par, n_frames, R=None, stochastic=True):
+        """rho0 (B,1,H,W); par (B,n_params); R (B,1,H,W) reservoir fraction (default 0).
+        Returns (B,n_frames+1,H,W) density frames (frame 0 = max(rho0, R))."""
         par = par[:, :, None, None]
-        rho, hid = rho0, torch.zeros(rho0.shape[0], self.nh, *rho0.shape[2:], device=rho0.device)
+        R = torch.zeros_like(rho0) if R is None else R
+        rho, hid = torch.maximum(rho0, R), torch.zeros(rho0.shape[0], self.nh, *rho0.shape[2:], device=rho0.device)
         frames = [rho[:, 0]]
         for _ in range(n_frames):
             for _ in range(self.K):
-                rho, hid = self.step(rho, hid, par, stochastic)
+                rho, hid = self.step(rho, R, hid, par, stochastic)
             frames.append(rho[:, 0])
         return torch.stack(frames, 1)
 
 
+TM_MIN, TM_MAX = 0.05, 5.0   # sim/calibrate.py grid (dt = 0.05 h)
+BIAS_MIN, BIAS_MAX = 0.2, 1.0
+
+
 def norm_params(Tm, bias):
-    """Network input encoding of the simulator parameters."""
+    """Network input encoding: both roughly in [-1, 1] over the fitted range."""
     import math
-    return [math.log(Tm) / 2.0 + 1.5, bias * 2 - 1]
+    lo, hi = math.log(TM_MIN), math.log(TM_MAX)
+    return [2 * (math.log(Tm) - lo) / (hi - lo) - 1, 2 * bias - 1]
