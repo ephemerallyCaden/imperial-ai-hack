@@ -17,7 +17,7 @@ g2 = GRAIN * GRAIN
 for i in range(a.n):
     rng = np.random.default_rng(2 * 10 ** 6 + i)
     occ0 = start_state(rng); Tm, bias = sample_params(rng, cfg)
-    p = Params(Tm=Tm, bias=bias, follow=cfg["follow"])
+    p = Params(Tm=Tm, bias=bias, rule="follow" if cfg["follow"] else "free")
     D = np.stack([simulate(occ0, p, 19, seed=2 * 10 ** 6 + 10 * i + s)["density"] for s in range(4)])
     R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     net.stats = {}

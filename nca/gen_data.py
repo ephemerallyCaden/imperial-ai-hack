@@ -76,7 +76,7 @@ def one(args):
     i, hours, seed0, cfg = args
     rng = np.random.default_rng(seed0 + i)
     occ0 = start_state(rng); Tm, bias = sample_params(rng, cfg)
-    p = Params(Tm=Tm, bias=bias, follow=True) if cfg["follow"] else Params(Tm=Tm, bias=bias)
+    p = Params(Tm=Tm, bias=bias, rule="follow" if cfg["follow"] else "free")
     r = simulate(occ0, p, hours, seed=seed0 + i, grain=GRAIN)
     R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return r["density"], R, np.array([Tm, bias], np.float32)
@@ -92,7 +92,7 @@ def generate(n, hours=19, seed0=1000, procs=8, cfg=None):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--n", type=int, default=1200); ap.add_argument("--hours", type=int, default=19)
     ap.add_argument("--out", default="/tmp/nca_data.npz"); ap.add_argument("--seed0", type=int, default=1000)
-    ap.add_argument("--follow", action="store_true", help="v2: follower (sheet-like) rule, Params(follow=True)")
+    ap.add_argument("--follow", action="store_true", help="v2: follower (sheet-like) rule, Params(rule=\"follow\")")
     ap.add_argument("--tm-max", type=float, default=TM_MAX, help="upper end of log-uniform Tm (v2 follower fits: 50 h)")
     ap.add_argument("--procs", type=int, default=8)
     a = ap.parse_args()
