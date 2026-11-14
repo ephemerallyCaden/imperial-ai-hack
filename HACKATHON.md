@@ -1,6 +1,6 @@
 # Imperial AI Hack Playbook (24 hours, 3 people)
 
-**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: 10:00 Sun 15 Nov. Venue: Huxley Building, Imperial College London. Team name: [TBC].
+**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: 12:00 Sun 15 Nov (aim for 11:30; confirmed with organisers). Venue: Huxley Building, Imperial College London. Team name: [TBC].
 
 ## Tracks
 
@@ -28,7 +28,7 @@ Because we are targeting Best Designed AI Product: design the 3 demo screens in 
 
 ## Timeline
 
-Start 12:00 Sat 14 Nov. **Submission deadline 10:00 Sun 15 Nov** (22h of build time). Event ends 12:00.
+Start 12:00 Sat 14 Nov. **Submission deadline 12:00 Sun 15 Nov** (aim for 11:30). The table below was drafted for a 10:00 deadline; everything after 09:00 has 2 extra hours of slack.
 
 | Time | Activity | Who |
 |------|----------|-----|
