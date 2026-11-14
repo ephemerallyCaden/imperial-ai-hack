@@ -60,6 +60,9 @@ An assay scientist running scratch assays. Today tools (TScratch, ImageJ plugins
 **What would you need to deploy it?**
 Calibration data from their own microscope and cell line: our results show bands do not transfer across cell types. A few dozen wells per condition is enough to calibrate (we used 28 wounds).
 
+**Could a lab actually stop plates early?** (simulation on recorded WHAD data, not a lab trial)
+"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 89% of those calls are right, against 73% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 5 of 46 calls were wrong: wounds that did close."
+
 **Clinical use?**
 Not claimed. Clinics use a similar early rule for chronic wounds (about 50% area reduction at 4 weeks); large EHR studies predict non-healing with AUC ~0.85-0.90. We have no clinical data, so that is a future direction only.
 
@@ -87,3 +90,5 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 | Stall flag | AUC 0.78-0.90 |
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
+| NCA at 3.8 h | 0.0495 vs 0.0385 (29% worse), ties by 9.5 h; emulator for the draw tool |
+| Stop early | 82% called at 1.9 h, 89% right vs 73% always-no; only "won't close" calls |
