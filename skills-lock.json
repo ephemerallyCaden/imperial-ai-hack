@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skills/research-discovery/gap-finder/SKILL.md",
       "computedHash": "bcb26baa471f9e4b85c4836cd2620555e44e068115ab635e6ec0db54ab812284"
+    },
+    "remotion-video-creation": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/remotion-video-creation/SKILL.md",
+      "computedHash": "a8b55456e0cf95c0edf3c97a5e9d4ea2e5899603dd1bbcb7623db6344b107c66"
+    },
+    "video-editing": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/video-editing/SKILL.md",
+      "computedHash": "b1a66c7e9337e7030cfef7c5a8b2a519123e63c8fef710105118eab89641e505"
     }
   }
 }
