@@ -44,7 +44,8 @@ export class NCA {
   // division: source gate (0 for v1 / WHAD presets: hard off; 1 for v2 follower), as nca/model.py NCA(division=...).
   // tm_min/tm_max: Tm encoding range; bias_min/bias_max (or bias: [lo, hi]): if given, Tm and bias are clipped to the
   // trained range (v2). Pass the parsed weights.config.json as the second argument; defaults = v1.
-  constructor(wt, { K = 2, noise = 0.1, division = 0, tm_min = TM_MIN, tm_max = TM_MAX, bias_min, bias_max, bias, ...rest } = {}) {
+  // Clip bounds default to v1's (nca/model.py V1_CONFIG), as nca/api.py rollout always clips.
+  constructor(wt, { K = 2, noise = 0.1, division = 0, tm_min = TM_MIN, tm_max = TM_MAX, bias_min = 0.25, bias_max = 0.9, bias, ...rest } = {}) {
     if (Array.isArray(bias)) [bias_min, bias_max] = bias;
     this.cfg = { tm_min, tm_max, bias_min, bias_max, ...rest };
     this.W1 = wt['l1.weight'].map((r) => Float32Array.from(r)); this.b1 = Float32Array.from(wt['l1.bias']);
@@ -60,7 +61,7 @@ export class NCA {
   // network encoding of (Tm, bias) for this weights version (clipped to the trained range when the config gives one)
   normParams(Tm, bias) {
     const c = this.cfg, clip = (v, lo, hi) => Math.min(hi ?? Infinity, Math.max(lo ?? -Infinity, v));
-    const tm = c.bias_min != null ? clip(Tm, c.tm_min, c.tm_max) : Tm, b = clip(bias, c.bias_min, c.bias_max);
+    const tm = clip(Tm, c.tm_min, c.tm_max), b = clip(bias, c.bias_min, c.bias_max);
     return normParams(tm, b, c.tm_min, c.tm_max);
   }
 
