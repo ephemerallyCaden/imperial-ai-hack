@@ -31,7 +31,6 @@ cp .env.example .env
     fix/SKILL.md           /fix: paste error, get fix
     verify/SKILL.md        /verify: build + types + lint + tests + diff review
     ship/SKILL.md          /ship: build, test, commit, push
-    demo/SKILL.md          /demo: generate pitch script from codebase
 CLAUDE.md                  Fill in at kickoff (with agent auto-routing rules)
 HACKATHON.md               Timeline, tactics, sponsor API reference
 ```
@@ -39,7 +38,7 @@ HACKATHON.md               Timeline, tactics, sponsor API reference
 ## Workflow
 
 ```
-/spec -> build features -> /fix when broken -> /verify before merge -> /ship -> /demo for the pitch
+/spec -> build features -> /fix when broken -> /verify before merge -> /ship
 ```
 
 ## Agent auto-routing

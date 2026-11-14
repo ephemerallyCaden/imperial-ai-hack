@@ -87,7 +87,6 @@ claude
 | `/fix` | Something breaks | Paste error, get fix. Max 3 cycles. |
 | `/verify` | Before merge | Build, types, lint, tests, diff review. PASS/FAIL report. |
 | `/ship` | Feature done | Build, test, commit, push. One command. |
-| `/demo` | Sun 07:30 | Write pitch script from what's actually built |
 | `/secure` | Before deploying | 5-min security scan: secrets, debug code, exposed endpoints |
 
 ### Speed rules
