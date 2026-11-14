@@ -1,6 +1,6 @@
-// node sim/js/draw_check.mjs [free|follow] -> heal a drawn disc on a WHAD-sized 32x44 lattice (20 um sites) with each preset
+// node sim/js/draw_check.mjs [follow|free] (default follow) -> heal a drawn disc on a WHAD-sized 32x44 lattice (20 um sites) with each preset
 import { Engine, presetsFor } from './engine.js';
-const rule = process.argv[2] || 'free';
+const rule = process.argv[2] || 'follow';
 const e0 = (n) => presetsFor(rule)[n].Tm.toFixed(3);
 const w = 44, h = 32, wound = new Uint8Array(w * h);
 for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) wound[y * w + x] = (x - 22) ** 2 + (y - 16) ** 2 < 81 ? 1 : 0;
