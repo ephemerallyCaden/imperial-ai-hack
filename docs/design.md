@@ -1,6 +1,6 @@
 # Stitch: design doc (single source of truth)
 
-Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is decided. Everything else is in section 15 (OPEN) or in research notes (kept on branch `session/research-docs`: `docs/research-report.md`, `docs/wound-plan.md`, `docs/papers/reading-notes.md`), which are background and do not override this file. Tags: [D] decided by the user; [F] verified fact; [DER] derived from a [D] and a [F] (confirm if wrong). Change a decision by editing here and adding a line to section 16.
+Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is decided. Everything else is in section 15 (OPEN) or in research notes (`docs/research-report.md`, `docs/wound-plan.md`, `docs/papers/reading-notes.md`), which are background and do not override this file. Tags: [D] decided by the user; [F] verified fact; [DER] derived from a [D] and a [F] (confirm if wrong). Change a decision by editing here and adding a line to section 16.
 
 ## 1. Goal
 - [D] Build **Stitch**, the headline product: an early wound-closure forecaster with calibrated uncertainty, stall / "measure again" flags and a scorecard against simple baselines. (Name "for now"; user may rename.)
@@ -127,15 +127,17 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 4. Public repo, 2-minute video, Devpost submitted before 12:00 Sun.
 
 ## 15. OPEN (not decided)
-- Product name: "Stitch" is provisional.
-- Whether overnight work outside the building is permitted (ask organisers).
-- Demo video rule conflict (site: no demo video; Devpost rules: 2-minute video required): follow Devpost, confirm.
-- Cell-simulator parameters (P2, from calibration).
-- Anomaly-detector thresholds (band exceedance, stall window, flat-area rule) and the LLM prompt/output schema (P1/P2).
-- Role names; Figma owner (P3 assumed).
+Resolved by the user on 14 Nov (R12):
+- Product name: Stitch (final).
+- Overnight work outside the building: allowed (user decision; the organisers' data.js says building closes 21:00 Sat, so keep commits and video inside the 12:00 Sun cutoff either way).
+- Demo: do a live demo if time allows, not required. The 2-minute video stays the submission.
+- Cell-simulator parameters: taken from the training data (calibration on WHAD), not from the literature priors alone.
+- Anomaly-detector thresholds and the LLM prompt/output schema: set by testing against the training wounds.
+- Role names: as written in section 3. Figma owner: P3.
 - Boltz: not used; bounty not pursued.
-- Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
+- Jin supplement licence: the team has permission to use it. Still cite Jin 2016; the BINNs repo numpy copy has no licence, so do not re-host it.
 
+Still open: none.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
 - P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader.
@@ -155,3 +157,4 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - R10 (14 Nov): LLM roles = assay intake (protocol text to config) + anomaly triage (code flags, LLM explains with hypotheses); Claude API run offline, outputs cached; Reviewer 2, report writer and segmentation QC not included. UI direction: journal-figure look, realistic tissue palette, full-bleed canvas with collapsible panels, skin-tone range shown in mockups only; five mockups built in design/mockups (selection pending).
 - R11 (14 Nov): tissue tone switcher ships (display setting); starting-point mockup not yet chosen: user will supply one more reference/mockup to build before choosing among M1 to M5.
 - R11b (14 Nov): tissue rendering = no outlines, no hexagons, gradient state blends; shared renderer rewritten (design/shared/cellfield.js v2); mockups M1 to M5 being updated; M6 night-plate in progress.
+- R12 (14 Nov): open list closed: name Stitch final; overnight work allowed; live demo optional; simulator parameters from training data; anomaly thresholds by testing; roles kept; Boltz not used; Jin supplement permission granted.
