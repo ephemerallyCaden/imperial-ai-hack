@@ -5,7 +5,7 @@
 //   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac }
 // NCA band (#28): { type:'nca-load', weights:<nca/weights.json object> } then
 //   { type:'band', hours:24, members:20, Tm, bias } -> { type:'band', t_hours, q05, q50, q95 } (wound_frac)
-//   band starts from the CURRENT agent grid, coarse-grained by 4 (cellsim grain).
+//   band starts from the CURRENT agent grid, coarse-grained by 4 (cellsim grain); R = coarse-grained t0 reservoir.
 import { Engine } from './engine.js';
 import { NCA, coarseGrain } from './nca.js';
 
@@ -36,8 +36,8 @@ onmessage = (e) => {
   else if (m.type === 'run') { hpf = m.hoursPerFrame || hpf; if (!running) { running = true; loop(); } }
   else if (m.type === 'band') {
     if (!nca) return;
-    const cg = coarseGrain(eng.occ, eng.h, eng.w, 4);
-    const b = nca.band(cg.rho, cg.h, cg.w, m.Tm ?? eng.p.Tm, m.bias ?? eng.p.bias, m.hours || 24, { members: m.members || 20, seed: m.seed || 1 });
+    const cg = coarseGrain(eng.occ, eng.h, eng.w, 4), R = coarseGrain(eng.resMask, eng.h, eng.w, 4).rho;
+    const b = nca.band(cg.rho, cg.h, cg.w, m.Tm ?? eng.p.Tm, m.bias ?? eng.p.bias, m.hours || 24, { members: m.members || 20, seed: m.seed || 1, R });
     postMessage({ type: 'band', t0_hours: eng.t_hours, t_hours: b.t_hours, q05: b.q05, q50: b.q50, q95: b.q95 });
   }
   else if (m.type === 'pause') { running = false; clearTimeout(timer); }
