@@ -96,6 +96,12 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (deck.gl/WebGL); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
 - Public GitHub repo, MIT licence; no raw data, no PDFs committed; reimplement code from papers with no licence.
 
+## 9b. LLM roles [D, R10]
+- Principle: deterministic code does the science; the LLM never forecasts and never produces a number. LLM output ships as cached JSON (run offline with the Claude API on the demo inputs; no live API call and no keys in the repo).
+- **Assay intake**: pasted protocol text to a structured config (cell line, seeding density, mitomycin yes/no, scratch tool, imaging interval, plate part). Code maps the config to a preset and applies rules (mitomycin means division off; Phi = Tm/Td < about 1e-2 check) and checks consistency; the LLM extraction is shown next to the source text for review.
+- **Anomaly triage**: code detects suspicious wounds first (observed leaves its 90% band, stall probability above threshold, flat area over a stated window, blank or out-of-focus frames); the LLM then reads the flagged wound's curve summary, metadata and (optionally) frame overlays and writes a short triage note with candidate causes (for example plate-part batch effect, edge damage, debris) labelled as hypotheses. It never raises or clears a flag by itself. Thresholds are set by P2/P1 and recorded here once chosen (OPEN).
+- Not included: Reviewer 2 audit, report/caption writer, segmentation QC as a separate role, free-form chat.
+
 ## 10. Schedule [D / F]
 - Now: Sat afternoon. **Gate: 19:00 Sat** (section 5.3). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
 
@@ -123,6 +129,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Whether overnight work outside the building is permitted (ask organisers).
 - Demo video rule conflict (site: no demo video; Devpost rules: 2-minute video required): follow Devpost, confirm.
 - Cell-simulator parameters (P2, from calibration).
+- Anomaly-detector thresholds (band exceedance, stall window, flat-area rule) and the LLM prompt/output schema (P1/P2).
 - Role names; Figma owner (P3 assumed).
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
@@ -143,3 +150,4 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - R7 (14 Nov): both movement and multiplication terms confirmed; draw tool = MCF10A control + CYR61 shRNA presets only; real WHAD frames only in the video's validation segment; user supplied colleagues' extra data sources (6.4) instead of answering the segmentation-scope question.
 - R8 (14 Nov): main benchmark = WHAD MCF10A; Zaritsky 2015 = second test set with held-out treatment, conditional on a first-hour verification; embryo set, WHiM-BC and MDCK strip movies in core as secondary data; auto-segmentation scope = MCF10A exp1 remainder + exp2.
 - R9 (14 Nov): adopt all three parts of Migliaccio 2023 (agent rules, Phi power-law baseline and sanity check, Table 2 priors).
+- R10 (14 Nov): LLM roles = assay intake (protocol text to config) + anomaly triage (code flags, LLM explains with hypotheses); Claude API run offline, outputs cached; Reviewer 2, report writer and segmentation QC not included. UI direction: journal-figure look, realistic tissue palette, full-bleed canvas with collapsible panels, skin-tone range shown in mockups only; five mockups built in design/mockups (selection pending).
