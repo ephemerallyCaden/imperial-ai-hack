@@ -46,3 +46,9 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 
 ### Open checks (first hour)
 1. Open 7660424 zip: masks, frame counts, metadata. 2. Open one Jin .xls with a safe reader. 3. Check 4991621 paper (cell type, frame interval, zip contents). 4. Ask organisers: prep allowed, overnight work, Boltz credits, video rule. 5. Quick literature check for NCA + wound/scratch and the 2026 audit of wound proxies. 6. deck.gl performance with a few thousand cells.
+
+## 2026-11-14 20:15 [randodeh] Data and splits (R15 in design.md)
+- DECIDED: WHAD part I and part II are the same wounds filmed consecutively; split by physical wound (leave-one-wound-out), not by part.
+- DECIDED: add 22 auto-segmented WHAD MCF10A wounds (exp1 remainder + exp2) and WHiM-BC (12 monolayer + 12 sphere) as data; report manual-mask-only results too.
+- DECIDED: held-out conditions = WHAD CC to C61, WHiM-BC monolayer to sphere. Gate at 00:00 Sun.
+- DROPPED: HUVEC/SKOV-3 (Zenodo 21779854) and the diabetic study (19738270): only 2-4 time points per series.
