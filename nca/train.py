@@ -1,7 +1,7 @@
 """Train the NCA on simulator density grids. python nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt"""
 import argparse, os, sys, time, numpy as np, torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import NCA, norm_params
+from model import NCA, norm_params, build, V1_CONFIG, config_path
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--data", default="/tmp/nca_data.npz"); ap.add_argument("--out", default="nca/weights.pt")
@@ -10,13 +10,19 @@ ap.add_argument("--init", default=None, help="fine-tune from these weights (full
 ap.add_argument("--lr", type=float, default=3e-3)
 ap.add_argument("--w-anorm", type=float, default=0.0, help="weight of the energy score on area / area(t=0) (closure curve)")
 ap.add_argument("--w-mse", type=float, default=10.0, help="per-cell MSE weight (pulls members to the mean; lower = more spread)")
+ap.add_argument("--config", default=None, help='JSON overrides of the model config, e.g. \'{"version": "v2", "tm_max": 50, "division": 1, "follow": true}\'; saved next to --out')
 a = ap.parse_args()
 torch.manual_seed(0); torch.set_num_threads(4)
 d = np.load(a.data)
-X = torch.tensor(d["density"]); RR = torch.tensor(d["R"])[:, None]; P = torch.tensor([norm_params(*p) for p in d["params"]], dtype=torch.float32)
+import json
+cfg = {**V1_CONFIG, **(json.loads(a.config) if a.config else {})}
+X = torch.tensor(d["density"]); RR = torch.tensor(d["R"])[:, None]
+P = torch.tensor([norm_params(*p, cfg["tm_min"], cfg["tm_max"]) for p in d["params"]], dtype=torch.float32)
 Xtr, Rtr, Ptr, Xva, Rva, Pva = X[a.nval:], RR[a.nval:], P[a.nval:], X[:a.nval], RR[:a.nval], P[:a.nval]
 F_ = X.shape[1] - 1
-net = NCA(); opt = torch.optim.Adam(net.parameters(), 2e-3)
+net = build(cfg); opt = torch.optim.Adam(net.parameters(), 2e-3)
+if a.config:
+    json.dump(cfg, open(config_path(a.out), "w"), indent=1)
 if a.init:
     net.load_state_dict(torch.load(a.init, map_location="cpu")); a.curr = 1  # L = F_ from the start
     for g in opt.param_groups: g["lr"] = a.lr
