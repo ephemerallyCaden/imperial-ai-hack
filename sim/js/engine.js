@@ -43,7 +43,11 @@ export function reservoirMask(occ, h, w, edge = DEFAULTS.edge) {
 
 export class Engine {
   // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
-  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1 }) {
+  // rule: 'frozen' (default, the gate rules) or 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
+  // Moore-connected to the reservoir through occupied sites pulls the chain behind it, so its source stays occupied;
+  // movers on islands leave a vacancy as before. Fixed at construction (preset switches keep it). params.follow = true
+  // is accepted as an alias.
+  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = 'frozen' }) {
     this.w = w; this.h = h;
     this.occ = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
@@ -55,6 +59,9 @@ export class Engine {
     this.res = [];
     for (let i = 0; i < w * h; i++) if (this.resMask[i]) this.res.push(i);
     this._refill();
+    this.follow = rule === 'follow' || !!(params && params.follow);
+    this.rule = this.follow ? 'follow' : 'frozen';
+    if (this.follow) { this.conn = Uint8Array.from(this.resMask); this._growConnected(); }
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
     this.cum = new Float64Array((w + 2 * R + 1) * (h + 2 * R + 1));
@@ -63,6 +70,22 @@ export class Engine {
 
   setPreset(name, override) {
     this.p = { ...DEFAULTS, ...(PRESETS[name] || PRESETS.CC), ...(override || {}) };
+  }
+
+  // cellsim.grow_connected: conn &= occ, then extend to every occupied site Moore-connected to it (conn only grows)
+  _growConnected() {
+    const { w, h, occ, conn } = this, q = this._q || (this._q = new Int32Array(w * h));
+    let tail = 0;
+    for (let i = 0; i < w * h; i++) { if (!occ[i]) conn[i] = 0; else if (conn[i]) q[tail++] = i; }
+    for (let head = 0; head < tail; head++) {
+      const i = q[head], x = i % w, y = (i / w) | 0;
+      for (let k = 0; k < 8; k++) {
+        const ny = y + NY[k], nx = x + NX[k];
+        if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+        const j = ny * w + nx;
+        if (occ[j] && !conn[j]) { conn[j] = 1; q[tail++] = j; }
+      }
+    }
   }
 
   _refill() {
@@ -128,9 +151,10 @@ export class Engine {
     for (let a = 0; a < srcs.length; a++) {
       if (keys[a] !== best[tgts[a]]) continue; // lost the conflict
       occ[tgts[a]] = 1;
-      if (moves[a]) occ[srcs[a]] = 0;
+      if (moves[a] && !(this.follow && this.conn[srcs[a]])) occ[srcs[a]] = 0; // follow: connected source stays filled
     }
     this._refill();
+    if (this.follow) this._growConnected();
     this.t_hours += p.dt;
   }
 

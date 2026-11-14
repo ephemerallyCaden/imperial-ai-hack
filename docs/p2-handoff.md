@@ -47,6 +47,7 @@ Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `
 | Message | Effect |
 |---|---|
 | `{type:'init', w, h, wound, preset, seed}` | `wound`: `Uint8Array(w*h)`, 1 = drawn (empty), 0 = cells. `preset`: `'CC'` or `'C61'`. Posts frame 0. Any message sent before `init` is ignored. |
+| `init` option `rule` | `'frozen'` (default) is the gate rules. `'follow'` is the sheet-like follower rule (`cellsim.Params.follow`, feature/p2-follower): a moving cell connected to the reservoir pulls the chain behind it, so no vacancy is left behind. It is fixed per `init`, and frames report `rule`. Over 20 seeds it matches Python at Tm 3 (4/12/24 h: JS 0.1685 / 0.1236 / 0.0532, Python 0.1686 / 0.1236 / 0.0538), and also with an unconnected island in the wound (30 seeds, within one standard error). The presets are fitted to the frozen rules; follower presets come with Agent 1's follower fits. |
 | `{type:'run', hoursPerFrame}` | Starts the loop at up to about 30 fps; default 0.5 h of sim time per frame |
 | `{type:'pause'}` | Stops the loop |
 | `{type:'step', hours}` | Advances once and posts one frame |
