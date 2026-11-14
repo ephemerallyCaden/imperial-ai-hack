@@ -64,6 +64,9 @@ sim_follow did NOT pass it. It beats v1 sim_ensemble on qscore in 6 of 12 groups
 headline loo_all 3.8 h is 0.0459 (v2) vs 0.0492 (v1) vs edge_speed 0.0385; and CC_to_C61 is worse in all four groups (worst 5.7 h: 0.0380 vs 0.0320).
 The scorecard reports both v1 (sim_ensemble) and v2 (sim_follow) rows. Neither beats edge_speed at 1.9-5.7 h.
 **WHiM-BC external check (Agent 4, frozen WHAD settings):** _slot: result pending_.
+**Which NCA is the demo forecaster (user decision, Sun 00:20):** NCA v2 (trained on follower-rule simulations, Agent 2, `nca/v2/`), for
+consistency with the follower-rule cells shown in the draw tool and playback. This is a stated choice, not the best score: **nca_realft** (P1, #71: the
+v1 NCA fine-tuned on real WHAD frames, 4 wound-level folds) scores best on the gate (passes 9 of 12 groups). The scorecard keeps both rows.
 
 **Tuned and evaluated on WHAD; no external test set** (a WHiM-BC check is with Agent 4). Code `sim/v2.py`; rule `Params(rule="follow")`
 (Agent 4, 3dd4fcf). Fits are at P1's cut-offs in series time (`sim/fits/whad_fits_follow.json`, 490b4c7: Tm grid 0.05-500 h, near-tie break),
