@@ -84,6 +84,16 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "- **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).",
           "- **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.",
           "- **Time-to-90% is often censored**: most WHAD series do not reach 90% closure within 19 h, so t90 medians are often open-ended.", "",
+          "## Can a scientist stop the plate early? (simulation)", "",
+          "Policy fixed in advance: at each check (1.9, 3.8, 5.7, 9.5 h), if P(90% closed by 19 h) <= 0.1 or >= 0.9, make the call "
+          "and stop imaging; otherwise keep imaging. Held-out WHAD wounds, edge-speed forecaster. This is a simulation on recorded "
+          "data, not a lab trial.", ""] + (lambda R: [
+          f"- **{int(R.called_early)} of {int(R.n)} wounds ({R.share_called:.0%}) get a call by the first check** (median {R.median_stop_h_if_called:.1f} h); "
+          f"{R.accuracy_of_calls:.0%} of calls are right ({int(R.wrong_calls)} wrong), vs {R.base_rate_not_closed:.0%} for always saying 'won't close'.",
+          f"- Every early call is **'won't reach 90% closure by 19 h'** ({int(R.calls_wont_close)} calls); the forecaster never confidently calls early closure. "
+          "The wrong calls are wounds that did close: stopping them would have been a mistake.",
+          f"- Simulated imaging saved: {R.hours_saved_mean:.1f} h per wound on average (of 19 h)."])(
+          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'edge_speed' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + ["",
           "## NCA vs baselines (gate, design.md 5.3)", "",
           "Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator "
           "forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).", "",

@@ -59,6 +59,14 @@ Stall across cut-offs: AUC 0.78-0.90, precision 0.50-0.75, recall 0.62-0.71.
 - **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.
 - **Time-to-90% is often censored**: most WHAD series do not reach 90% closure within 19 h, so t90 medians are often open-ended.
 
+## Can a scientist stop the plate early? (simulation)
+
+Policy fixed in advance: at each check (1.9, 3.8, 5.7, 9.5 h), if P(90% closed by 19 h) <= 0.1 or >= 0.9, make the call and stop imaging; otherwise keep imaging. Held-out WHAD wounds, edge-speed forecaster. This is a simulation on recorded data, not a lab trial.
+
+- **46 of 56 wounds (82%) get a call by the first check** (median 1.9 h); 89% of calls are right (5 wrong), vs 73% for always saying 'won't close'.
+- Every early call is **'won't reach 90% closure by 19 h'** (46 calls); the forecaster never confidently calls early closure. The wrong calls are wounds that did close: stopping them would have been a mistake.
+- Simulated imaging saved: 13.8 h per wound on average (of 19 h).
+
 ## NCA vs baselines (gate, design.md 5.3)
 
 Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).
