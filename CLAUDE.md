@@ -35,7 +35,7 @@ Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2
 - Read files before editing. Don't guess what exists.
 - No features beyond what was asked. Hackathon scope is tight.
 - Match existing patterns. Don't refactor adjacent code.
-- Run build/test after changes. Fix what you break.
+- Build/lint/test are slow. Run them ONCE, only after all other work for the current request is finished (all edits made, all other checks done). Never run them between intermediate edits. Fix what you break, then re-run once.
 - Commit after every working feature. Small commits, clear messages.
 - If unsure, ask. Don't assume and build the wrong thing.
 - No abstractions for one-time code. Inline is fine for 24 hours.
@@ -49,7 +49,7 @@ Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2
 
 ## Agent auto-routing
 Use these agents and skills proactively without being asked:
-- After writing code that changes behavior: run `/verify` to check build/types/lint/tests
+- When all edits for the request are done (not after each edit): run `/verify` once to check build/types/lint/tests. Use cheap checks (typecheck on touched files, reading the diff) while working instead.
 - When a build or test fails: run `/fix` with the error output
 - Before committing: run `git diff` and scan for debug code, hardcoded secrets, console.logs
 - When starting a new feature: read SPEC.md first to check scope and team ownership
