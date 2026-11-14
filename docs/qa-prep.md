@@ -8,16 +8,16 @@ Stitch forecasts the rest of a scratch-assay wound from its first few hours, wit
 ## Scientific rigour (30)
 
 **How do you know the 90% band is honest?**
-Every band is leave-one-wound-out: a wound's own outcome never calibrates its own forecast. On 28 unseen WHAD wounds (56 series), 93% of future points fall inside the band (95% CI 0.88-0.96, bootstrap over wounds). Same on 24 WHiM-BC wells (0.91), 62 fly-embryo wounds (0.92), 19 Zaritsky wells (0.89).
+Every band is leave-one-wound-out: a wound's own outcome never calibrates its own forecast. On 28 unseen WHAD wounds (56 series), 92% of future points fall inside the band (95% CI 0.88-0.96, bootstrap over wounds). Same on 24 WHiM-BC wells (0.91), 62 fly-embryo wounds (0.92), 19 Zaritsky wells (0.89).
 
 **What are you comparing against?**
 Five simple forecasters, all with the same calibration: no-change, linear, constant edge speed, logistic, Gompertz. Scored with a quantile score (a CRPS approximation from the 5/50/95% quantiles), coverage, band width, time-to-50/90% in-range, and a Brier score for "90% closed by 19 h".
 
 **Which wins?**
-On WHAD, constant edge speed (wound edge moving at a fixed speed, 2 parameters): quantile score 0.0385 vs 0.0726 for the typical-wound curve at 3.8 h of history. More history helps every model.
+On WHAD, constant edge speed (wound edge moving at a fixed speed, 2 parameters): quantile score 0.0352 vs 0.0644 for the typical-wound curve at 4 h of history. More history helps every model.
 
 **Did you hold out anything harder than random wounds?**
-Two held-out conditions. WHAD control to CYR61 knockdown: coverage 0.92 at 3.8 h, but only 0.78 at 1.9 h. WHiM-BC ordinary to stem-cell-enriched cells: it fails, 15-58% coverage. Stem-cell wounds close about twice as fast, so bands calibrated on ordinary cells do not transfer. We report that as a limit.
+Two held-out conditions. WHAD control to CYR61 knockdown: coverage 0.87-0.91 at 2-4 h, dipping to 0.79 at 6 h. WHiM-BC ordinary to stem-cell-enriched cells: it fails, 15-58% coverage. Stem-cell wounds close about twice as fast, so bands calibrated on ordinary cells do not transfer. We report that as a limit.
 
 **Why is WHAD 9 / 28 wounds, not 16 / 104?**
 We found WHAD "part II" is the same wounds as part I filmed later (same position ids, files named PartI_plus4, masks overlap with IoU 0.82-0.90). Splitting by part would test on wounds the model trained on, so we split by physical wound. 9 wounds have the authors' masks; we auto-segmented 22 more (our segmenter: IoU 0.84 part I / 0.60 part II vs manual masks, 1.8 points of wound-area error) and report manual-only results too (coverage 0.87).
@@ -27,15 +27,15 @@ Small. Coverage CIs are about +/-0.05 to +/-0.15. That is why we bootstrap over 
 
 **What doesn't work?**
 - Calibration does not transfer to a faster-closing cell type (above).
-- We tried three "measure again" signals (band width, fit error, stall ambiguity): AUC 0.55-0.65, close to chance, so we do not ship that flag.
+- We tried three "measure again" signals (band width, fit error, stall ambiguity): AUC 0.46-0.73, inconsistent across cut-offs and chosen on the same data, so we do not ship that flag.
 - "Two frames outside the band" does not predict a forecast going off-track.
 - Time to 90% closed is often beyond the 19 h series, so many t90 ranges are open-ended.
 
 **Why should I trust the stall flag?**
-Thresholds are tuned leave-one-wound-out. AUC 0.78-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 56 series).
+Thresholds are tuned leave-one-wound-out. AUC 0.79-0.89 across cut-offs; at 4 h it is right 62% of the time it fires and catches 77% of real stalls (13 stalls in 55 series).
 
 **How did you pick the cut-offs?**
-10/20/30/50% of the frames. On WHAD every series has the same 20 hourly frames, so that is a fixed time and cannot leak the outcome. On the embryo and Zaritsky sets series end near closure, so there we use fixed fractions of the median closure time instead.
+After 2, 4, 6 and 10 hours. Every WHAD series has the same hourly frames, so a fixed time cannot leak the outcome. On the embryo and Zaritsky sets series end near closure, so there we use fixed fractions of the median closure time instead.
 
 ## Technical execution (25)
 
@@ -81,9 +81,9 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 ## Numbers to remember
 | | |
 |---|---|
-| Coverage on unseen WHAD wounds | 0.93 (0.88-0.96), target 0.90 |
-| Best forecaster on WHAD at 3.8 h | constant edge speed, quantile score 0.0385 |
+| Coverage on unseen WHAD wounds | 0.92 (0.88-0.96), target 0.90 |
+| Best forecaster on WHAD at 4 h | constant edge speed, quantile score 0.0352 |
 | Held-out condition, stem cells | 0.15-0.58 coverage: fails |
-| Stall flag | AUC 0.78-0.90 |
+| Stall flag | AUC 0.79-0.89 |
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
