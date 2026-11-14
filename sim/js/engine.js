@@ -1,125 +1,126 @@
-// Draw-tool engine: Migliaccio-2023 lattice agent rules (design.md 5.1b), pure JS, no DOM.
-// One site = one cell. 3x3 Moore neighbourhood. Grid cell values: 1 = cell, 0 = empty.
-// Agent area = cells * siteArea; wound = connected empty region drawn by the user.
-// Presets are PLACEHOLDERS until #23 (fit Tm/bias per wound) lands: replace via setPreset / presets.json.
+// Draw-tool engine: JS port of sim/cellsim.py (rules in docs/sim.md on feature/p2-agent1).
+// Same semantics: parallel update per dt=0.1 h step, Moore 8-neighbourhood, density-dependent
+// migration dt/Tm*rho^dens_exp, division dt/Td (Td=null: off), wound bias = up the gradient of
+// blurred emptiness (radius blur), random-priority conflicts, reservoir band `edge` at borders.
+// Grid: Uint8Array(h*w) row-major, 1 = cell. Frame = { occ, t_hours, wound_frac } (same as npz keys).
+// Presets are PLACEHOLDERS until #23 (fit Tm/bias per wound) lands.
 
 export const PRESETS = {
-  CC: { Tm: 1, Td: 40, bias: 7 / 9, divide: true },
-  C61: { Tm: 2, Td: 40, bias: 7 / 9, divide: true },
+  CC: { Tm: 1.0, Td: 20, bias: 7 / 9 },
+  C61: { Tm: 2.0, Td: 20, bias: 7 / 9 },
 };
+const DEFAULTS = { Td: null, bias: 7 / 9, dens_exp: 0.5, dt: 0.1, blur: 6, edge: 2 };
 
-// xorshift32, seedable so runs are reproducible
+const NY = [-1, -1, -1, 0, 0, 1, 1, 1];
+const NX = [-1, 0, 1, -1, 1, -1, 0, 1];
+
 function rng(seed) {
   let s = seed >>> 0 || 1;
-  return () => {
-    s ^= s << 13; s >>>= 0;
-    s ^= s >>> 17;
-    s ^= s << 5; s >>>= 0;
-    return s / 4294967296;
-  };
+  return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
 }
 
-const DX = [-1, 0, 1, -1, 1, -1, 0, 1];
-const DY = [-1, -1, -1, 0, 0, 1, 1, 1];
-
 export class Engine {
-  // wound: Uint8Array(w*h), 1 where the user drew the wound (starts empty); rest is confluent cells.
+  // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
   constructor({ w, h, wound, preset = 'CC', params = null, seed = 1 }) {
     this.w = w; this.h = h;
-    this.grid = new Uint8Array(w * h);
-    for (let i = 0; i < w * h; i++) this.grid[i] = wound[i] ? 0 : 1;
-    this.dist = new Float32Array(w * h); // distance (sites) to nearest empty site
+    this.occ = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
     this.rand = rng(seed);
+    this.t_hours = 0;
     this.setPreset(preset, params);
-    this.step_ = 0;
-    this.cells = [];
-    this._rebuild();
-    this._updateDist();
+    this._refill();
+    this.g = new Float32Array(w * h);
+    this.cum = new Float32Array((w + 1) * (h + 1));
+    this.best = new Float64Array(w * h);
   }
 
   setPreset(name, override) {
-    const p = { ...(PRESETS[name] || PRESETS.CC), ...(override || {}) };
-    // Pm = (1/Tm)/(1/Tm+1/Td), Pd = (1/Td)/(1/Tm+1/Td)
-    const a = 1 / p.Tm, b = p.divide ? 1 / p.Td : 0;
-    this.pMove = a / (a + b);
-    this.pDiv = b / (a + b);
-    this.bias = p.bias;
-    this.params = p;
+    this.p = { ...DEFAULTS, ...(PRESETS[name] || PRESETS.CC), ...(override || {}) };
   }
 
-  _rebuild() {
-    const c = [];
-    for (let i = 0; i < this.grid.length; i++) if (this.grid[i]) c.push(i);
-    this.cells = c;
+  _refill() {
+    const { w, h, occ } = this, e = this.p.edge;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+      if (y < e || y >= h - e || x < e || x >= w - e) occ[y * w + x] = 1;
   }
 
-  get count() { return this.cells.length; }
-
-  // multi-source BFS (8-neighbour) from empty sites; closed boundary (edges are walls)
-  _updateDist() {
-    const { w, h, grid, dist } = this;
-    const q = new Int32Array(w * h);
-    let head = 0, tail = 0;
-    for (let i = 0; i < w * h; i++) {
-      if (!grid[i]) { dist[i] = 0; q[tail++] = i; } else dist[i] = 1e9;
-    }
-    while (head < tail) {
-      const i = q[head++], x = i % w, y = (i / w) | 0, d = dist[i] + 1;
-      for (let k = 0; k < 8; k++) {
-        const nx = x + DX[k], ny = y + DY[k];
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const j = ny * w + nx;
-        if (dist[j] > d) { dist[j] = d; q[tail++] = j; }
+  // blurred emptiness: box mean over (2r+1)^2, edge-replicated (clamped), via integral image
+  _blur() {
+    const { w, h, occ, g, cum } = this, r = this.p.blur, k = 2 * r + 1, W1 = w + 1;
+    for (let y = 0; y < h; y++) {
+      let row = 0;
+      for (let x = 0; x < w; x++) {
+        row += occ[y * w + x] ? 0 : 1;
+        cum[(y + 1) * W1 + x + 1] = cum[y * W1 + x + 1] + row;
       }
     }
+    const S = (y0, x0, y1, x1) => cum[y1 * W1 + x1] - cum[y0 * W1 + x1] - cum[y1 * W1 + x0] + cum[y0 * W1 + x0];
+    // replicate edges by clamping window and weighting: approximate with clamped window mean
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+        g[y * w + x] = S(y0, x0, y1, x1) / ((y1 - y0) * (x1 - x0));
+      }
+    }
+    return k;
   }
 
-  // One Monte Carlo sweep: each cell (random order) acts once.
   step() {
-    const { w, h, grid, dist, rand, cells } = this;
-    // Fisher-Yates shuffle
-    for (let i = cells.length - 1; i > 0; i--) {
-      const j = (rand() * (i + 1)) | 0;
-      const t = cells[i]; cells[i] = cells[j]; cells[j] = t;
-    }
-    const n = cells.length; // newborns act next sweep
-    const empt = new Int8Array(8);
-    for (let ci = 0; ci < n; ci++) {
-      const idx = cells[ci], x = idx % w, y = (idx / w) | 0;
-      let ne = 0;
-      for (let k = 0; k < 8; k++) {
-        const nx = x + DX[k], ny = y + DY[k];
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        if (!grid[ny * w + nx]) empt[ne++] = k;
-      }
-      if (ne === 0) continue; // quiescent (contact inhibition)
-      const r = rand();
-      if (r >= this.pMove + this.pDiv) continue;
-      // choose target: with prob bias restrict to empties facing the wound (smaller dist), else any empty
-      let pick = -1;
-      if (rand() < this.bias) {
-        let m = 0, best = 1e9;
-        for (let e = 0; e < ne; e++) {
-          const k = empt[e], d = dist[(y + DY[k]) * w + x + DX[k]];
-          if (d < best) { best = d; m = 0; }
-          if (d === best) empt[m++] = k; // compact ties to the front
+    const { w, h, occ, g, best, rand } = this, p = this.p;
+    this._blur();
+    const pdv = p.Td == null ? 0 : Math.min(1, p.dt / p.Td), pmb = Math.min(1, p.dt / p.Tm);
+    const srcs = [], tgts = [], moves = [], keys = [];
+    best.fill(2);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (!occ[i]) continue;
+        // rho_local: occupied fraction of 3x3 block (edge-replicated -> clamp coords)
+        let s = 0;
+        for (let k = 0; k < 9; k++) {
+          const yy = Math.min(h - 1, Math.max(0, y + ((k / 3) | 0) - 1)), xx = Math.min(w - 1, Math.max(0, x + (k % 3) - 1));
+          s += occ[yy * w + xx];
         }
-        pick = empt[(rand() * m) | 0];
-      } else {
-        pick = empt[(rand() * ne) | 0];
-      }
-      const tx = x + DX[pick], ty = y + DY[pick], t = ty * w + tx;
-      if (r < this.pMove) {
-        grid[idx] = 0; grid[t] = 1; cells[ci] = t;
-      } else {
-        grid[t] = 1; cells.push(t);
+        const pm = pmb * Math.pow(s / 9, p.dens_exp);
+        const u = rand();
+        const move = u < pm, div = !move && u < pm + pdv;
+        if (!move && !div) continue;
+        // central-difference gradient of g (np.gradient: one-sided at borders)
+        const yl = y > 0 ? y - 1 : y, yr = y < h - 1 ? y + 1 : y, xl = x > 0 ? x - 1 : x, xr = x < w - 1 ? x + 1 : x;
+        const gy = (g[yr * w + x] - g[yl * w + x]) / (yr - yl || 1);
+        const gx = (g[y * w + xr] - g[y * w + xl]) / (xr - xl || 1);
+        const useBias = rand() < p.bias;
+        let bk = -1, bs = -1;
+        for (let k = 0; k < 8; k++) {
+          const ny = y + NY[k], nx = x + NX[k];
+          if (ny < 0 || ny >= h || nx < 0 || nx >= w || occ[ny * w + nx]) continue;
+          const sc = rand() + (useBias && NY[k] * gy + NX[k] * gx > 0 ? 2 : 0);
+          if (sc > bs) { bs = sc; bk = k; }
+        }
+        if (bk < 0) continue; // contact inhibited
+        const t = (y + NY[bk]) * w + x + NX[bk], key = rand();
+        if (key < best[t]) best[t] = key;
+        srcs.push(i); tgts.push(t); moves.push(move); keys.push(key);
       }
     }
-    this.step_++;
-    if (this.step_ % 4 === 0) this._updateDist();
-    return this.step_;
+    for (let a = 0; a < srcs.length; a++) {
+      if (keys[a] !== best[tgts[a]]) continue; // lost the conflict
+      occ[tgts[a]] = 1;
+      if (moves[a]) occ[srcs[a]] = 0;
+    }
+    this._refill();
+    this.t_hours += p.dt;
   }
 
-  // wound area = empty sites in the largest empty component touching... kept simple: all empty sites
-  woundSites() { return this.grid.length - this.cells.length; }
+  // advance `hours` of simulated time (default 1 h = one recorded frame in cellsim)
+  advance(hours = 1) {
+    const n = Math.max(1, Math.round(hours / this.p.dt));
+    for (let i = 0; i < n; i++) this.step();
+  }
+
+  get wound_frac() {
+    let c = 0; for (let i = 0; i < this.occ.length; i++) c += this.occ[i];
+    return 1 - c / this.occ.length;
+  }
 }
