@@ -2,7 +2,10 @@
 //   const wk = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 //   wk.postMessage({ type:'init', w, h, wound:Uint8Array(w*h), preset:'CC'|'C61', seed });
 //   wk.postMessage({ type:'run', hoursPerFrame: 0.5 });  // also 'pause','step','preset','reset'
-//   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac }
+//   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac, fine, outline }
+//   fine = { scale:k, sigma, h:h*k, w:w*k, data:Uint8Array round(smoothed occupancy*255) }   (sim/js/smooth.js,
+//   outline = { units:'sites', rule:'area-matched', level, lines:[flat x,y,...] }           same as playback files)
+//   init option smooth: { k, sigma } overrides SMOOTH_K/SMOOTH_SIGMA; smooth:false turns both off.
 // NCA band (#28), for UPLOADED / REAL wounds only (never for a drawn wound: design.md, draw tool = simulation, no band):
 //   { type:'nca-load', weights:<nca/weights.json object> } -> { type:'nca-ready' }
 //   { type:'band', Tm, bias, hours:24, members:20, seed, start } with fitted Tm/bias (required) and start either
@@ -12,14 +15,24 @@
 //   Independent of the draw engine (no 'init' needed).
 import { Engine, GRAIN, reservoirMask } from './engine.js';
 import { NCA, coarseGrain } from './nca.js';
+import { fineDensity, outline, SMOOTH_K, SMOOTH_SIGMA } from './smooth.js';
 
 let nca = null;
 
 let eng = null, init = null, running = false, hpf = 0.5, timer = null;
 
 function post() {
-  const occ = eng.occ.slice();
-  postMessage({ type: 'frame', w: eng.w, h: eng.h, occ, t_hours: eng.t_hours, wound_frac: eng.wound_frac }, [occ.buffer]);
+  const occ = eng.occ.slice(), wf = eng.wound_frac;
+  const msg = { type: 'frame', w: eng.w, h: eng.h, occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
+  const sm = init.smooth === false ? null : { k: SMOOTH_K, sigma: SMOOTH_SIGMA, ...(init.smooth || {}) };
+  if (sm) {
+    const f = fineDensity(eng.occ, eng.h, eng.w, sm.k, sm.sigma), o = outline(f, wf), data = new Uint8Array(f.data.length);
+    for (let i = 0; i < data.length; i++) data[i] = Math.round(f.data[i] * 255);
+    msg.fine = { scale: f.scale, sigma: f.sigma, h: f.h, w: f.w, data };
+    msg.outline = { units: 'sites', rule: 'area-matched', level: o.level, lines: o.lines };
+    tr.push(data.buffer);
+  }
+  postMessage(msg, tr);
 }
 function loop() {
   if (!running) return;
