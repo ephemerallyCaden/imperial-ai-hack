@@ -22,6 +22,21 @@ Chosen sub-bounty: [TBC]
 
 Track details, judging criteria, sponsor APIs and rules: [TBC, fill in when received]
 
+## Tech partners we have access to
+Listed on the event's tech partners slide. Credits/keys and exact offers: [TBC, fill in when received].
+
+| Partner | Area | Possible use |
+|---------|------|--------------|
+| fal | Generative media API (image/video/audio models) | Fast image/video generation |
+| ElevenLabs | Voice AI (TTS, speech, voice agents) | Voice output/input, narration |
+| Tavily | Web search/extract API for agents | Live web research and grounding |
+| Lovable | AI app builder | Rapid UI prototyping |
+| Synthesia | AI avatar video generation | Presenter/avatar videos |
+| Anam | Real-time AI avatars/personas | Conversational avatar |
+| Boltz | Biomolecular structure prediction | Bio/chem workflows |
+| MongoDB | Database (Atlas, vector search) | Storage, vector search |
+| Tamarind Bio | Hosted bio/protein modelling tools | Bio/chem workflows |
+
 ## Design (Figma)
 Because we are targeting Best Designed AI Product: design the 3 demo screens in Figma in hour 0:30-2:00 (one person), then build to the Figma. Keep the file link here: [Figma link]. Reserve time at 16:00-18:00 for design polish, not just feature work.
 
