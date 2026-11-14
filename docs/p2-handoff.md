@@ -38,6 +38,24 @@ These have been tested in Node with a stubbed worker, but not yet in a real brow
 
 > **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.022 (CC) and 0.018 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). With the earlier 65c035a presets, Agent 1 got 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
 >
+**Follow-rule presets** (`PRESETS_FOLLOW`, used automatically when `init` has `rule:'follow'`; from `sim/fits/whad_fits_follow.json` → `presets.draw_tool`, Agent 1 1d88802). Part II medians at cut-off 9.5 h under the follow rule:
+
+| Preset | Tm (h) | Tm IQR | Bias | Bias IQR | n (manual) |
+|---|---|---|---|---|---|
+| `CC` | 4.287 | 4.06–7.38 | 0.90 | 0.70–0.90 | 7 (4) |
+| `C61` | 4.602 | 4.34–5.04 | 0.467 | 0.36–0.54 | 7 (3) |
+
+The label is `"simulation, preset parameters (WHAD part II fits, follow rule)"` (`PRESET_LABEL_FOLLOW`; frames carry `label`). Tm is about 9× the free-rule value, so never mix the two preset sets.
+
+On the drawn disc (0.18 at the start, 10 seeds), wound fraction at 6/12/18/24 h:
+
+| Preset | JS | Python |
+|---|---|---|
+| CC | 0.110 / 0.054 / 0.016 / 0.000 | 0.112 / 0.056 / 0.014 / 0.000 |
+| C61 | 0.116 / 0.059 / 0.021 / 0.002 | 0.117 / 0.064 / 0.022 / 0.001 |
+
+The disc closes fully, and CC is slightly faster than C61. Reproduce with `node sim/js/draw_check.mjs follow`.
+
 > **The CC bias of 0.25 sits on the lower edge of the fit range (0.25–0.9), so treat it as poorly identified** (Agent 1's caveat). Don't present it as a measured property of CC cells.
 
 Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `presets.draw_tool.label`) next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).

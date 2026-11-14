@@ -10,6 +10,15 @@ export const PRESETS = {
   CC: { Tm: 0.4815544732805177, Td: null, bias: 0.25 }, // n 7 (4 manual); Tm IQR 0.39-0.63, bias IQR 0.25-0.57
   C61: { Tm: 0.4805468482096445, Td: null, bias: 0.362584527178654 }, // n 7 (3 manual); Tm IQR 0.44-0.53, bias IQR 0.29-0.41
 };
+// rule 'follow' presets = sim/fits/whad_fits_follow.json presets.draw_tool (Agent 1, 1d88802, feature/p2-v2-sim): part II
+// medians at cut-off 9.5 h under rule = "follow". Tm is ~9x the free-rule value: never mix the two sets.
+export const PRESET_LABEL_FOLLOW = 'simulation, preset parameters (WHAD part II fits, follow rule)';
+export const PRESETS_FOLLOW = {
+  CC: { Tm: 4.2867591533230405, Td: null, bias: 0.9 }, // n 7 (4 manual); Tm IQR 4.06-7.38, bias IQR 0.70-0.90
+  C61: { Tm: 4.601599808471412, Td: null, bias: 0.4666197199506065 }, // n 7 (3 manual); Tm IQR 4.34-5.04, bias IQR 0.36-0.54
+};
+export const presetsFor = (rule) => (rule === 'follow' ? PRESETS_FOLLOW : PRESETS);
+export const presetLabelFor = (rule) => (rule === 'follow' ? PRESET_LABEL_FOLLOW : PRESET_LABEL);
 export const DT = 0.05; // hours per step, = cellsim.DT
 export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
 export const FIELD_H = 32, FIELD_W = 44; // draw tool is locked to the WHAD field (presets were fitted at this size)
@@ -53,14 +62,14 @@ export class Engine {
     for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
     this.rand = rng(seed);
     this.t_hours = 0;
+    this.follow = rule === 'follow' || !!(params && params.follow);
+    this.rule = this.follow ? 'follow' : 'free'; // = cellsim Params.rule names; picks the matching preset set
     this.setPreset(preset, params);
     // reservoir = border-band sites occupied at t0 (cellsim.reservoir_mask): a wound touching the edge stays open
     this.resMask = reservoirMask(this.occ, h, w, this.p.edge);
     this.res = [];
     for (let i = 0; i < w * h; i++) if (this.resMask[i]) this.res.push(i);
     this._refill();
-    this.follow = rule === 'follow' || !!(params && params.follow);
-    this.rule = this.follow ? 'follow' : 'free'; // = cellsim Params.rule names
     if (this.follow) { this.conn = Uint8Array.from(this.resMask); this._growConnected(); }
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
@@ -69,7 +78,8 @@ export class Engine {
   }
 
   setPreset(name, override) {
-    this.p = { ...DEFAULTS, ...(PRESETS[name] || PRESETS.CC), ...(override || {}) };
+    const set = presetsFor(this.rule);
+    this.p = { ...DEFAULTS, ...(set[name] || set.CC), ...(override || {}) };
   }
 
   // cellsim.grow_connected: conn &= occ, then extend to every occupied site Moore-connected to it (conn only grows)
