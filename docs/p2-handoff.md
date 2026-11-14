@@ -23,7 +23,7 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 | `CC` | 0.792 | 0.65 |
 | `C61` | 0.878 | 0.25 |
 
-Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool, and no band from the presets themselves.
+Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
 
 **Messages to the worker:**
 
@@ -45,30 +45,35 @@ const wk = new Worker(new URL('./public/sim/js/worker.js', import.meta.url), { t
 const w = 44, h = 32, wound = new Uint8Array(w * h);           // fill 1s where the user drew
 wk.onmessage = ({ data: m }) => {
   if (m.type === 'frame') draw(m.occ, m.w, m.h, m.t_hours, m.wound_frac);
-  if (m.type === 'band') showBand(m);                           // section 2
 };
 wk.postMessage({ type: 'init', w, h, wound, preset: 'CC', seed: 1 });
 wk.postMessage({ type: 'run', hoursPerFrame: 0.5 });
 ```
 
-## 2. NCA band (same worker)
+## 2. NCA band (same worker, uploaded/real wounds only)
 
-1. Send `{type:'nca-load', weights}` once, with `weights` = the parsed `nca/weights.json`. The worker replies `{type:'nca-ready'}`. A `band` request sent before this is ignored.
-2. Send `{type:'band', hours: 24, members: 20, Tm, bias, seed}`. `Tm` and `bias` default to the current preset. The band starts from the **current** drawn grid: it coarse-grains by `GRAIN = 2` to 16×22 and uses the starting border reservoir.
-3. The reply is `{type:'band', t0_hours, t_hours[0..hours], q05[], q50[], q95[]}`.
-   - Each quantile array holds `wound_frac` per hour.
-   - Index 0 is the start of the forecast, at absolute time `t0_hours`.
+> **Use the band only for an uploaded or real WHAD wound with fitted `Tm`/`bias`. Never use it for a drawn wound.**
 
-**Latency:** on 16×22, 20 members take about **1.5 s** and 50 members about 3.5 s. The worker is busy for that time, so show a loading state and pause the run first.
+The band does not depend on the draw engine and does not need `init`.
+
+1. Send `{type:'nca-load', weights}` once, with `weights` = the parsed `nca/weights.json`. The worker replies `{type:'nca-ready'}`.
+2. Send `{type:'band', Tm, bias, hours: 24, members: 20, seed, start}`.
+   - `Tm` and `bias` are the wound's fitted values and are required.
+   - `start` is either `{occ, h, w}`: the agent lattice from the mask, `Uint8Array(h*w)` with 1 = cell. The worker coarse-grains it by `GRAIN = 2` and takes the reservoir from its starting border band.
+   - Or `start` is `{rho, h, w, R?}`: a coarse density `Float32Array(h*w)` in 0..1, used as is. `R` is the reservoir fraction and defaults to 0.
+3. The reply is `{type:'band', t_hours[0..hours], q05[], q50[], q95[]}`.
+   - Each quantile array holds `wound_frac` per hour, counted from the start state at index 0.
+   - On bad input the reply is `{type:'band-error', error}` instead: no weights loaded, or a missing `start`, `Tm` or `bias`.
+
+**Latency:** on 16×22, 20 members take about **1.5 s** and 50 members about 3.5 s. The worker is busy for that time, so show a loading state.
 
 ```js
 const weights = await (await fetch('./public/sim/nca_weights.json')).json();
 wk.postMessage({ type: 'nca-load', weights });
-// later, e.g. on a "forecast" button:
-wk.postMessage({ type: 'pause' });
+// for an uploaded wound: occ = 32x44 lattice from its mask, Tm/bias = its fit
 showSpinner();
-wk.postMessage({ type: 'band', hours: 24, members: 20 });
-// -> m.q05/q50/q95[k] is the wound fraction at t0_hours + m.t_hours[k]
+wk.postMessage({ type: 'band', Tm, bias, hours: 24, members: 20, start: { occ, h: 32, w: 44 } });
+// -> m.q05/q50/q95[k] is the wound fraction k hours after the start state
 ```
 
 ## 3. Playback files (`web/public/sim/<name>.json`, written by `sim/export_playback.py`)
