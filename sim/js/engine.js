@@ -10,7 +10,9 @@ export const PRESETS = {
   CC: { Tm: 0.1, Td: null, bias: 7 / 9 },
   C61: { Tm: 0.2, Td: null, bias: 7 / 9 },
 };
-export const DT = 0.05; // hours per step, = cellsim Params.dt
+export const DT = 0.05; // hours per step, = cellsim.DT
+export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
+export const GRAIN = 2; // coarse-grain factor, = cellsim.GRAIN (WHAD: 32x44 lattice -> 16x22 density)
 const DEFAULTS = { Td: null, bias: 7 / 9, dens_exp: 0.5, dt: DT, blur: 6, edge: 2 };
 
 const NY = [-1, -1, -1, 0, 0, 1, 1, 1];
