@@ -11,7 +11,7 @@ F = pd.read_csv(f"{HERE}/results/flags.csv")
 OUT = os.path.join(HERE, "..", "docs", "results.md")
 NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz",
          "lvcf": "typical-wound curve"}
-MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
+MAIN_CUT = {"whad": 4.0, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
 SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
           ("whad", "CC_to_C61", "WHAD MCF10A", "held-out condition: CC to C61"),
@@ -42,10 +42,10 @@ lines = ["# Stitch: results", "",
          "| Zaritsky 2015 (GigaDB 100118, CC0) | DA3, MDCK, +/- HGF, Met inhibitor | 19 wells | 14.5 min | authors' (noisy) | secondary |",
          "", "WHAD part II is the same wounds as part I filmed later (same position ids, mask IoU 0.82-0.90), so splits are by physical wound (design.md R15). "
          "Segmenter vs WHAD manual masks: IoU 0.84 (part I) / 0.60 (part II), wound-area error 2.1 / 1.5 points of the field.", "",
-         "## Headline: unseen WHAD wounds, forecast from the first 3.8 h (20%) of a 19 h series", "",
+         "## Headline: unseen WHAD wounds, forecast from the first 4 h of a 19 h series", "",
          "| Forecaster | Quantile score (CRPS approx., lower better) | 90% band coverage | Band width | Median abs. error | Brier P(90% closed by 19 h) |",
          "|---|---|---|---|---|---|"]
-_, g = best("whad", "loo_all", 3.8)
+_, g = best("whad", "loo_all", 4.0)
 for _, r in g.sort_values("qscore").iterrows():
     lines.append(f"| {NAMES[r.model]} | {ci(r.qscore, r.qscore_lo, r.qscore_hi, '{:.4f}')} | {ci(r.coverage, r.cov_lo, r.cov_hi)} | "
                  f"{r.width:.2f} | {r.mae:.3f} | {r.brier:.3f} |")
@@ -60,8 +60,8 @@ for ds, sp, dname, test in SPLITS:
     mark = "" if r.cov_lo <= 0.90 <= r.cov_hi or r.coverage >= 0.85 else " **(fails)**"
     lines.append(f"| {dname} | {test} | {r.cutoff_h:g} h | {NAMES[r.model]} | {ci(r.coverage, r.cov_lo, r.cov_hi)}{mark} | {r.qscore:.4f} | "
                  f"{r.t50_in:.2f} ({int(r.t50_n)}) | {r.t90_in:.2f} ({int(r.t90_n)}) |")
-f = F[F.cut_h.round(1) == 3.8]
-lines += ["", "## Flags (WHAD, unseen wounds, 3.8 h; thresholds tuned leave-one-wound-out)", "",
+f = F[F.cut_h.round(1) == 4.0]
+lines += ["", "## Flags (WHAD, unseen wounds, 4 h; thresholds tuned leave-one-wound-out)", "",
           "| Flag | Shipped | Precision | Recall | AUC | Note |", "|---|---|---|---|---|---|"]
 notes = {"stall": ("yes", "area at 19 h still >= 90% of the area at the cut-off"),
          "out_of_band": ("as an observation only", "does not predict a forecast going off-track"),
@@ -75,8 +75,8 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           f"recall {st.recall.min():.2f}-{st.recall.max():.2f}.", "",
           "## What does not work (said plainly)", "",
           "- **Calibration does not transfer to a faster-closing cell type.** Bands calibrated on ordinary MCF-7 wells cover only 15-58% of the stem-cell wells' future (target 90%); 97% of their observations fall below the forecast median.",
-          "- **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage 0.78 at 1.9 h, recovering to ~0.9 by 9.5 h.",
-          "- **No 'measure again' signal**: band width, history-fit error and stall ambiguity all have AUC 0.55-0.65 for predicting a bad forecast.",
+          "- **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage is lowest at the earliest cut-off and recovers with more history.",
+          f"- **No 'measure again' signal**: band width, history-fit error and stall ambiguity give AUC {F[F.flag == 'measure_again'].auc.min():.2f}-{F[F.flag == 'measure_again'].auc.max():.2f} for predicting a bad forecast, inconsistent across cut-offs.",
           "- **Simple models are strong**: a 2-parameter constant-edge-speed model is the best forecaster on WHAD; more history helps every model.",
           "- **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).",
           "- **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.",

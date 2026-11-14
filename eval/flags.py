@@ -96,8 +96,8 @@ def main():
               f"precision {r.precision:4.2f}  recall {r.recall:4.2f}  AUC {r.auc:4.2f}  [{r.signal}]")
     print("  measure_again: signal chosen on these data, so its AUC is optimistic.")
     # viewer file: stall flags with the deployment threshold (tuned on all WHAD wounds)
-    src, dst = f"{SRC}/edge_speed_3.8h.json", os.path.join(HERE, "..", "web", "data", "forecast_whad_edge_speed_3.8h.json")
-    doc = json.load(open(src)); th = thresholds["3.8"]["p_stall"]
+    src, dst = f"{SRC}/edge_speed_4h.json", os.path.join(HERE, "..", "web", "data", "forecast_whad_edge_speed_4h.json")
+    doc = json.load(open(src)); th = thresholds["4"]["p_stall"]
     for f in doc["forecasts"]:
         if f["p_stall"] is not None and f["p_stall"] >= th:
             f["flags"].append({"type": "stall", "reason": f"{100 * f['p_stall']:.0f}% of plausible futures close less than 10% more "
