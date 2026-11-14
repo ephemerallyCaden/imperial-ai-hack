@@ -8,7 +8,8 @@
 //   outline = { units:'sites', rule:'area-matched', level, lines:[flat x,y,...], display:{opacity, lines} }  same as playback)
 //   init option smooth: { k, sigma } overrides SMOOTH_K/SMOOTH_SIGMA; smooth:false turns both off.
 // NCA band (#28), for UPLOADED / REAL wounds only (never for a drawn wound: design.md, draw tool = simulation, no band):
-//   { type:'nca-load', weights:<nca/weights.json object> } -> { type:'nca-ready' }
+//   { type:'nca-load' } -> fetches the default model (v2 follower; { type:'nca-load', model:'v1' } for v1)
+//   { type:'nca-load', weights, config } -> a given model;  both reply { type:'nca-ready', model }
 //   { type:'band', Tm, bias | params:[[Tm,bias],...], hours:24, members:20, seed, start } (fitted; params = fit members,
 //     member m uses params[m % n]) and start either
 //     { occ:Uint8Array(h*w) agent lattice (1 = cell), h, w }  -> coarse-grained by GRAIN, R from its t0 border reservoir
@@ -20,6 +21,12 @@ import { NCA, coarseGrain } from './nca.js';
 import { fineDensity, outline, displayOutline, SMOOTH_K, SMOOTH_SIGMA } from './smooth.js';
 
 let nca = null;
+// band models in web/public/sim/ (this file lives in web/public/sim/js/). v2 = follower-rule emulator (demo default,
+// user decision); v1 = free-rule emulator (gate rules), kept for comparison.
+const DEFAULT_NCA = {
+  v2: { weights: '../nca_v2_weights.json', config: '../nca_v2_weights.config.json' },
+  v1: { weights: '../nca_weights.json', config: null },
+};
 
 let eng = null, init = null, running = false, hpf = 0.5, timer = null;
 
@@ -72,7 +79,16 @@ function stop() { running = false; clearTimeout(timer); timer = null; }
 onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') { stop(); init = lockField(m); eng = new Engine(init); post(); return; }
-  if (m.type === 'nca-load') { nca = new NCA(m.weights, m.config || m.opts); postMessage({ type: 'nca-ready' }); return; }
+  if (m.type === 'nca-load') {
+    if (m.weights) { nca = new NCA(m.weights, m.config || m.opts); postMessage({ type: 'nca-ready', model: m.name || 'custom' }); return; }
+    // no weights given: fetch the default band model (v2 follower emulator) next to this folder; model:'v1' for the old one
+    const def = DEFAULT_NCA[m.model || 'v2'];
+    Promise.all([fetch(new URL(def.weights, import.meta.url)).then((r) => r.json()),
+                 def.config ? fetch(new URL(def.config, import.meta.url)).then((r) => r.json()) : Promise.resolve(undefined)])
+      .then(([wt, cfg]) => { nca = new NCA(wt, cfg); postMessage({ type: 'nca-ready', model: m.model || 'v2' }); })
+      .catch((e) => postMessage({ type: 'band-error', error: 'nca-load: ' + e.message }));
+    return;
+  }
   if (m.type === 'band') { postMessage(band(m)); return; }
   if (!eng) return; // ignore everything else until init
   if (m.type === 'reset') { stop(); eng = new Engine(init); post(); }

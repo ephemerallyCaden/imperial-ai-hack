@@ -30,16 +30,21 @@ The demo uses the **follower rule everywhere**. This is an *open departure* from
 | Draw tool | `init` with no `rule` means `'follow'`, with `PRESETS_FOLLOW` (CC Tm 4.287 / bias 0.754, C61 Tm 4.707 / bias 0.533) | `rule:'free'` uses `PRESETS` (CC 0.482 / 0.25, C61 0.481 / 0.363) |
 | Draw label (frame `label`) | `"simulation, preset parameters (WHAD part II fits, follow rule)"` | `"simulation, preset parameters (WHAD part II fits)"` |
 | Draw caption (frame `caption`) | **`"bias not identified from these data; Tm carries the signal"`** | none |
-| NCA weights for the band | **Not decided yet** (lead and user are choosing; #67). Candidates: `nca_v2_weights.json` + `nca_v2_weights.config.json` (follower emulator, pending Agent 2's weights), or P1's real-data fine-tuned `nca_realft` (#71). Until decided, the page should pass no config, which means v1. | `web/public/sim/nca_weights.json` (v1, free-rule emulator, no config) |
+| NCA weights for the band | **v2 follower emulator** (user decision): `web/public/sim/nca_v2_weights.json` + `nca_v2_weights.config.json` (Agent 2 b2b47e8, sha256 `a426643dab3b`). `{type:'nca-load'}` with no weights loads it. Passed the torch check (JS vs torch at most 8.9e-7 over 4 cases, including clipped Tm and bias) and mass_check (flux residual ~1e-5, reservoir share ≤ 0.01, no source at isolated sites, density ≤ 1). Checked in headless Chrome. | `web/public/sim/nca_weights.json` (v1, free-rule emulator): `{type:'nca-load', model:'v1'}` |
 | Video run | `whad_partII_C61_P2_follow.json` | `whad_partII_C61_P2.json` |
-| Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` (*pending*) + `meta.observed` | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
+| Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` + `meta.observed`. MAE vs observed after the cut-off (16 frames): sim 0.0088, NCA v2 deterministic 0.0040. One wound only, so don't generalise. | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
 | Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 39 frames at 0.5 h; display only, not scored | none |
 
 Rules that hold for both rules:
 - **No band on drawn wounds.** The band is only for uploaded or real wounds with fitted parameters.
 - **The band is uncalibrated.** Caption it "NCA emulator ensemble spread (uncalibrated)", and never call it a 90% interval.
 - **Never mix weights and fits across rules.** v2 weights need follow fits (`sim/fits/whad_fits_follow.json`), and v1 weights need free fits. `make_nca_playback.mjs` refuses a mismatch.
-- **Load v2 with its config:** `{type:'nca-load', weights, config}`, where `config` is the parsed `nca_v2_weights.config.json`. It sets the source gate, the Tm range (to 500 h) and the clip. Without a config the worker runs v1.
+- **Loading the band model:**
+  - `{type:'nca-load'}` fetches the default v2 weights and config. `{model:'v1'}` loads v1.
+  - Explicit `{weights, config}` still works. `config` is the parsed `*.config.json`, which sets the source gate, the Tm range (to 500 h) and the clip. Weights without a config are treated as v1.
+  - The reply is `{type:'nca-ready', model}`.
+- **Uncalibrated band, NCA v2 on the panel wound:** the 20–50-member spread lies *below* the deterministic rollout (for example 0.059–0.075 against 0.085 at 11 h). The noise shifts the dynamics as well as widening them. Show it only with the "uncalibrated" caption.
+- **Later real-data fine-tunes of v2** (`nca_follow_realft`, or `weights_real_fold{0..3}`) only replace the default after the same torch check and mass_check pass.
 
 ## 1. Draw tool (worker)
 
