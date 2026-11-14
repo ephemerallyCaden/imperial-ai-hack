@@ -21,18 +21,18 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 > - **Why:** under the frozen sim rules, closure speed depends on field size, because vacancies leave through the border reservoir. A 120×168 field still holds 81% of its wound at 24 h. The presets and the NCA were fitted and trained at 32×44.
 > - **Other mask sizes:** a `wound` mask of any other size (for example canvas pixels) is resampled nearest-neighbour onto 32×44 in `init`, and frames then carry `resampled_from: [h, w]`. A disc drawn on 320×440 px went from 0.181 on the canvas to 0.182 on the lattice.
 
-**Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, division off):
+**Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, Agent 1 65c035a). Each is the median of the WHAD part II fits at t0 = 10 (manual + auto), with division off:
 
-| Preset | Tm (h) | Bias |
-|---|---|---|
-| `CC` | 0.948 | 0.25 |
-| `C61` | 1.052 | 0.383 |
+| Preset | Tm (h) | Tm IQR | Bias | Bias IQR | n (manual) |
+|---|---|---|---|---|---|
+| `CC` | 0.499 | 0.40–0.62 | 0.25 | 0.25–0.45 | 7 (4) |
+| `C61` | 0.477 | 0.45–0.54 | 0.352 | 0.25–0.38 | 7 (3) |
 
-> **Under this model, the CC and C61 fits heal almost identically.** A drawn disc starting at a wound fraction of 0.18 reaches 0.066 (CC) and 0.068 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). The presets stay exactly as fitted. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
+> **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.024 (CC) and 0.019 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). Agent 1 gets 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
 >
 > **The CC bias of 0.25 sits on the lower edge of the fit range (0.25–0.9), so treat it as poorly identified** (Agent 1's caveat). Don't present it as a measured property of CC cells.
 
-Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
+Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `presets.draw_tool.label`) next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
 
 **Messages to the worker:**
 
