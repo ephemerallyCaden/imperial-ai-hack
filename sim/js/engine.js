@@ -44,6 +44,7 @@ export class Engine {
       const i = y * w + x;
       if ((y < e || y >= h - e || x < e || x >= w - e) && this.occ[i]) this.res.push(i);
     }
+    this.resMask = new Uint8Array(w * h); for (const i of this.res) this.resMask[i] = 1;
     this._refill();
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
