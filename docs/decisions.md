@@ -52,3 +52,7 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED: add 22 auto-segmented WHAD MCF10A wounds (exp1 remainder + exp2) and WHiM-BC (12 monolayer + 12 sphere) as data; report manual-mask-only results too.
 - DECIDED: held-out conditions = WHAD CC to C61, WHiM-BC monolayer to sphere. Gate at 00:00 Sun.
 - DROPPED: HUVEC/SKOV-3 (Zenodo 21779854) and the diabetic study (19738270): only 2-4 time points per series.
+
+## 2026-11-14 20:26 [ephemerallyCaden] Playback visuals (P2-10)
+- DECIDED: sim rules frozen for gate; visuals use smoothed density + outline; vacancy spreading = sheet stretching; revisit sheet-like rule after 00:00
+- DECIDED: playback layers: `density_fine` (occupancy upsampled 2x, Gaussian sigma 2.5 sites) and an area-matched outline (outlined area = wound_frac, same area at every zoom); raw agents only at deep zoom. Code in `sim/smooth_view.py`; Agent 3's worker uses the same parameters.
