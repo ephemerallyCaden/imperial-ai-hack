@@ -12,7 +12,8 @@ Interface for P1's upload pipeline (#15; masks from data/segment.py):
 Rules:
   - Refused -> no forecast: seg_quality.status == "refused", missing scale, or any mask covering <1% or >70% of the field.
   - 1 frame -> members drawn from the fitted (Tm, bias) of WHAD wounds of that condition at t0 = 10 (an empirical prior, so a
-    wider band), never including exclude_wound; flagged "measure_again" as preset-based.
+    wider band), never including exclude_wound; noted in `band` and the notes (no flag: design R16, no measure-again flag
+    until a signal passes).
   - 2+ frames -> fit Tm and bias on the observed areas (follower grid as sim/v2.py, frames interval_h apart) + 50 bootstrap members.
   - Rule: Params(rule="follow") (P2 v2, adopted for physical realism); prior and fits from sim/fits/whad_fits_follow.json.
   - Forecast grid hourly from the last frame to 19 h (the WHAD horizon the models were validated on).
@@ -71,10 +72,9 @@ def to_whad_field(masks, um_per_px):
         py, px = (h - crop.shape[0]) // 2, (w - crop.shape[1]) // 2
         c[py:py + crop.shape[0], px:px + crop.shape[1]] = crop
         out.append(c)
-    flag = dict(type="measure_again", reason=f"The image field ({H * um_per_px:.0f} x {W * um_per_px:.0f} um) differs from "
-                f"the {FIELD_UM[0]:.0f} x {FIELD_UM[1]:.0f} um field the parameters were fitted on; the forecast uses a "
-                "window of that size around the wound.")
-    return out, flag
+    note = (f"image field {H * um_per_px:.0f} x {W * um_per_px:.0f} um differs from the {FIELD_UM[0]:.0f} x {FIELD_UM[1]:.0f} um "
+            "WHAD field the parameters were fitted on; forecast uses a window of that size around the wound")
+    return out, note
 
 
 def prior_members(condition, exclude_wound, rng):
@@ -125,10 +125,13 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     if why:
         print("refused:", why)
         return None
-    seg_quality = seg_quality or dict(status="ok", reasons=[])
+    seg_quality = dict(seg_quality or dict(status="ok", reasons=[]))
     rng = np.random.default_rng(zlib.crc32(wound_id.encode()))
-    masks, field_flag = to_whad_field(masks, um_per_px)
-    flags = [field_flag] if field_flag else []
+    masks, field_note = to_whad_field(masks, um_per_px)
+    if field_note:  # a quality note, as data/upload.py does for a scale mismatch (no flag: R16)
+        seg_quality = dict(status="flagged" if seg_quality.get("status") in (None, "ok") else seg_quality["status"],
+                           reasons=list(seg_quality.get("reasons", [])) + [field_note])
+    flags = []
     occ0 = mask_to_lattice(masks[0], um_per_px, SITE_UM)
     lat_err = area_error(occ0, masks[0])
     assert lat_err < 0.02, f"lattice area error {lat_err:.2%}"
@@ -137,9 +140,8 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     a_obs = wf / wf[0]
     if len(masks) == 1:
         members, n_pool = prior_members(condition, exclude_wound, rng)
-        how = f"preset: {N_MEMBERS} draws from the fitted parameters of {n_pool} WHAD wounds ({condition or 'all conditions'})"
-        flags.append(dict(type="measure_again", reason="Only one frame, so this forecast uses typical parameters, "
-                                                       "not this wound's own; upload more frames to narrow the band."))
+        how = (f"single frame: parameters drawn from the training-population prior ({N_MEMBERS} draws from the fitted parameters "
+               f"of {n_pool} WHAD wounds, {condition or 'all conditions'}); band not conformal-calibrated")
     else:
         fit = fit_members(occ0, wf, interval_h, rng)
         members = fit["members"]
@@ -238,8 +240,8 @@ def calibrate_doc(doc, cal, n_pool):
     fc["raw_band"] = dict(label="uncalibrated spread", area_q05=fc["area_q05"], area_q50=fc["area_q50"],
                           area_q95=fc["area_q95"], t50=fc["t50"], t90=fc["t90"], p_close_by_T=fc["p_close_by_T"])
     if cal is None:
-        fc["band"] = ("90% band = population prior (one frame: 50 draws of fitted WHAD parameters); no conformal step, "
-                      "as data/upload.py's one-frame case")
+        fc["band"] = ("single frame: parameters drawn from the training-population prior; band not conformal-calibrated "
+                      "(as data/upload.py's one-frame case)")
         return
     assert np.allclose(cal["t_hours"], fc["t_hours"]), "conformal grid differs"
     for k in ("area_q05", "area_q50", "area_q95", "t50", "t90", "p_close_by_T"):
