@@ -24,7 +24,8 @@ _cache = {}
 def whad_shapes():
     if not _cache:
         # same loader + resample as sim/calibrate.py (full-res PNG -> 32 x 44 lattice at SITE_UM = 20 um)
-        for pos in sorted(os.path.basename(f)[:-4] for f in glob.glob(f"{MASKS}/*.npz")):
+        import pandas as pd  # manual-mask positions (full-res PNGs via sim/start_state.py)
+        for pos in sorted(pd.read_csv(os.path.join(HERE, "..", "data", "processed", "whad_curves.csv")).position.unique()):
             fr = []
             for k in range(EARLY_T + 1):
                 try:
@@ -53,8 +54,12 @@ def synthetic(rng, H=32, W=44):  # WHAD lattice at SITE_UM (sim/start_state.py)
     return occ
 
 
-def sample_params(rng):
-    return float(np.exp(rng.uniform(np.log(TM_MIN), np.log(TM_MAX)))), float(rng.uniform(BIAS_MIN, BIAS_MAX))
+CFG = dict(tm_min=TM_MIN, tm_max=TM_MAX, bias_min=BIAS_MIN, bias_max=BIAS_MAX, follow=False)  # set by --follow/--tm-max
+
+
+def sample_params(rng, cfg=None):
+    c = cfg or CFG
+    return float(np.exp(rng.uniform(np.log(c["tm_min"]), np.log(c["tm_max"])))), float(rng.uniform(c["bias_min"], c["bias_max"]))
 
 
 def start_state(rng):
@@ -68,27 +73,30 @@ def start_state(rng):
 
 
 def one(args):
-    i, hours, seed0 = args
+    i, hours, seed0, cfg = args
     rng = np.random.default_rng(seed0 + i)
-    occ0 = start_state(rng); Tm, bias = sample_params(rng)
-    p = Params(Tm=Tm, bias=bias)
+    occ0 = start_state(rng); Tm, bias = sample_params(rng, cfg)
+    p = Params(Tm=Tm, bias=bias, follow=True) if cfg["follow"] else Params(Tm=Tm, bias=bias)
     r = simulate(occ0, p, hours, seed=seed0 + i, grain=GRAIN)
     R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return r["density"], R, np.array([Tm, bias], np.float32)
 
 
-def generate(n, hours=19, seed0=1000, procs=8):
+def generate(n, hours=19, seed0=1000, procs=8, cfg=None):
     whad_shapes()  # load once before forking
     with Pool(procs) as pool:
-        res = pool.map(one, [(i, hours, seed0) for i in range(n)])
+        res = pool.map(one, [(i, hours, seed0, cfg or CFG) for i in range(n)])
     return (np.stack([r[0] for r in res]), np.stack([r[1] for r in res]), np.stack([r[2] for r in res]))
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--n", type=int, default=1200); ap.add_argument("--hours", type=int, default=19)
     ap.add_argument("--out", default="/tmp/nca_data.npz"); ap.add_argument("--seed0", type=int, default=1000)
+    ap.add_argument("--follow", action="store_true", help="v2: follower (sheet-like) rule, Params(follow=True)")
+    ap.add_argument("--tm-max", type=float, default=TM_MAX, help="upper end of log-uniform Tm (v2 follower fits: 50 h)")
+    ap.add_argument("--procs", type=int, default=8)
     a = ap.parse_args()
-    D, R, P = generate(a.n, a.hours, a.seed0)
+    D, R, P = generate(a.n, a.hours, a.seed0, a.procs, {**CFG, "tm_max": a.tm_max, "follow": a.follow})
     np.savez_compressed(a.out, density=D, R=R, params=P)
     A = (1 - D.mean((2, 3))); A = A / A[:, :1]
     print("saved", a.out, D.shape, "area@19h q10/50/90:", np.round(np.quantile(A[:, -1], [.1, .5, .9]), 3))
