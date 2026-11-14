@@ -37,6 +37,20 @@ def stall_threshold(cut):
     return th[min(th, key=lambda k: abs(float(k) - cut))]["p_stall"]
 
 
+def schedule_advice(p, cut):
+    """Next step from P(90% closed by 19 h), using the held-out WHAD stop-early simulation (eval/scheduler.py)."""
+    checks = [1.9, 3.8, 5.7, 9.5]
+    nxt = next((c for c in checks if c > cut + 1e-9), None)
+    if p <= 0.1:
+        return {"action": "call", "call": "unlikely to reach 90% closure by 19 h",
+                "evidence": "on held-out WHAD wounds such early calls were right 89% of the time (always saying no: 73%)"}
+    if p >= 0.9:
+        return {"action": "call", "call": "likely to reach 90% closure by 19 h",
+                "evidence": "untested: no held-out WHAD wound got this call early"}
+    return {"action": "image_again", "next_image_hours": nxt,
+            "evidence": "the 90% band narrows on average from 0.59 (1.9 h) to 0.32 (3.8 h) of the starting area"}
+
+
 def check_frame(img, scale):
     reasons = []
     if img.std() < 1e-3:
@@ -114,6 +128,7 @@ def run(frames, interval, scale, out, name, exclude_wound=None):
     if f["p_stall"] is not None and th is not None and f["p_stall"] >= th:
         f["flags"].append({"type": "stall", "reason": f"{100 * f['p_stall']:.0f}% of plausible futures close less than 10% more "
                            f"by {HORIZON_H:g} h (flag threshold {th:.2f}, tuned leave-one-wound-out on WHAD)."})
+    doc["schedule"] = schedule_advice(f["p_close_by_T"], cut)
     doc["notes"] = (doc.get("notes", "") + f" | frames={len(masks)}, interval={interval} h, scale={scale} um/px, "
                     f"wound at first frame {100 * w[0]:.1f}% of field").strip(" |")
     json.dump(doc, open(f"{out}/{name}.json", "w"))
