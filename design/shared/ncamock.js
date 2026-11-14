@@ -150,20 +150,23 @@ function mount(mode){
   }
   const sm=u=>u*u*(3-2*u);
   function frame(){
-    const W=OPT.W,H=OPT.H,n=OPT.steps,f=Math.min(n-1,Math.floor(pos)),u=pos>=n?1:pos-f;
-    const k=grid?Math.min(n,Math.round(pos)):f+1,sn=cur.hist[k],occ=new Uint8Array(W*H).fill(0),cl=sn.length/7;
+    const W=OPT.W,H=OPT.H,n=OPT.steps,k=Math.max(0,Math.min(n,Math.ceil(pos))),u=k===0?1:Math.min(1,pos-(k-1));
+    const sn=cur.hist[k],occ=new Uint8Array(W*H).fill(0),cl=sn.length/7;
     for(let i=0;i<sn.length;i+=7)occ[sn[i+2]*W+sn[i+1]]=1;
     const emptyN=(x,y)=>{let n=0;for(const[dx,dy]of nbrsOf(y)){const a=x+dx,b=y+dy;if(a>=0&&b>=0&&a<W&&b<H&&!occ[b*W+a])n++}return n>=2};
     ctx.clearRect(0,0,CW,CH);
     if(grid){
       ctx.fillStyle=outline?mix(pal.intact,'#000000',.55):pal.intact;ctx.fillRect(0,0,CW,CH);
-      const Rh=S/Math.sqrt(3)+(outline?-.7:.55),hexp=(x,y)=>{const cx=PXc(x,y)*S,cy=PYc(y)*S;ctx.beginPath();for(let a=0;a<6;a++){const t=Math.PI/6+a*Math.PI/3;ctx.lineTo(cx+Rh*Math.cos(t),cy+Rh*Math.sin(t))}ctx.closePath()};
+      const Rh=S/Math.sqrt(3)+(outline?-.7:.55),e=sm(u),hexp=(x,y,sc=1,ox,oy)=>{const cx=ox===undefined?PXc(x,y)*S:ox,cy=oy===undefined?PYc(y)*S:oy;ctx.beginPath();for(let a=0;a<6;a++){const t=Math.PI/6+a*Math.PI/3;ctx.lineTo(cx+Rh*sc*Math.cos(t),cy+Rh*sc*Math.sin(t))}ctx.closePath()};
       ctx.fillStyle=pal.wound;
       for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!occ[y*W+x]){hexp(x,y);ctx.fill()}
       for(let i=0;i<sn.length;i+=7){
-        const x=sn[i+1],y=sn[i+2],div=sn[i+5],cx=PXc(x,y)*S,cy=PYc(y)*S;
+        const x=sn[i+1],y=sn[i+2],px=sn[i+3],py=sn[i+4],div=sn[i+5],born=sn[i+6];
+        const cx=(PXc(px,py)+(PXc(x,y)-PXc(px,py))*e)*S,cy=(PYc(py)+(PYc(y)-PYc(py))*e)*S;
+        let sc=1;if(born===2)sc=.3+.7*e;else if(div)sc=1+.14*Math.sin(Math.PI*e);
+        ctx.globalAlpha=born===3?e:1;
         ctx.fillStyle=div?pal.div:emptyN(x,y)?pal.edge:cur.orig[y*W+x]?pal.fresh:pal.intact;
-        hexp(x,y);ctx.fill();
+        hexp(x,y,sc,cx,cy);ctx.fill();ctx.globalAlpha=1;
         if(div){ctx.fillStyle=mix(pal.edge,'#000000',.2);ctx.fillRect(cx-2.6,cy-.6,5.2,1.2)}
         else if(sn[i+3]!==x||sn[i+4]!==y){ctx.fillStyle='rgba(31,27,24,.55)';ctx.fillRect(cx-1,cy-1,2,2)}
       }
