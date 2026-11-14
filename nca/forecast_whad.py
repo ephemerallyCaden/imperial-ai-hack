@@ -132,6 +132,8 @@ if __name__ == "__main__":
             for k, r in enumerate(held):
                 d = cur[cur.position == r.position].sort_values("t_hours")
                 obs_t, obs_a = d.t_hours.tolist(), d.area_norm.tolist()
+                if not any(t <= t0 for t in obs_t):  # wound's first annotated frame is after t0: nothing to forecast from
+                    src[r.position] = "skipped"; continue
                 ic = max(i for i, t in enumerate(obs_t) if t <= t0)
                 occ, rho, R = start(r.position, d.frame.iloc[ic])
                 t_fc = [float(t) for t in np.arange(int(obs_t[ic]) + 1, T_END + 1)]
@@ -148,8 +150,10 @@ if __name__ == "__main__":
                         "nca_deterministic": "NCA, no noise, point (Tm, bias) fit: ablation (band has zero width)",
                         "sim_ensemble": "cell-agent simulator, 50 bootstrapped (Tm, bias) members, one seed each"}[model]
                 n_pre = sum(v == "preset" for v in src.values())
+                skipped = [k for k, v in src.items() if v == "skipped"]
                 doc = dict(version="1.0", model=model, dataset="whad", fold=fold, cutoff_hours=float(t0), level=LEVEL,
-                           p_close_by_T_hours=a.T, notes=f"{note}; start = observed mask at t0; {n_pre} wound(s) have no own fit (< 2 frames) and use training-wound fits (preset; members = resampled training fits)",
+                           p_close_by_T_hours=a.T, notes=f"{note}; start = observed mask at t0; {n_pre} wound(s) have no own fit (< 2 frames) and use training-wound fits (preset; members = resampled training fits)"
+                           + (f"; skipped (first frame after t0): {', '.join(skipped)}" if skipped else ""),
                            forecasts=fcs)
                 fn = f"{a.out}/whad_{model}_{fold}_t{t0}.json"
                 json.dump(doc, open(fn, "w"))
