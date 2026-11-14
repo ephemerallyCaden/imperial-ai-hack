@@ -13,7 +13,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Teams 1 to 4 students; one track; up to 2 bounties from own track; Figma and Adaption prizes open to every track and do not count toward the 2 (show how Figma was used in the presentation).
 - Building starts 12:10 Sat 14 Nov; pre-existing projects not eligible; building closes 21:00 Sat, reopens 10:00 Sun; **submissions close 12:00 sharp Sun 15 Nov**; video and last commit must be before 12:00.
 - Deliverables: Devpost project with public GitHub repo + demo video up to 2 minutes.
-- Judging Sun 13:00 to 16:30, 10-minute slot: video, then 6 min judge questions; no slides, no live demo. AI for Science judged in Blackett LT3. Finals on main stage 17:00; prizes 17:30.
+- Judging Sun 13:00 to 16:30, 10-minute slot: the demo video, then 6 min judge questions; no slides, and live demo is not part of the slot (organiser site and Devpost disagree; the video is required either way, R15). AI for Science judged in Blackett LT3. Finals on main stage 17:00; prizes 17:30.
 - AI for Science marks (0 to 3 each, weighted): scientific rigour 30, technical execution 25, path to the lab 20, novelty 15, video and answers 10.
 - Prize verification afterwards: public repo, last commit before 12:00. Contact: aisociety@imperial.ac.uk. Source: `docs/event-rules.md`.
 
@@ -111,6 +111,10 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 8. Video and submission
 - [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
+- [D, R15] **The demo video is required and is the only thing most judges see**, so it is a core deliverable with its own owner (P3) and schedule, not a final-hour task. It carries 10 marks directly and the real run carries most of the rest.
+- Production plan: record the real run from a working build as early as Sat evening (screen capture at 1440x900 or 1920x1080, mic or captions only); keep every take. Edit with ffmpeg plus a Remotion or hyperframes overlay pass (titles, captions, scale labels, "simulated" and "sped up" tags). Skills installed for this in `.agents/skills/`: `video-editing`, `remotion-video-creation` (plus existing `hyperframes`). Captions are burned in so it works muted. Hard cap 2:00; export H.264 MP4; upload to Devpost and keep a copy outside the repo.
+- Schedule: script locked and storyboard shot list by 20:00 Sat; a rough cut using whatever works by 21:00 Sat (so a valid submission exists before building closes); final cut and re-record of any weak shot Sun 09:00 to 11:00; uploaded by 11:30. Never leave the video until after the last code change.
+- Every claim in the video must be on screen and real: no mocked numbers; label simulated cells and sped-up footage.
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
 
 ## 9. Stack and repo [D]
@@ -145,12 +149,13 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 2b. Upload 1 to 5 real frames and get a forecast with band from the same pipeline (or a precomputed sample if live processing fails).
 3. Gate result recorded (passable or not) with numbers.
 4. Public repo, 2-minute video, Devpost submitted before 12:00 Sun.
+5. A rough-cut video from a working build exists by 21:00 Sat; the final cut replaces it Sun morning (8).
 
 ## 15. OPEN (not decided)
 Resolved by the user on 14 Nov (R12):
 - Product name: Stitch (final).
 - Overnight work outside the building: allowed (user decision; the organisers' data.js says building closes 21:00 Sat, so keep commits and video inside the 12:00 Sun cutoff either way).
-- Demo: do a live demo if time allows, not required. The 2-minute video stays the submission.
+- Demo: superseded by R15. The demo video is required and is a core deliverable; a live demo is only a fallback if organisers ask for one.
 - Cell-simulator parameters: taken from the training data (calibration on WHAD), not from the literature priors alone.
 - Anomaly-detector thresholds and the LLM prompt/output schema: set by testing against the training wounds.
 - Role names: as written in section 3. Figma owner: P3.
@@ -166,7 +171,7 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - WHAD cannot calibrate division (mitomycin); division comes from priors and Jin.
 - Segmentation error (IoU ~0.74, part II 0.62) propagates to start states and labels.
 - Cell agents are a model: always label "simulated cells, not tracked cells".
-- No live demo: the video's real run must work first time; keep a recorded backup.
+- The demo video is the main thing judges see (R15): record early, keep every take, ship a rough cut Sat night; cut order never removes the video.
 - Coordination: unmerged `feature/data-baselines` also edits HACKATHON.md; mockup choice and Figma authentication pending.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
@@ -190,3 +195,4 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R12 (14 Nov): open list closed: name Stitch final; overnight work allowed; live demo optional; simulator parameters from training data; anomaly thresholds by testing; roles kept; Boltz not used; Jin supplement permission granted.
 - R13 (14 Nov): upload promoted to core-lite (4.4): 1 to 5 frames in, classical segmenter to start state, forecast with band out; no LLM on pixels; sample-frame fallback; video real run uses it. Reason: without user input the forecaster has no path to the lab.
 - R14 (14 Nov): risks and implementation contracts added (5.5, 15c): pipeline, target definition, splits, uncertainty recipe, JSON forecast contract, upload refusal rules, repo ownership, video plan. Proposed defaults.
+- R15 (14 Nov): demo video confirmed as required and promoted to a core deliverable with schedule and tooling (section 8); video skills installed (video-editing, remotion-video-creation); rough cut by 21:00 Sat.
