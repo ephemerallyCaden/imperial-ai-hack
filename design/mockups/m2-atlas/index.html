@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch - M2 Atlas (mockup, simulated)</title>
+<meta name="viewport" content="width=1440">
+<style>
+:root{
+  --paper:#FBF8F1; --panel:#F4EFE2; --panel2:#EDE6D4;
+  --ink:#1F2328; --ink2:#5B6370; --ink3:#8A919B; --hair:#D9D3C3; --hair2:#C9C2AF;
+  --blue:#2F5D8A; --violet:#5B4B8A; --slate:#4A5A6A;
+  --serif:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--serif);font-variant-numeric:tabular-nums lining-nums}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.kick{font-variant:small-caps;letter-spacing:.07em;font-size:13px;color:var(--ink2);font-weight:600;text-transform:lowercase}
+.app{display:grid;grid-template-columns:1fr 320px;grid-template-rows:52px 1fr 140px;width:100vw;height:100vh}
+
+/* header */
+header{grid-column:1/3;display:flex;align-items:center;gap:16px;padding:0 16px;border-bottom:1px solid var(--ink);background:var(--paper);position:relative}
+header:after{content:"";position:absolute;left:0;right:0;bottom:-4px;border-bottom:.5px solid var(--ink3)}
+.brand{display:flex;align-items:baseline;gap:12px;white-space:nowrap}
+.brand b{font-size:28px;line-height:1;font-weight:600;letter-spacing:-.005em}
+.brand i{font-size:14px;color:var(--ink2)}
+.tools{margin-left:auto;display:flex;align-items:center;gap:8px}
+.btn{height:30px;min-width:30px;padding:0 12px;border:1px solid var(--ink3);font:500 13px var(--sans);display:inline-flex;align-items:center;gap:6px;background:var(--paper);border-radius:2px;white-space:nowrap}
+.btn.active{border:1.5px solid var(--ink);background:var(--panel2);font-weight:600}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:600}
+.sep{width:1px;height:22px;background:var(--hair2);margin:0 6px}
+.seg{display:inline-flex;border:1px solid var(--ink3);border-radius:2px;overflow:hidden}
+.seg button{height:28px;padding:0 12px;font:500 13px var(--sans);border-right:1px solid var(--ink3);color:var(--ink2);display:flex;align-items:center;gap:6px}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:var(--paper);font-weight:600}
+.lab{font:500 12px var(--sans);color:var(--ink2);margin-right:2px}
+
+/* canvas */
+.stage{position:relative;border-right:1px solid var(--ink3);background:#ccc;overflow:hidden}
+#field{position:absolute;inset:0;width:100%;height:100%;display:block}
+#leaders{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.float{position:absolute;background:var(--paper);border:1px solid var(--ink3);border-radius:2px}
+.plate{left:50%;transform:translateX(-50%);top:12px;height:28px;padding:0 12px;display:flex;align-items:center;font-size:13.5px;font-style:italic;white-space:nowrap;margin-left:-20px}
+.chip{left:12px;top:12px;background:var(--ink);color:var(--paper);border-color:var(--ink);padding:5px 10px;font:700 12px var(--sans);letter-spacing:.03em;display:flex;gap:8px;align-items:center;height:28px}
+.chip span{font-weight:500;letter-spacing:0}
+.ladder{left:12px;top:52px;width:128px}
+.ladder .kick{display:block;padding:6px 10px 4px;font-size:12px}
+.ladder button{display:flex;justify-content:space-between;align-items:center;width:100%;height:28px;padding:0 10px 0 12px;font:500 13px var(--sans);color:var(--ink2);border-top:1px solid var(--hair);position:relative}
+.ladder button.on{background:var(--panel2);color:var(--ink);font-weight:700}
+.ladder button.on:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink)}
+.ladder em{font:12px var(--mono);font-style:normal;color:var(--ink2)}
+.mini{right:12px;top:12px;width:164px;padding:0}
+.mini canvas{display:block;width:162px;height:106px}
+.mini .cap{font:11px var(--sans);color:var(--ink2);padding:3px 6px;border-top:1px solid var(--hair);display:flex;justify-content:space-between}
+.fig{left:12px;bottom:12px;width:500px;padding:8px 12px 9px;font-size:12.5px;line-height:1.45;color:var(--ink)}
+.fig b{font-weight:700}
+.fig .src{display:block;margin-top:3px;color:var(--ink2);font-style:italic}
+.scale{right:12px;bottom:12px;padding:8px 12px 8px;width:252px}
+.scale .row{display:flex;align-items:center;justify-content:space-between;font:12px var(--mono)}
+.scale .bar{height:9px;width:95px;border:1px solid var(--ink);border-top:0;margin-top:4px}
+.scale .help{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair);font:11px/1.45 var(--sans);color:var(--ink2);display:flex;gap:8px;align-items:flex-start}
+.q{flex:none;width:24px;height:24px;border:1px solid var(--ink);border-radius:50%;font:600 13px var(--serif);display:grid;place-items:center;color:var(--ink)}
+
+/* dock */
+.dock{grid-column:1;border-top:1px solid var(--ink);background:var(--paper);display:flex;padding:8px 16px 6px 16px;gap:20px;position:relative}
+.dock:before{content:"";position:absolute;left:0;right:0;top:3px;border-top:.5px solid var(--ink3)}
+.tp{width:196px;flex:none;display:flex;flex-direction:column;gap:7px;padding-top:6px}
+.tp .r1{display:flex;gap:6px}
+.ib{width:32px;height:32px;border:1px solid var(--ink3);border-radius:2px;display:grid;place-items:center}
+.ib.big{border:1.5px solid var(--ink);background:var(--panel2)}
+.tp .seg button{height:26px;padding:0 9px;font-size:12px}
+.tp .read{font:12px var(--mono);color:var(--ink)}
+.tp .read span{color:var(--ink2)}
+#chart{flex:1;min-width:0;display:block}
+text{font-family:var(--sans)}
+
+/* panel */
+aside{grid-column:2;grid-row:2/4;background:var(--panel);overflow:hidden;position:relative;padding:0 14px 0 18px}
+.ph{height:36px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--hair2)}
+.collapse{height:26px;padding:0 6px 0 8px;border:1px solid var(--ink3);border-radius:2px;font:500 12px var(--sans);display:flex;align-items:center;gap:4px;background:var(--paper)}
+.sec{padding:10px 0 12px;border-bottom:1px solid var(--hair2)}
+.sec:last-child{border-bottom:0}
+.sec h3{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.sec h3 small{font:11.5px var(--sans);color:var(--ink2)}
+.leg{display:grid;grid-template-columns:20px 30px 1fr;column-gap:8px;align-items:start;padding:7px 0;border-top:.5px solid var(--hair)}
+.leg:first-of-type{border-top:0}
+.num{width:20px;height:20px;border:.75px solid var(--ink);border-radius:50%;font:600 12.5px/18px var(--serif);text-align:center;background:var(--paper);margin-top:1px}
+.leg b{font-size:15px;font-weight:600;line-height:1.2;display:block}
+.leg p{font-size:12.5px;line-height:1.33;color:var(--ink)}
+.leg p em{color:var(--ink2)}
+.note{font-size:12px;line-height:1.4;color:var(--ink2);font-style:italic;margin-top:2px}
+.fx{display:grid;grid-template-columns:1fr;gap:0}
+.fr{display:grid;grid-template-columns:96px 1fr;column-gap:8px;padding:4px 0;border-top:.5px solid var(--hair);align-items:baseline}
+.fr:first-child{border-top:0}
+.fr dt{font-variant:small-caps;letter-spacing:.05em;font-size:11.5px;letter-spacing:.03em;color:var(--ink2);font-weight:600;text-transform:lowercase;line-height:1.25}
+.fr dd{font-size:12.5px;white-space:nowrap;line-height:1.35}
+.fr dd .big{font-size:19px;font-weight:600;line-height:1}
+.fr dd small{display:block;font-size:12px;color:var(--ink2)}
+.flag{display:inline-flex;align-items:center;gap:6px;color:var(--violet);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:2px}
+th,td{padding:3px 4px;text-align:right;line-height:1.3}
+th:first-child,td:first-child{text-align:left;padding-left:0}
+thead tr:first-child th{border-top:1.5px solid var(--ink)}
+thead th{font:600 11.5px var(--sans);border-bottom:.75px solid var(--ink);color:var(--ink);padding-top:4px}
+tbody tr:last-child td{border-bottom:1.5px solid var(--ink)}
+tbody td.b{font-weight:700}
+.ill{font-size:12px;font-style:italic;color:var(--ink2);margin-top:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><b>Stitch</b><i>Wound-closure forecaster &ndash; research prototype</i></div>
+    <div class="tools" role="toolbar" aria-label="Wound tools">
+      <button class="btn active" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12l1-3.5L10 1.5l2.5 2.5-7 7z"/></svg>Draw wound</button>
+      <button class="btn primary"><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2 1l9 5-9 5z"/></svg>Heal</button>
+      <button class="btn"><svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.4" fill="none"><path d="M2 2l8 8M10 2l-8 8"/></svg>Clear wound</button>
+      <span class="sep"></span>
+      <span class="lab">Preset</span>
+      <div class="seg" role="group" aria-label="Preset">
+        <button class="on" aria-pressed="true">MCF10A control (CC)</button>
+        <button aria-pressed="false">CYR61 shRNA (C61)</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="stage" id="stage" aria-label="Simulation canvas (simulated cells)">
+    <canvas id="field"></canvas>
+    <svg id="leaders"></svg>
+    <div class="float plate"><span class="kick">Plate I</span> &nbsp;Wound closure in a simulated epithelial monolayer</div>
+    <div class="float chip">SIMULATED CELLS <span>&ndash; not tracked cells</span></div>
+    <nav class="float ladder" aria-label="Magnification">
+      <span class="kick">Magnification</span>
+      <button><span>Cells</span><em>40x</em></button>
+      <button><span>Colony</span><em>30x</em></button>
+      <button class="on" aria-current="true"><span>Wound</span><em>20x</em></button>
+      <button><span>Field</span><em>10x</em></button>
+    </nav>
+    <div class="float mini"><canvas id="mini" aria-label="Minimap"></canvas><div class="cap"><span>Minimap</span><span>field 2.4 mm</span></div></div>
+    <div class="float fig"><b>Figure 1 |</b> Simulated wound in an MCF10A-CC monolayer at t = 14 h (n = 1 simulated field). Numerals 1 to 5 refer to the key in the margin.
+      <span class="src">Source: simulated cell agents, MCF10A-CC preset; not tracked cells. Values illustrative.</span></div>
+    <div class="float scale">
+      <div class="row"><span>100 &micro;m</span><span>20x</span></div><div class="bar"></div>
+      <div class="help"><span class="q">?</span><span>Space play &middot; &larr;/&rarr; step &middot; +/&minus; zoom</span></div>
+    </div>
+  </section>
+
+  <footer class="dock" aria-label="Timeline">
+    <div class="tp">
+      <div class="r1">
+        <button class="ib" aria-label="Step back"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="2" height="10"/><path d="M13 3v10L6 8z"/></svg></button>
+        <button class="ib big" aria-label="Play"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2l10 6-10 6z"/></svg></button>
+        <button class="ib" aria-label="Pause"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="3.5" height="10"/><rect x="9.5" y="3" width="3.5" height="10"/></svg></button>
+        <button class="ib" aria-label="Step forward"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="11" y="3" width="2" height="10"/><path d="M3 3v10l7-5z"/></svg></button>
+      </div>
+      <div class="seg" role="group" aria-label="Speed"><button>0.5x</button><button class="on">1x</button><button>2x</button><button>4x</button></div>
+      <div class="read"><span>t =</span> 14.0 h <span>of 20 h</span></div>
+    </div>
+    <svg id="chart"></svg>
+  </footer>
+
+  <aside aria-label="Key and forecast">
+    <div class="ph"><span class="kick" style="font-size:14px">Key &amp; forecast</span>
+      <button class="collapse" aria-label="Collapse panel"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 1l4 4-4 4"/></svg>Collapse</button></div>
+    <div class="sec" id="legend"></div>
+    <div class="sec">
+      <h3><span class="kick">Forecast</span><small>n = 50 simulated members</small></h3>
+      <dl class="fx">
+        <div class="fr"><dt>Time to 90% closure</dt><dd><span class="big">17.5 h</span><small>(90% interval 15.0 to 21.0)</small></dd></div>
+        <div class="fr"><dt>P(close by 24 h)</dt><dd><span class="big">0.93</span></dd></div>
+        <div class="fr"><dt>Stall flag</dt><dd><span class="flag"><svg width="14" height="12" viewBox="0 0 18 14"><defs><pattern id="hv" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#5B4B8A" stroke-width="1.4"/></pattern></defs><rect x=".5" y=".5" width="17" height="13" fill="url(#hv)" stroke="#5B4B8A"/></svg>Stall unlikely (P = 0.08)</span></dd></div>
+        <div class="fr"><dt>Ensemble flag</dt><dd style="display:flex;align-items:center;gap:6px"><svg width="16" height="6"><line x1="1" y1="3" x2="15" y2="3" stroke="#4A5A6A" stroke-width="1.6" stroke-dasharray="1.5 3.5"/></svg>Ensemble spread: moderate</dd></div>
+      </dl>
+    </div>
+    <div class="sec">
+      <h3><span class="kick">Scorecard</span><small>Table 1 | held-out, n = 48</small></h3>
+      <table>
+        <thead><tr><th>Model</th><th>CRPS</th><th>90% coverage</th><th>n</th></tr></thead>
+        <tbody>
+          <tr><td class="b">NCA ensemble</td><td class="b">0.042</td><td class="b">0.89</td><td class="b">48</td></tr>
+          <tr><td>Gompertz</td><td>0.071</td><td>0.81</td><td>48</td></tr>
+          <tr><td>Fisher-KPP</td><td>0.066</td><td>0.84</td><td>48</td></tr>
+          <tr><td>Persistence</td><td>0.118</td><td>0.62</td><td>48</td></tr>
+        </tbody>
+      </table>
+      <p class="ill">Illustrative values, not results.</p>
+    </div>
+  </aside>
+</div>
+
+<script src="../../shared/cellfield.js"></script>
+<script>
+(function(){
+  const q = new URLSearchParams(location.search);
+  const tone = ['light','medium','deep'].includes(q.get('tone')) ? q.get('tone') : 'medium';
+  const P = CellField.PAL[tone];
+  const SEED = 7, PROG = 0.56, WIN = 0.14, R = 11;
+  const WOUND = {cx:0.5,cy:0.5,a:0.30,b:0.20,rot:-0.35};
+
+  /* main field */
+  const cv = document.getElementById('field');
+  const dpr = 1;
+  const out = CellField.render(cv, {tone, seed:SEED, progress:PROG, r:R, window:WIN, wound:WOUND, dpr});
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const g = out.geometry, W = out.W;
+  function boundary(th,p){
+    const base = 1 + 0.16*Math.sin(3*th+W.p1) + 0.10*Math.sin(5*th+W.p2) + 0.06*Math.sin(2*th+W.p3);
+    const close = Math.min(1, p*(0.92 + 0.14*Math.sin(2*th+W.p4)));
+    return Math.max(0, base*(1-close));
+  }
+  function pt(th, rho, p){ const r = boundary(th,p===undefined?PROG:p)*rho; const u=Math.cos(th)*g.A*r, v=Math.sin(th)*g.B*r; return [g.cx+u*g.ca-v*g.sa, g.cy+u*g.sa+v*g.ca]; }
+
+  /* find a dividing cell: the pale two-nucleus blob nearest a target (smoothed colour match to the dividing tone) */
+  const ctx = cv.getContext('2d');
+  const img = ctx.getImageData(0,0,cv.width,cv.height).data;
+  const hx = P.dividing.replace('#',''); const dr=parseInt(hx.slice(0,2),16), dg=parseInt(hx.slice(2,4),16), db=parseInt(hx.slice(4,6),16);
+  function dividingNear(tx,ty){
+    let best=null,bs=1e9;
+    for(let y=Math.max(8,Math.round(ty-70));y<Math.min(cv.height-8,ty+70);y+=2) for(let x=Math.max(8,Math.round(tx-70));x<Math.min(cv.width-8,tx+70);x+=2){
+      let s=0,n=0; for(let dy=-6;dy<=6;dy+=2) for(let dx=-6;dx<=6;dx+=2){ if(dx*dx+dy*dy>40) continue; const k=((y+dy)*cv.width+x+dx)*4; s+=Math.abs(img[k]-dr)+Math.abs(img[k+1]-dg)+Math.abs(img[k+2]-db); n++; }
+      s=s/n + 0.05*Math.hypot(x-tx,y-ty); if(s<bs){bs=s;best=[x,y];} }
+    return best||[tx,ty];
+  }
+
+  const T = window.__targets = {
+    t1: dividingNear(388,323),
+    t2: (()=>{ const th=2.35, a=pt(th,1.0); const dx=a[0]-g.cx, dy=a[1]-g.cy, L=Math.hypot(dx,dy); return [a[0]+dx/L*9, a[1]+dy/L*9]; })(),
+    t3: (()=>{ const th=0.55, rn=boundary(th,PROG), rp=boundary(th,PROG-WIN), r=rn+0.62*(rp-rn); const u=Math.cos(th)*g.A*r, v=Math.sin(th)*g.B*r; return [g.cx+u*g.ca-v*g.sa, g.cy+u*g.sa+v*g.ca]; })(),
+    t4: pt(3.9,0.38),
+    t5: [w*0.70, h*0.68]
+  };
+  const L = window.__labels = { 1:[T.t1[0]-70,T.t1[1]-70], 2:[T.t2[0]-80,T.t2[1]+30], 3:[T.t3[0]+84,T.t3[1]+44], 4:[T.t4[0]-62,T.t4[1]+54], 5:[T.t5[0]+52,T.t5[1]+30] };
+
+  const svg = document.getElementById('leaders'); svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const NS='http://www.w3.org/2000/svg';
+  function el(n,a,p){ const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); (p||svg).appendChild(e); return e; }
+  [1,2,3,4,5].forEach(i=>{
+    const t=T['t'+i], l=L[i]; const dx=t[0]-l[0], dy=t[1]-l[1], d=Math.hypot(dx,dy), ux=dx/d, uy=dy/d;
+    const x0=l[0]+ux*10, y0=l[1]+uy*10;
+    el('line',{x1:x0,y1:y0,x2:t[0],y2:t[1],stroke:'#FBF8F1','stroke-width':2.4,opacity:.65});
+    el('line',{x1:x0,y1:y0,x2:t[0],y2:t[1],stroke:'#1F2328','stroke-width':.75});
+    el('circle',{cx:t[0],cy:t[1],r:3.2,fill:'#FBF8F1',opacity:.85});
+    el('circle',{cx:t[0],cy:t[1],r:1.9,fill:'#1F2328'});
+    el('circle',{cx:l[0],cy:l[1],r:10,fill:'#FBF8F1',stroke:'#1F2328','stroke-width':.75});
+    const tx=el('text',{x:l[0],y:l[1]+4.3,'text-anchor':'middle','font-size':12.5,'font-weight':600,fill:'#1F2328'}); tx.style.fontFamily='Charter,"Iowan Old Style",Palatino,Georgia,serif'; tx.textContent=i;
+  });
+
+  /* minimap: same seed and wound, coarse cells */
+  const mini=document.getElementById('mini');
+  const mo=CellField.render(mini,{tone,seed:SEED,progress:PROG,r:2.6,window:WIN,wound:WOUND,overlays:false,dpr:2});
+  const mc=mini.getContext('2d'); mc.setTransform(2,0,0,2,0,0);
+  const mw=mini.clientWidth, mh=mini.clientHeight;
+  mc.strokeStyle='#1F2328'; mc.lineWidth=1.5; mc.strokeRect(mw*0.16,mh*0.14,mw*0.68,mh*0.72);
+  mc.strokeStyle='#FBF8F1'; mc.lineWidth=.5; mc.strokeRect(mw*0.16-1,mh*0.14-1,mw*0.68+2,mh*0.72+2);
+
+  /* legend (order follows callouts) */
+  const order=['dividing','edge','fresh','intact','wound'];
+  const calloutNo={dividing:1,edge:2,fresh:3,wound:4,intact:5};
+  const ruleBy={}; CellField.RULES.forEach(r=>ruleBy[r.key]=r);
+  const legendOrder=['dividing','edge','fresh','wound','intact'];
+  const lg=document.getElementById('legend');
+  lg.innerHTML='<h3><span class="kick">Key to Figure 1</span><small>tone: '+tone+'</small></h3>';
+  const swatch=k=>CellField.swatch(k,tone,30);
+  legendOrder.forEach(k=>{ const r=ruleBy[k]; const d=document.createElement('div'); d.className='leg';
+    d.innerHTML=`<span class="num">${calloutNo[k]}</span>${swatch(k)}<div><b>${r.name}</b><p>${r.rule.charAt(0).toUpperCase()+r.rule.slice(1)}.<em> Cue: ${r.cue}.</em></p></div>`; lg.appendChild(d); });
+  const n=document.createElement('p'); n.className='note'; n.textContent='Precedence: dividing > edge > new tissue > intact. Colours illustrative.'; lg.appendChild(n);
+
+  /* chart + scrubber (hand-drawn SVG) */
+  const ch=document.getElementById('chart'); const CW=ch.clientWidth, CH=ch.clientHeight; ch.setAttribute('viewBox',`0 0 ${CW} ${CH}`);
+  const pl=54, pr=56, pt0=20, pb=CH-50; // plot top / bottom
+  const X=t=>pl+(CW-pl-pr)*t/20, Y=a=>pb-(pb-pt0)*a/100;
+  const area=(t,tau,k)=>100*Math.exp(-Math.pow(t/tau,k));
+  const T0=6, TAU=10.9, K=1.75, TNOW=14;
+  function med(t,c){ const hz=Math.max(0,t-T0); const ce=1+(c-1)*(1-Math.exp(-hz/2.6)); return area(t,TAU*ce,K); }
+  let sd=11; const rnd=()=>{ sd=(sd*16807)%2147483647; return sd/2147483647; };
+  const obs=[]; for(let t=0;t<=TNOW+1e-9;t+=0.25){ obs.push([t, Math.min(100, area(t,10.6,1.75)+(t>0?(rnd()-0.5)*1.6:0))]); }
+  const path=(pts)=>pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('');
+  const ts=[]; for(let t=T0;t<=20+1e-9;t+=0.25) ts.push(t);
+  const band=(cLo,cHi)=>{ const up=ts.map(t=>[t,med(t,cHi)]), lo=ts.map(t=>[t,med(t,cLo)]).reverse(); return path(up)+path(lo).replace(/^M/,'L')+'Z'; };
+  const S=[]; const add=s=>S.push(s);
+  add(`<defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#5B6370" stroke-width="1"/></pattern></defs>`);
+  // title/legend row
+  add(`<text x="${pl}" y="10" font-size="11.5" font-weight="600" fill="#1F2328">Figure 2 | Wound area (% of initial) vs time (h); n = 1 simulated run, 50 ensemble members</text>`);
+  const lx=CW-pr-352;
+  // grid + axes
+  [0,50,100].forEach(v=>{ add(`<line x1="${pl}" x2="${CW-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#D9D3C3" stroke-width=".5"/><text x="${pl-6}" y="${Y(v)+3.5}" font-size="11" text-anchor="end" fill="#5B6370">${v}</text>`); });
+  add(`<line x1="${pl}" x2="${CW-pr}" y1="${Y(10)}" y2="${Y(10)}" stroke="#8A919B" stroke-width=".6" stroke-dasharray="1 3"/><text x="${pl+4}" y="${Y(10)-3}" font-size="10" fill="#5B6370">90% closed</text>`);
+  add(`<line x1="${pl}" x2="${pl}" y1="${pt0}" y2="${pb}" stroke="#1F2328" stroke-width=".75"/><line x1="${pl}" x2="${CW-pr}" y1="${pb}" y2="${pb}" stroke="#1F2328" stroke-width=".75"/>`);
+  for(let t=0;t<=20;t+=2){ add(`<line x1="${X(t)}" x2="${X(t)}" y1="${pb}" y2="${pb+3}" stroke="#1F2328" stroke-width=".75"/><text x="${X(t)}" y="${pb+14}" font-size="11" text-anchor="middle" fill="#5B6370">${t}</text>`); }
+  add(`<text x="${CW-pr}" y="${pb+14}" font-size="11" text-anchor="end" fill="#1F2328" font-weight="500" dx="0"></text>`);
+  // ensemble members
+  for(let m=0;m<8;m++){ const c=0.86+0.34*rnd(); add(`<path d="${path(ts.map(t=>[t,med(t,c)]))}" fill="none" stroke="#2F5D8A" stroke-opacity=".28" stroke-width=".7"/>`); }
+  add(`<path d="${band(0.857,1.2)}" fill="#2F5D8A" fill-opacity=".15"/>`);
+  add(`<path d="${band(0.94,1.09)}" fill="#2F5D8A" fill-opacity=".28"/>`);
+  add(`<path d="${path(ts.map(t=>[t,med(t,1)]))}" fill="none" stroke="#2F5D8A" stroke-width="1.6" stroke-dasharray="5 3"/>`);
+  add(`<path d="${path(obs)}" fill="none" stroke="#1F2328" stroke-width="1.8" stroke-linejoin="round"/>`);
+  add(`<circle cx="${X(TNOW)}" cy="${Y(obs[obs.length-1][1])}" r="2.8" fill="#1F2328"/>`);
+  add(`<line x1="${X(T0)}" x2="${X(T0)}" y1="${pt0-2}" y2="${pb}" stroke="#1F2328" stroke-width="1" stroke-dasharray="4 3"/>`);
+  add(`<text x="${X(T0)+5}" y="${pt0+8}" font-size="11" fill="#1F2328">t0</text>`);
+  // direct labels
+  add(`<text x="${X(1.2)}" y="${Y(52)}" font-size="11" fill="#1F2328" font-weight="600">observed</text>`);
+  add(`<text x="${X(16.4)}" y="${Y(med(16.4,1.0))-12}" font-size="11" fill="#2F5D8A" font-weight="600">predicted median</text>`);
+  add(`<text x="${X(10.4)}" y="${Y(med(10.4,1.2))-6}" font-size="10.5" fill="#2F5D8A">90% band</text>`);
+  add(`<text x="${CW-2}" y="10" font-size="11" text-anchor="end" fill="#5B6370">bands: 50% and 90% interval</text>`);
+  add(`<text x="${CW-2}" y="${pb+14}" font-size="11" text-anchor="end" fill="#1F2328" font-weight="500">Time (h)</text>`);
+  // scrubber
+  const sy=CH-26, sh=8;
+  add(`<rect x="${X(0)}" y="${sy}" width="${X(TNOW)-X(0)}" height="${sh}" fill="#1F2328"/>`);
+  add(`<rect x="${X(TNOW)}" y="${sy}" width="${X(20)-X(TNOW)}" height="${sh}" fill="url(#hatch)" stroke="#5B6370" stroke-width=".75"/>`);
+  add(`<line x1="${X(T0)}" x2="${X(T0)}" y1="${sy-6}" y2="${sy+sh+6}" stroke="#1F2328" stroke-width="2"/>`);
+  add(`<text x="${X(T0)+6}" y="${sy+sh+12}" font-size="11" fill="#1F2328" font-weight="600">t0 = forecast origin (6 h)</text>`);
+  add(`<rect x="${X(TNOW)-4}" y="${sy-5}" width="8" height="${sh+10}" fill="#FBF8F1" stroke="#1F2328" stroke-width="1.5"/>`);
+  add(`<text x="${X(TNOW)+10}" y="${sy+sh+12}" font-size="11" fill="#1F2328">t = 14 h</text>`);
+  add(`<text x="${X(17)}" y="${sy+sh+12}" font-size="11" fill="#5B6370" text-anchor="middle">forecast (hatched)</text>`);
+  add(`<text x="${X(2.8)}" y="${sy+sh+12}" font-size="11" fill="#5B6370" text-anchor="middle">history (solid)</text>`);
+  ch.innerHTML=S.join('');
+})();
+</script>
+</body>
+</html>

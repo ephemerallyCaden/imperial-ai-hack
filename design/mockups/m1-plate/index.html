@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch - M1 Plate</title>
+<meta name="viewport" content="width=1440">
+<style>
+:root{
+  --paper:#FCFCFA; --panel:#F6F5F0; --ink:#1F2328; --ink2:#5B6370; --ink3:#6F7681; --rule:#D9DCE0; --frame:#8A919B;
+  --blue:#2F5D8A; --violet:#5B4B8A; --slate:#4A5A6A;
+  --serif:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans);font-variant-numeric:tabular-nums}
+button{font:500 13px/1 var(--sans);color:var(--ink);background:transparent;border:1px solid var(--frame);border-radius:0;cursor:pointer;min-height:26px;padding:0 12px}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+#app{display:grid;grid-template-columns:1120px 320px;grid-template-rows:52px 848px;width:1440px;height:900px}
+/* masthead */
+header{grid-column:1/3;display:flex;align-items:baseline;gap:16px;padding:0 24px;border-top:3px solid var(--ink);border-bottom:1px solid var(--rule);height:52px;align-items:center}
+.wordmark{font:600 28px/1 var(--serif);letter-spacing:-.01em}
+.sub{font:13px/1.2 var(--sans);color:var(--ink2);padding-left:16px;border-left:1px solid var(--rule)}
+.sub b{font-weight:500;color:var(--ink)}
+.spacer{flex:1}
+.help{display:flex;align-items:center;gap:8px;font:12px/1 var(--mono);color:var(--ink2)}
+.help button{width:26px;padding:0;font:600 13px/1 var(--serif);border-radius:50%}
+.help kbd{font:12px var(--mono);border:1px solid var(--rule);padding:1px 5px;color:var(--ink);background:#fff}
+/* left column */
+#main{display:flex;flex-direction:column;min-width:0}
+#toolbar{height:40px;flex:none;display:flex;align-items:center;gap:8px;padding:0 24px 0 24px;border-bottom:1px solid var(--rule)}
+#toolbar .grp{display:flex;gap:8px;align-items:center}
+.t-active{background:var(--ink);color:#fff}
+.t-primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.seg{display:flex}
+.seg button{flex:none;white-space:nowrap;border-left-width:0;color:var(--ink2);background:var(--panel)}
+.seg button:first-child{border-left-width:1px}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);font-weight:600;box-shadow:none;border-color:var(--ink);border-left-width:1px;position:relative;z-index:1}
+.lab{font:12.5px/1 var(--sans);color:var(--ink2);margin-right:4px}
+#stage{position:relative;flex:1;border-bottom:1px solid var(--frame);border-top:0;background:#E9D3C0}
+#cf{display:block;width:100%;height:100%}
+.ov{position:absolute;background:rgba(252,252,250,.94);border:1px solid var(--frame);font:12px/1.3 var(--sans)}
+#chip{left:16px;top:16px;padding:6px 10px;font:600 12px/1 var(--sans);letter-spacing:.04em;color:var(--ink);border-color:var(--ink);border-left:4px solid var(--ink)}
+#ladder{left:16px;top:56px;width:128px;display:flex;flex-direction:column}
+#ladder .k{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);padding:7px 10px 6px;border-bottom:1px solid var(--rule)}
+#ladder button{display:flex;justify-content:space-between;align-items:center;border:0;border-bottom:1px solid var(--rule);min-height:30px;padding:0 10px;font:13px var(--sans);color:var(--ink2);text-align:left}
+#ladder button:last-child{border-bottom:0}
+#ladder button span{font:12px var(--mono)}
+#ladder button[aria-current=true]{background:var(--ink);color:#fff;font-weight:600}
+#scale{left:16px;bottom:16px;padding:8px 12px 7px;display:flex;align-items:flex-end;gap:14px}
+#scale .bar{width:104px}
+#scale .bar div{font:12px/1 var(--mono);margin-bottom:4px}
+#scale .bar i{display:block;height:7px;border:1.5px solid var(--ink);border-top:0}
+#scale .zoom{font:600 18px/1 var(--mono);padding-left:12px;border-left:1px solid var(--rule)}
+#scale .zoom small{display:block;font:11px/1 var(--sans);color:var(--ink2);margin-bottom:4px;font-weight:400}
+#mini{right:16px;bottom:16px;padding:6px 6px 4px}
+#mini canvas{display:block;width:168px;height:96px;border:1px solid var(--frame)}
+#mini svg{position:absolute;left:6px;top:6px}
+#mini .c{font:11px/1.2 var(--sans);color:var(--ink2);margin-top:4px;display:flex;justify-content:space-between}
+#caption{height:44px;flex:none;padding:5px 24px 0;font:12.5px/1.45 var(--serif);color:var(--ink);border-bottom:1px solid var(--rule);white-space:nowrap;overflow:hidden}
+#caption b{font-weight:700}
+#caption .src{color:var(--ink2);font:11.5px/1.45 var(--sans)}
+/* dock */
+#dock{height:148px;flex:none;display:grid;grid-template-columns:252px 1fr 214px;background:var(--paper)}
+#transport{padding:14px 16px 0 24px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:12px}
+#transport .row{display:flex;gap:6px;align-items:center}
+#transport .row button{width:34px;padding:0;min-height:32px;display:grid;place-items:center}
+#transport .row button.play{background:var(--ink);color:#fff;border-color:var(--ink);width:40px}
+#transport .ro{font:12px/1.35 var(--mono);color:var(--ink);margin-left:6px}
+#transport .ro span{color:var(--ink2);display:block}
+#transport .row .seg button{width:auto;padding:0 8px;font:12px var(--mono);min-height:26px}
+#chartwrap{position:relative;min-width:0}
+#chartwrap svg{position:absolute;left:0;top:0}
+#key{padding:10px 24px 0 16px;border-left:1px solid var(--rule);font:12px/1.3 var(--sans)}
+#key .fig{font:12.5px/1.4 var(--serif);margin-bottom:5px}
+#key .fig b{font-weight:700}
+#key .r{display:flex;align-items:center;gap:8px;height:16px;color:var(--ink)}
+#key svg{flex:none}
+/* panel */
+aside{background:var(--panel);border-left:1px solid var(--frame);overflow:hidden;display:flex;flex-direction:column}
+.phead{height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 20px;border-bottom:1px solid var(--rule);font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.phead button{min-height:24px;font:12px var(--sans);display:flex;gap:6px;align-items:center;padding:0 8px;background:#fff;color:var(--ink)}
+section{padding:12px 20px 10px;border-bottom:1px solid var(--rule)}
+section h2{font:600 16px/1.25 var(--serif);margin-bottom:8px}
+section h2 em{font:400 italic 12px/1 var(--serif);color:var(--ink2);margin-left:6px}
+.leg{display:grid;grid-template-columns:30px 1fr;gap:2px 12px;padding:4px 0;border-top:1px solid var(--rule)}
+.leg:first-of-type{border-top:0}
+.leg svg{grid-row:1/3;margin-top:1px}
+.leg b{font:600 13px/1.25 var(--sans)}
+.leg p{font:12px/1.35 var(--sans);color:var(--ink2)}
+.leg p i{font-style:normal;color:var(--ink);}
+.ov-note{font:11.5px/1.4 var(--sans);color:var(--ink2);margin-top:6px;padding-top:6px;border-top:1px solid var(--rule)}
+.ov-note u{text-decoration:none;color:var(--violet);font-weight:600}
+.big{display:flex;align-items:baseline;gap:8px}
+.big strong{font:600 28px/1 var(--serif)}
+.big span{font:12.5px/1.35 var(--sans);color:var(--ink2)}
+.dl{margin-top:8px}
+.dl div{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-top:1px solid var(--rule);font:12.5px/1.3 var(--sans)}
+.dl dt{color:var(--ink2)}
+.dl dd{font:500 13px/1.3 var(--sans);text-align:right}
+.dl dd.v{color:var(--violet)}
+table{width:100%;border-collapse:collapse;font:12.5px/1.3 var(--sans);border-top:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink)}
+th{font-weight:600;text-align:right;padding:4px 0 4px 8px;border-bottom:.75px solid var(--ink);font-size:12px}
+td{text-align:right;padding:4px 0 4px 8px}
+th:first-child,td:first-child{text-align:left;padding-left:0}
+tr.best td{font-weight:600}
+.tnote{font:italic 11.5px/1.4 var(--serif);color:var(--ink2);margin-top:5px}
+.tnote b{font-style:normal;font-family:var(--sans);color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="wordmark">Stitch</div>
+    <div class="sub"><b>Wound-closure forecaster</b> &ndash; research prototype</div>
+    <div class="spacer"></div>
+    <div class="help"><span><kbd>Space</kbd> play &nbsp;<kbd>&larr;</kbd><kbd>&rarr;</kbd> step &nbsp;<kbd>+</kbd><kbd>&minus;</kbd> zoom</span><button aria-label="Help and keyboard shortcuts" title="Help: Space play, arrows step, +/- zoom">?</button></div>
+  </header>
+
+  <div id="main">
+    <div id="toolbar">
+      <div class="grp">
+        <button class="t-active" aria-pressed="true">Draw wound</button>
+        <button class="t-primary">Heal</button>
+        <button>Clear wound</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="grp">
+        <span class="lab">Preset</span>
+        <div class="seg" role="group" aria-label="Preset">
+          <button aria-pressed="true">MCF10A control (CC)</button><button aria-pressed="false">CYR61 shRNA (C61)</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="stage">
+      <canvas id="cf"></canvas>
+      <div class="ov" id="chip">SIMULATED CELLS - not tracked cells</div>
+      <div class="ov" id="ladder">
+        <div class="k">Magnification</div>
+        <button><b style="font-weight:inherit">Cells</b><span>80x</span></button>
+        <button><b style="font-weight:inherit">Colony</b><span>40x</span></button>
+        <button aria-current="true"><b style="font-weight:inherit">Wound</b><span>20x</span></button>
+        <button><b style="font-weight:inherit">Field</b><span>5x</span></button>
+      </div>
+      <div class="ov" id="scale">
+        <div class="bar"><div>100 &micro;m</div><i></i></div>
+        <div class="zoom"><small>Zoom</small>20x</div>
+      </div>
+      <div class="ov" id="mini">
+        <canvas id="mc" width="168" height="96"></canvas><svg id="msvg" width="168" height="96"></svg>
+        <div class="c"><span>Overview</span><span>box = view</span></div>
+      </div>
+    </div>
+
+    <div id="caption">
+      <div><b>Figure 1 |</b> Simulated scratch wound at t = 14 h (20x). Dotted contours bound the central 80% of ensemble closure; n = 24 members.</div>
+      <div class="src">Source: simulated cell agents, MCF10A-CC preset; not tracked cells. Values illustrative.</div>
+    </div>
+
+    <div id="dock">
+      <div id="transport">
+        <div class="row">
+          <button aria-label="Step back" title="Step back (Left)"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="2" height="10" fill="currentColor"/><path d="M12 2L5.5 7L12 12Z" fill="currentColor"/></svg></button>
+          <button class="play" aria-label="Play or pause" title="Play / pause (Space)"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 1.5L12 7L3 12.5Z" fill="currentColor"/></svg></button>
+          <button aria-label="Step forward" title="Step forward (Right)"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="10" y="2" width="2" height="10" fill="currentColor"/><path d="M2 2L8.5 7L2 12Z" fill="currentColor"/></svg></button>
+          </div>
+        <div class="ro" style="margin:0"><span style="display:inline">t = </span><b style="font-weight:600">14.0 h</b> <span style="display:inline">of 20 h</span></div>
+        <div class="row" style="gap:8px"><span class="lab" style="margin:0">Speed</span>
+          <div class="seg" role="group" aria-label="Speed"><button aria-pressed="false">0.5x</button><button aria-pressed="true">1x</button><button aria-pressed="false">2x</button><button aria-pressed="false">4x</button></div>
+        </div>
+      </div>
+      <div id="chartwrap"></div>
+      <div id="key">
+        <div class="fig"><b>Figure 2 |</b> Forecast of wound area from t0; n = 24 ensemble members.</div>
+        <div class="r"><svg width="30" height="10"><path d="M0 5H30" stroke="#1F2328" stroke-width="2"/></svg>Observed</div>
+        <div class="r"><svg width="30" height="10"><path d="M0 5H30" stroke="#2F5D8A" stroke-width="2" stroke-dasharray="6 3"/></svg>Predicted median</div>
+        <div class="r"><svg width="30" height="10"><rect y="1" width="30" height="8" fill="#2F5D8A" fill-opacity=".28"/><rect y="1" width="30" height="8" fill="#2F5D8A" fill-opacity=".15" transform="translate(0 -1) scale(1 1.25)"/></svg>50% and 90% bands</div>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="phead"><span>Panel</span><button aria-label="Collapse panel" title="Collapse panel">Collapse <svg width="9" height="10" viewBox="0 0 9 10"><path d="M2 1L7 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
+    <section id="legend">
+      <h2>Key to tissue states<em>rules, as computed</em></h2>
+      <div id="leglist"></div>
+      <div class="ov-note"><svg width="26" height="8" style="vertical-align:middle;margin-right:4px"><path d="M0 4H26" stroke="#4A5A6A" stroke-width="1.5" stroke-dasharray="1.5 3.5"/></svg>Dotted contour = ensemble spread. <u>Violet hatch</u> + text badge = stall flag.</div>
+    </section>
+    <section>
+      <h2>Forecast <em>origin t0 = 6 h</em></h2>
+      <div class="big"><strong>17.5 h</strong><span>to 90% closure<br>(90% interval 15.0 to 21.0)</span></div>
+      <dl class="dl">
+        <div><dt>P(close by 24 h)</dt><dd>0.93</dd></div>
+        <div><dt>Stall flag</dt><dd class="v">Stall unlikely (P = 0.08)</dd></div>
+        <div><dt>Ensemble flag</dt><dd>Ensemble spread: moderate</dd></div>
+      </dl>
+    </section>
+    <section style="border-bottom:0">
+      <h2>Table 1 <em>forecast scorecard</em></h2>
+      <table>
+        <thead><tr><th>Model</th><th>CRPS</th><th>90% cov.</th><th>n</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>NCA ensemble</td><td>2.1</td><td>0.89</td><td>24</td></tr>
+          <tr><td>Gompertz</td><td>3.4</td><td>0.71</td><td>24</td></tr>
+          <tr><td>Fisher-KPP</td><td>3.9</td><td>0.64</td><td>24</td></tr>
+          <tr><td>Persistence</td><td>6.8</td><td>0.38</td><td>24</td></tr>
+        </tbody>
+      </table>
+      <div class="tnote"><b>Illustrative values, not results.</b> CRPS in % of initial area (lower is better); coverage target 0.90; n = wounds.</div>
+    </section>
+  </aside>
+</div>
+
+<script src="../../shared/cellfield.js"></script>
+<script>
+(function(){
+  const q = new URLSearchParams(location.search), tone = ['light','medium','deep'].includes(q.get('tone')) ? q.get('tone') : 'light';
+  const SEED = 7, PROG = 0.47, WOUND = {cx:0.47,cy:0.5,a:0.30,b:0.21,rot:-0.35};
+  const cv = document.getElementById('cf');
+  const res = CellField.render(cv, {tone, seed:SEED, progress:PROG, r:12, wound:WOUND});
+  document.getElementById('stage').style.background = res.palette.intact;
+
+  // minimap: same field, same wound geometry (canvas aspect matched), plus initial-wound outline and view rect
+  const mc = document.getElementById('mc');
+  const mres = CellField.render(mc, {tone, seed:SEED, progress:PROG, r:3.6, wound:WOUND, overlays:false, window:0.14});
+  const g = mres.geometry, s = document.getElementById('msvg');
+  const NS='http://www.w3.org/2000/svg';
+  function el(n,a,p){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);(p||s).appendChild(e);return e;}
+  const deg = Math.atan2(g.sa,g.ca)*180/Math.PI;
+  el('ellipse',{cx:g.cx,cy:g.cy,rx:g.A*0.95,ry:g.B*0.95,transform:`rotate(${deg} ${g.cx} ${g.cy})`,fill:'none',stroke:'#1F2328','stroke-width':1,'stroke-dasharray':'3 2'});
+  el('rect',{x:20.5,y:11.5,width:127,height:73,fill:'rgba(255,255,255,.12)',stroke:'#fff','stroke-width':3});
+  el('rect',{x:20.5,y:11.5,width:127,height:73,fill:'none',stroke:'#1F2328','stroke-width':1.25});
+
+  // legend with swatches in active tone
+  const list=document.getElementById('leglist');
+  CellField.RULES.forEach(R=>{
+    const d=document.createElement('div'); d.className='leg';
+    d.innerHTML=`${CellField.swatch(R.key,tone,30)}<b>${R.name}</b><p>${R.rule}. <i>Cue: ${R.cue}.</i></p>`;
+    list.appendChild(d);
+  });
+
+  // forecast ribbon (hand-drawn SVG)
+  const wrap=document.getElementById('chartwrap'), W=wrap.clientWidth, H=wrap.clientHeight;
+  const L=50,Rm=18,T=8,B=52, pw=W-L-Rm, ph=H-T-B, YMAX=105, XMAX=20, T0=6, TC=14;
+  const X=t=>L+t/XMAX*pw, Y=a=>T+(1-a/YMAX)*ph;
+  const pts=[[0,100],[2,97.5],[4,90],[6,79],[8,67],[10,55],[12,43],[14,31],[16,19],[17.5,10],[19,5.5],[21,3],[24,1.5],[30,0.3]];
+  // monotone cubic (Fritsch-Carlson)
+  const n=pts.length, xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]), dx=[],m=[],tg=new Array(n);
+  for(let i=0;i<n-1;i++){dx[i]=xs[i+1]-xs[i];m[i]=(ys[i+1]-ys[i])/dx[i];}
+  tg[0]=m[0];tg[n-1]=m[n-2];
+  for(let i=1;i<n-1;i++) tg[i]= m[i-1]*m[i]<=0?0:(m[i-1]+m[i])/2;
+  for(let i=0;i<n-1;i++){ if(m[i]===0){tg[i]=tg[i+1]=0;continue;} const a=tg[i]/m[i],b=tg[i+1]/m[i],h=a*a+b*b; if(h>9){const k=3/Math.sqrt(h);tg[i]=k*a*m[i];tg[i+1]=k*b*m[i];} }
+  function med(t){ if(t<=0)return ys[0]; if(t>=xs[n-1])return ys[n-1]; let i=0; while(t>xs[i+1])i++; const h=dx[i],s=(t-xs[i])/h,s2=s*s,s3=s2*s;
+    return (2*s3-3*s2+1)*ys[i]+(s3-2*s2+s)*h*tg[i]+(-2*s3+3*s2)*ys[i+1]+(s3-s2)*h*tg[i+1]; }
+  const warp=(t,c)=> t<=T0? med(t) : med(T0+(t-T0)*c);
+  const C90=[11.5/9, 11.5/15], C50=[1+(11.5/9-1)*0.45, 1-(1-11.5/15)*0.45];
+  const ts=[]; for(let t=T0;t<=XMAX+1e-6;t+=0.25) ts.push(t);
+  const band=(cl,cu)=>{ const up=ts.map(t=>X(t).toFixed(1)+','+Y(Math.max(0,warp(t,cu))).toFixed(1)); const lo=ts.slice().reverse().map(t=>X(t).toFixed(1)+','+Y(Math.max(0,warp(t,cl))).toFixed(1)); return 'M'+up.join('L')+'L'+lo.join('L')+'Z'; };
+  const line=(f,from,to,step)=>{ const a=[]; for(let t=from;t<=to+1e-6;t+=step) a.push(X(t).toFixed(1)+','+Y(f(t)).toFixed(1)); return 'M'+a.join('L'); };
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('width',W); svg.setAttribute('height',H); svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.setAttribute('role','img'); svg.setAttribute('aria-label','Forecast ribbon: wound area percent of initial versus time in hours. Observed to 6 h; predicted median reaches 10 percent at 17.5 h.');
+  const add=(n,a,t)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;svg.appendChild(e);return e;};
+  add('defs',{}).innerHTML=`<pattern id="hat" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#fff"/><line x1="0" y1="0" x2="0" y2="5" stroke="#2F5D8A" stroke-opacity=".55" stroke-width="1.6"/></pattern><clipPath id="pc"><rect x="${L}" y="${T}" width="${pw}" height="${ph}"/></clipPath>`;
+  // grid
+  [0,50,100].forEach(v=>{ add('line',{x1:L,x2:L+pw,y1:Y(v),y2:Y(v),stroke:'#D9DCE0','stroke-width':v===0?1:.75}); add('text',{x:L-6,y:Y(v)+3.5,'text-anchor':'end','font-size':11,fill:'#5B6370','font-family':'var(--sans)'},v); });
+  add('text',{transform:`translate(11 ${T+ph/2}) rotate(-90)`,'text-anchor':'middle','font-size':11,fill:'#1F2328','font-family':'var(--sans)'},'Area (% of initial)');
+  const gp=add('g',{'clip-path':'url(#pc)'});
+  const sv=svg; // draw into group
+  const g2=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);gp.appendChild(e);return e;};
+  // 90% closure reference
+  g2('line',{x1:L,x2:L+pw,y1:Y(10),y2:Y(10),stroke:'#8A919B','stroke-width':.75,'stroke-dasharray':'1 3'});
+  g2('path',{d:band(C90[0],C90[1]),fill:'#2F5D8A','fill-opacity':.15});
+  g2('path',{d:band(C50[0],C50[1]),fill:'#2F5D8A','fill-opacity':.28});
+  [0.82,0.9,0.96,1.04,1.1,1.17,1.24,0.78].forEach((c,i)=>g2('path',{d:line(t=>warp(t,c+(i%2?0.015:-0.015)),T0,XMAX,.25),fill:'none',stroke:'#2F5D8A','stroke-opacity':.22,'stroke-width':.8}));
+  g2('path',{d:line(med,T0,XMAX,.25),fill:'none',stroke:'#2F5D8A','stroke-width':2,'stroke-dasharray':'6 3.5'});
+  g2('path',{d:line(med,0,T0,.25),fill:'none',stroke:'#1F2328','stroke-width':2});
+  // t0 rule (solid) through plot and track
+  add('line',{x1:X(T0),x2:X(T0),y1:T,y2:T+ph+16,stroke:'#1F2328','stroke-width':1.25});
+  add('text',{x:X(T0)+5,y:T+10,'font-size':11,fill:'#1F2328','font-family':'var(--sans)','font-weight':600},'t0 = forecast origin');
+  // 90% label
+  add('text',{x:L+pw-3,y:Y(10)-4,'text-anchor':'end','font-size':10.5,fill:'#5B6370','font-family':'var(--sans)'},'90% closure');
+  // scrubber track: solid history, hatched forecast
+  const ty=T+ph+6, th=9;
+  add('rect',{x:X(0),y:ty,width:X(T0)-X(0),height:th,fill:'#1F2328'});
+  add('rect',{x:X(T0),y:ty,width:X(XMAX)-X(T0),height:th,fill:'url(#hat)',stroke:'#2F5D8A','stroke-width':1});
+  // cursor
+  add('line',{x1:X(TC),x2:X(TC),y1:T,y2:ty+th+3,stroke:'#1F2328','stroke-width':1});
+  add('circle',{cx:X(TC),cy:Y(med(TC)),r:3.5,fill:'#fff',stroke:'#1F2328','stroke-width':1.5});
+  add('rect',{x:X(TC)-4.5,y:ty-4,width:9,height:th+8,fill:'#fff',stroke:'#1F2328','stroke-width':1.5});
+  add('text',{x:X(TC)+6,y:T+10,'font-size':11,fill:'#1F2328','font-family':'var(--mono)'},'t = 14 h');
+  // x ticks
+  [0,5,10,15,20].forEach(v=>{ add('line',{x1:X(v),x2:X(v),y1:ty+th+1,y2:ty+th+4,stroke:'#5B6370'}); add('text',{x:X(v),y:ty+th+15,'text-anchor':v===0?'start':v===20?'end':'middle','font-size':11,fill:'#5B6370','font-family':'var(--sans)'},v); });
+  add('text',{x:L+pw/2,y:H-8,'text-anchor':'middle','font-size':11,fill:'#1F2328','font-family':'var(--sans)'},'Time since wounding (h)   [solid = history, hatched = forecast]');
+  wrap.appendChild(svg);
+})();
+</script>
+</body>
+</html>
