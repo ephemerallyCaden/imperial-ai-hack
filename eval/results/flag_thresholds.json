@@ -1,0 +1,22 @@
+{
+ "1.9": {
+  "p_stall": 0.278,
+  "measure_again_signal": "width_h",
+  "measure_again": 0.4068
+ },
+ "3.8": {
+  "p_stall": 0.315,
+  "measure_again_signal": "width_h",
+  "measure_again": 0.4972
+ },
+ "5.7": {
+  "p_stall": 0.566,
+  "measure_again_signal": "width_h",
+  "measure_again": 0.4904
+ },
+ "9.5": {
+  "p_stall": 0.122,
+  "measure_again_signal": "ambiguity",
+  "measure_again": 0.137
+ }
+}
