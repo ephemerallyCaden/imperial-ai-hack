@@ -17,6 +17,8 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 
 **Scale:** one lattice site is one cell, `SITE_UM = 20` µm. A WHAD-sized field is **32 rows × 44 cols** (`h = 32`, `w = 44`). Grids are row-major (`i = y*w + x`).
 
+> **Canvas size: use `h = 32, w = 44`, the WHAD field, for now.** Under the frozen sim rules, vacancies mostly leave through the border reservoir, so healing speed depends on canvas size. Agent 4 measured it: a 120×168 canvas keeps about 81% of its wound area at 24 h, while WHAD-sized runs close to about 0.1–0.2. The presets were fitted at 32×44. Draw at that size and scale the canvas up visually rather than adding sites. The lead and Agent 1 have not yet decided how to handle larger canvases.
+
 **Presets** (`PRESETS` in `engine.js`, from `sim/fits/whad_fits.json` → `presets.draw_tool`, division off):
 
 | Preset | Tm (h) | Bias |
