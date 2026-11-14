@@ -62,7 +62,7 @@ def calibration(S):
 
 def error_vs_history(S):
     g = S[(S.dataset == "whad") & (S.split == "loo_all")]
-    names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "no change (persistence)"}
+    names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "typical-wound curve"}
     fig, ax = plt.subplots(figsize=(7, 4))
     ends = []
     for i, m in enumerate(["edge_speed", "linear", "logistic", "gompertz", "lvcf"]):
