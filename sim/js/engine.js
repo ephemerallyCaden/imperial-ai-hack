@@ -43,11 +43,11 @@ export function reservoirMask(occ, h, w, edge = DEFAULTS.edge) {
 
 export class Engine {
   // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
-  // rule: 'frozen' (default, the gate rules) or 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
+  // rule: 'free' (default, the gate rules; 'frozen' accepted as alias) or 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
   // Moore-connected to the reservoir through occupied sites pulls the chain behind it, so its source stays occupied;
   // movers on islands leave a vacancy as before. Fixed at construction (preset switches keep it). params.follow = true
   // is accepted as an alias.
-  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = 'frozen' }) {
+  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = 'free' }) {
     this.w = w; this.h = h;
     this.occ = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
@@ -60,7 +60,7 @@ export class Engine {
     for (let i = 0; i < w * h; i++) if (this.resMask[i]) this.res.push(i);
     this._refill();
     this.follow = rule === 'follow' || !!(params && params.follow);
-    this.rule = this.follow ? 'follow' : 'frozen';
+    this.rule = this.follow ? 'follow' : 'free'; // = cellsim Params.rule names
     if (this.follow) { this.conn = Uint8Array.from(this.resMask); this._growConnected(); }
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
