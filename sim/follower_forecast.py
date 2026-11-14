@@ -13,6 +13,10 @@ from cellsim import Params
 out = os.path.abspath(sys.argv[1])
 assert not out.startswith(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))), "scratch dir must be outside the repo"
 mp.set_start_method("fork", force=True)
+os.nice(max(0, 19 - os.nice(0)))  # lowest priority; workers inherit it via fork
+import concurrent.futures as cf  # cap workers (default 4): calibrate imports the pool lazily, forecast at import
+cf.ProcessPoolExecutor = fc.ProcessPoolExecutor = functools.partial(cf.ProcessPoolExecutor,
+                                                                    max_workers=int(os.environ.get("FOLLOWER_WORKERS", 4)))
 cal.Params = fc.Params = functools.partial(Params, follow=True)
 cal.TM_GRID = np.geomspace(0.05, 50.0, 31)
 frozen = [cal.OUT, fc.AUTO_FITS] + [os.path.join(fc.OUT_DIR, f) for f in os.listdir(fc.OUT_DIR)]
