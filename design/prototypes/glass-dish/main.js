@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
 const PAL = { intact: 0x4B4FA8, edge: 0xF1605D, fresh: 0xC0388A, dividing: 0xFCFDBF, wound: 0x14141f };
-const HEIGHT = { intact: 1.0, dividing: 1.08, edge: 0.32, wound: 0.035 };   // relative density
+const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
@@ -60,11 +60,11 @@ function stateOf(f, k) {
   if (age >= 0 && age < 25) return 'fresh';
   return 'intact';
 }
-const targetH = (f, k, st) => st === 'fresh' ? 0.4 + 0.6 * Math.min(1, (f.step - f.born[k]) / 25) : HEIGHT[st];
+const targetH = (f, k, st) => st === 'fresh' ? 0.7 + 0.3 * Math.min(1, (f.step - f.born[k]) / 25) : HEIGHT[st];
 
 // ---------- graph space: axis frame, floor grid, rulers ----------
 const S = 0.5;                           // world units per lattice unit
-const X0 = -W * S / 2, Z0 = -D * S / 2, HMAX = 3.2;  // column height scale
+const X0 = -W * S / 2, Z0 = -D * S / 2, HMAX = 1.3;  // column height scale
 const frame = new THREE.Group(); scene.add(frame);
 const lineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.28 });
 const faint = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.08 });
@@ -115,7 +115,7 @@ function updateColumns(f, dt) {
   const ease = Math.min(1, dt * 6);
   for (let k = 0; k < COUNT; k++) {
     const st = stateOf(f, k); states[k] = st;
-    const tgt = targetH(f, k, st) * (st === 'intact' ? 0.9 + 0.2 * rnd[k] : 1);
+    const tgt = targetH(f, k, st);
     hNow[k] += (tgt - hNow[k]) * ease;
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
     m4.makeScale(1, h, 1).setPosition(x, 0, z);
