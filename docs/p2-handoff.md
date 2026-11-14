@@ -162,7 +162,7 @@ This is the same wound as Agent 4's sim playback, rolled out with the NCA so the
   - also the fit, the start, and the weights sha256.
 - **Decode check:** `1 - mean(densityFrame)` matches `wound_frac` to within 1.4e-4 (uint8 quantisation).
 - **Result:** the NCA's MAE against observed after the cut-off is 0.017. It closes faster than the data until about 11 h, then more slowly (0.013 vs 0.002 at 19 h).
-- **Fit source:** `meta.fit_source` = feature/p2-agent1 c30f6ed `sim/fits/whad_fits.json` (sha256 `97943ebccf05`).
+- **Fit source:** `meta.fit_source` = feature/p2-agent1 aed3174 `sim/fits/whad_fits.json` (sha256 `97943ebccf05`).
 - **Regenerate:** `python3 sim/js/band_check.py <agent1 root> exp1_partII_C61_P2 3.8 case.json`, then `node sim/js/make_nca_playback.mjs web/public/sim/nca_weights.json case.json web/public/sim/whad_partII_C61_P2_nca.json`.
 
 ### Fair NCA vs sim vs data panel (one wound)
@@ -173,7 +173,7 @@ This is the same wound as Agent 4's sim playback, rolled out with the NCA so the
 | Sim (cell agents, frozen rules) | `web/public/sim/whad_partII_C61_P2_sim38.json` (116 KB, 161 frames every 0.1 h, 3.0–19.0 h, with `agents`) | observed mask at frame 3 (t = 3.0 h) | `fits[pos]["3.8"]`, Tm 0.310, bias 0.443, seed 0 |
 | NCA (emulator) | `web/public/sim/whad_partII_C61_P2_nca.json` (33 frames every 0.5 h, density only) | the same mask, frame 3 | the same fit |
 
-- **Use this pair for the panel.** Both start from the same mask and use the same fit (c30f6ed). After the cut-off, sim and NCA have nearly the same MAE against observed: 0.0172 and 0.0174 over 16 frames.
+- **Use this pair for the panel.** Both start from the same mask and use the same fit (aed3174). After the cut-off, sim and NCA have nearly the same MAE against observed: 0.0172 and 0.0174 over 16 frames.
   - Both close faster than the data until about 11 h.
   - Late on, the NCA stays closer to the data than the sim: at 19 h, observed 0.002, NCA 0.013, sim 0.026.
 - **Agent 4's `whad_partII_C61_P2.json` is the video's full run.** It starts at frame 0 with the older t0 = 10 fit, so don't use it in this panel.
