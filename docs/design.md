@@ -121,6 +121,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - [D] The product is agentic (event theme). The team agreed; P3 builds it.
 - [D, kept from R10] Code does the science. The LLM plans, picks tools and explains; it never makes a number. Plain-code policy decides every action; a human approves anything that cannot be undone (stopping a plate). Research use only.
 - [D, R20] Back end: a Python script runs the agent and records each run to JSON; the UI plays the runs back. A FastAPI server is added only if a live run is wanted. The public repo and the video need no keys (R10 rule).
+- [D, R21] Agent loop: hand-written, not the SDK Tool Runner, so each step is logged, decisions are set by code, the Critic and human approval sit inside the loop, and `call_model()` stays a plain messages call that works with any provider.
 - [D, R20] Every model call goes through one `call_model()` wrapper, so the provider can be swapped in one file. Credentials, account IDs and profile names stay in local config (`.env`, git-ignored, or local cloud config), never in the repo. The runs used in the video are re-recorded on the final account before submission.
 - **Lead agent** [DER]: reads the situation and picks which helper (sub-agent) and which tool to call next. Helpers and the existing code they call:
   - **Intake:** protocol text to settings (cell line, seeding density, mitomycin, frame interval, pixel scale). Code checks units and maps them to a preset. Model: the 9c fine-tune if it passes, else Claude.
@@ -132,14 +133,14 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
   - **Reporter:** plain-English summary and the decision card.
 - Decisions the agent can propose [DER]: continue; stall flagged, ask a human; data refused, ask a human; "more frames will narrow the band" (backed by the measured error vs fraction-observed curve, section 7, not by the measure-again signal).
 - **Run log and monitoring** [DER]: one record per agent step and tool call (inputs as fingerprints, outputs, model version, tokens, cost, time), linked by a run ID. The UI reads the same log. Monitored: coverage against the 90% target, flag rates, refusals, tool errors, human overrides, cost per run. External tracing (Langfuse, Phoenix or SDK OpenTelemetry) is optional, for debugging.
-- **Agent evaluation** [DER]: replay held-out wounds frame by frame as a simulated lab. Compare three policies: fixed schedule, simple rules, the agent. Measures: plate-hours saved (stated as simulation; cost per plate-hour and per image recorded with the numbers), wrong stops, frames used, right helper chosen, hypothesis accuracy on synthetic wounds with a known cause, share of numbers traced (target 100%), guardrail triggers, cost per run. Rerun on every change; per-version scoreboard.
+- **Agent evaluation** [DER]: replay held-out wounds frame by frame as a simulated lab. Compare three policies: fixed schedule, simple rules, the agent. Measures: plate-hours saved (stated as simulation; relative costs stated as assumptions: 1 image = 1, 1 plate-hour = 5, with a sensitivity check at 1 plate-hour = 2 and 20), wrong stops, frames used, right helper chosen, hypothesis accuracy on synthetic wounds with a known cause, share of numbers traced (target 100%), guardrail triggers, cost per run. Rerun on every change; per-version scoreboard.
 - **Security and guardrails** [DER]: text inside files and protocols is data, never instructions; a fixed tool list; tools have no network access; no secrets in the model's context; uploads checked for type, size and dimensions before the 5.5 rules; model and data files checked against stored fingerprints; the run log is append-only; out-of-scope requests (molecule design, clinical questions) are refused and logged.
 - **Ethics and legality** [DER]: intended-purpose statement in the UI and README ("research use only, not for diagnosis or treatment"; clinical use would bring medical-device rules into scope, so it is out of scope); dataset licences and credits as in section 6; simulated cells labelled; failures shown (section 11).
-- **UI** [DER, confirm in 15]: one app, three modes. Draw: sandbox, NCA emulator, no agent. Assay: sample or uploaded wound, viewer, decision card, short agent timeline, approve or reject. Ops: full run log, monitoring tiles, agent scoreboard. The video shows Assay, then Ops as proof.
+- **UI** [D, R21]: one app, three modes. Build order: Assay, then Ops, then Draw polish. Ops minimum: run log table and agent scoreboard; monitoring tiles are cut first. Draw: sandbox, NCA emulator, no agent. Assay: sample or uploaded wound, viewer, decision card, short agent timeline, approve or reject. Ops: full run log, monitoring tiles, agent scoreboard. The video shows Assay, then Ops as proof.
 - Add-on if time [D]: notifications (FYI, heads-up, action needed) so scientists need not watch the plate. With no reply the agent only does things that can be undone.
 
 ## 9c. Adaption fine-tune [D, R19; owner P2]
-1. Task [DER, confirm in 15]: protocol paragraph to the Intake settings (9b). It has clear right answers, so the win rate means something.
+1. Task [open, P2 decides; see 15]: protocol paragraph to the Intake settings (9b). It has clear right answers, so the win rate means something.
 2. Test set first: 20 to 30 real Methods paragraphs from our dataset papers (WHAD, Zaritsky, Jin, Migliaccio), labelled by hand and never trained on.
 3. Training data: Adaption Invent and Expand to at least 1,000 rows (`instruction_dataset`) with varied wording, missing fields and unit variants. Run with `estimate=True` first to check credits and time.
 4. Train: AutoScientist, `training_method="instruction"`, a small base model (for example Qwen 3.5 0.8B or Gemma 3 4B), with `target_win_rate` and `max_iterations` set.
@@ -182,12 +183,9 @@ Resolved by the user on 14 Nov (R12):
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence: the team has permission to use it. Still cite Jin 2016; the BINNs repo numpy copy has no licence, so do not re-host it.
 
-Open from R19 (agent layer), owner P3 unless stated:
-- Agent loop: Claude Tool Runner (proposed) or a hand-written loop; model and effort per helper set in config (proposed: the current Opus model, effort set per helper).
-- Final account for the recorded runs and a spending cap (R20: swap before the video is recorded).
-- UI: three modes in one app (9b), confirm.
-- Adaption task (9c step 1): Intake settings (proposed) or another task (P2 decides).
-- Evaluation costs: values for one plate-hour and one image in the agent scoreboard.
+Open from R19 (agent layer):
+- Adaption task (9c step 1): Intake settings (proposed) or another task. Owner P2.
+- Final account for the recorded runs and a spending cap (R20: swap before the video is recorded). Owner P3.
 
 Still to confirm: overnight work and the demo/video rule with organisers (P3 emails aisociety@imperial.ac.uk); 5.5 defaults are proposals until the team accepts them.
 
@@ -233,3 +231,4 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R18 (14 Nov, gate, P1 scored P2's files): WHAD cut-offs back to 1.9/3.8/5.7/9.5 h (P2's gate files use them; R17's 2/4/6/10 superseded). Gate compares against statistical baselines only. **NCA not passable at the headline cut-off** (loo_all 3.8 h: 0.0495 vs edge speed 0.0385, ratio 1.29, coverage 0.93); passes 4/12 (all splits at 9.5 h, CC_to_C61 5.7 h); simulator 3/12; NCA within 7% of the simulator. Per 5.3: calibrated edge-speed forecaster ships for forecasts; NCA ships as the draw-tool emulator, labelled 'emulator'. Raw NCA/sim coverage 0.14/0.21, calibrated 0.93. Tables: docs/results.md.
 - R19 (14 Nov, team agreed): the product is agentic. 9b replaces the R10 LLM roles: a lead agent and helpers that call existing code (`data/upload.py`, `eval/flags.py`, `sim/upload.py`), recorded runs, a run log with monitoring, agent replay evaluation, security, ethics and legality rules, and a three-mode UI (to confirm). P3 builds it. 9c adds the Adaption fine-tune plan (P2). Notifications are an add-on. Open choices listed in 15; new risks in 15c.
 - R20 (14 Nov, P3): agent back end = recording script first (FastAPI only for a live run); all model calls behind one `call_model()` wrapper, credentials only in local config, video runs re-recorded on the final account; web viewer uses three.js (deck.gl dropped); Investigator is a should.
+- R21 (14 Nov, P3): hand-written agent loop (per-step logging, code-set decisions, Critic and human approval inside the loop, provider-agnostic `call_model()`); three UI modes confirmed, build order Assay, Ops, Draw polish, Ops minimum = run log table + scoreboard, monitoring tiles cut first; scoreboard costs 1 image = 1, 1 plate-hour = 5, sensitivity at 2 and 20.
