@@ -68,3 +68,8 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 ## 2026-11-14 23:45 [randodeh] NCA fine-tuned on real frames (R26 in design.md)
 - RESULT: real-data NCA passes the gate (9/12; 3.8 h within 4% of edge speed; best at 9.5 h). Zaritsky extra data hurt; not used.
 - OPEN for P2/P3: use the real-data NCA in the upload/agent path, or keep edge speed (marginally better early, no torch).
+
+### Glass-dish 3D look (2026-11-14, P3)
+- DECIDED palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F2B8F5 pale orchid, dividing FFFFFF. Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/82/100, so states read without colour).
+- DECIDED selection look: cells outside a box selection drop to dark matte greyscale, but each state keeps its own grey step so the rest of the wound still reads as context. Alternatives (rims, dim, flat, dots, lift) kept behind `?ghost=` and compared in `design/prototypes/glass-dish/ghost-variations.html`.
+- DECIDED wordmark: M6 night plate style (condensed caps "STITCH" + italic serif subtitle).

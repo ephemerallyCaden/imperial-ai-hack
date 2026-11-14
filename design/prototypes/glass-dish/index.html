@@ -13,9 +13,10 @@
   .hud { position: fixed; background: rgba(5,6,7,.62); backdrop-filter: blur(6px); }
   .k { color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
   .v { color: var(--accent); }
-  .title { top: 28px; left: 32px; padding: 4px 8px 6px 0; letter-spacing: .18em; }
-  .title h1 { margin: 0; font-size: 18px; font-weight: 500; }
-  .title p { margin: 4px 0 0; color: var(--dim); letter-spacing: .08em; }
+  /* wordmark from M6 night plate: condensed caps + italic serif subtitle */
+  .title { top: 28px; left: 32px; padding: 4px 8px 6px 0; display: flex; align-items: center; gap: 16px; }
+  .title h1 { margin: 0; font: 600 22px/1 "Avenir Next Condensed", "Helvetica Neue Condensed", "Arial Narrow", sans-serif; letter-spacing: .2em; text-transform: uppercase; }
+  .title p { margin: 0; font: italic 13px Charter, "Iowan Old Style", Georgia, serif; color: #AEB4C8; padding-left: 16px; border-left: 1px solid #3A4160; }
   .panel { top: 96px; left: 32px; width: 330px; border-left: 1px solid var(--line); padding: 8px 12px; }
   .panel h2 { margin: 0 0 2px; font-size: 13px; font-weight: 500; letter-spacing: .12em; }
   .src { color: var(--dim); font-size: 10px; margin-bottom: 8px; }
@@ -40,6 +41,7 @@
   .timeline { left: 50%; bottom: 24px; transform: translateX(-50%); width: min(720px, 56vw); display: flex; gap: 12px; align-items: center; padding: 8px 12px; }
   .timeline button { background: none; border: 1px solid var(--line); color: var(--ink); font: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .1em; }
   .timeline input { flex: 1; accent-color: #e8ecef; } .timeline .t { width: 90px; text-align: right; color: var(--dim); }
+  .bare .hud { display: none; }
   .help { left: 32px; bottom: 24px; color: var(--dim); max-width: 300px; font-size: 10px; padding: 4px 8px 4px 0; }
 </style>
 <script type="importmap">
@@ -49,7 +51,7 @@
 <body>
 <canvas id="scene"></canvas>
 
-<div class="hud title"><h1>// STITCH</h1><p>Early wound-closure forecast</p></div>
+<div class="hud title"><h1>Stitch</h1><p>Early wound-closure forecast</p></div>
 
 <div class="hud panel">
   <h2 id="r-id"></h2>
@@ -80,11 +82,11 @@
 
 <div class="hud legend">
   <div class="k" style="margin-bottom:6px">Cell states · height = local density</div>
-  <div class="st"><i style="background:#4B4FA8"></i>Intact</div>
-  <div class="st"><i style="background:#F1605D"></i>Leading edge</div>
-  <div class="st"><i style="background:#C0388A"></i>New tissue (rising)</div>
-  <div class="st"><i style="background:#FCFDBF"></i>Dividing</div>
-  <div class="st"><i style="background:#14141f;outline:1px solid #3A3F52"></i>Wound (floor)</div>
+  <div class="st"><i style="background:#1F4F5C"></i>Intact</div>
+  <div class="st"><i style="background:#EE7F2D"></i>Leading edge</div>
+  <div class="st"><i style="background:#F2B8F5"></i>New tissue (rising)</div>
+  <div class="st"><i style="background:#FFFFFF"></i>Dividing</div>
+  <div class="st"><i style="background:#0B1116;outline:1px solid #3A3F52"></i>Wound (floor)</div>
 </div>
 
 <div class="hud chartbox">
@@ -98,6 +100,6 @@
   <input id="time" type="range" min="0" max="1" value="0">
   <span class="t" id="t-label">t = 0</span>
 </div>
-<script type="module" src="./main.js"></script>
+<script type="module">import(`./main.js?v=${Date.now()}`);</script>  <!-- cache-bust while iterating -->
 </body>
 </html>

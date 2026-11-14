@@ -1,12 +1,19 @@
 // Stitch look-dev v4: floating 3D graph space. Each simulated cell is a hex column; height = local
 // density (healthy tall, wound low), colour = cell state (M8 palette). Box-select an area: it stays in
-// colour while the rest turns to a ghost (x-ray) look. Readouts/curve from Rand's embryo export (sample).
+// colour while the rest drops to dark greyscale (each state keeps its own grey step). Readouts/curve from Rand's embryo export (sample).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
-const PAL = { intact: 0x4B4FA8, edge: 0xF1605D, fresh: 0xC0388A, dividing: 0xFCFDBF, wound: 0x14141f };
+// colour-blind-safe teal/vermillion: min ΔE ~26 under protan/deutan/tritan sim (Machado 2009), and states step
+// ~20-30 apart in lightness (L 5/31/65/82/100) so they still read in greyscale
+const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF2B8F5, dividing: 0xFFFFFF, wound: 0x0B1116 };
+// look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
+const Q = new URLSearchParams(location.search);
+if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
+document.querySelectorAll('.legend .st i').forEach((el, i) => { el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
+if (Q.has('bare')) document.body.classList.add('bare');
 const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
@@ -19,7 +26,7 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
 scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, 1.1));
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-30, 60, 25); scene.add(key);
-const fill = new THREE.DirectionalLight(0x8ea0ff, 0.6); fill.position.set(40, 20, -30); scene.add(fill);
+const fill = new THREE.DirectionalLight(0xe4e6ea, 0.5); fill.position.set(40, 20, -30); scene.add(fill);
 
 // ---------- hex lattice + simulation (stand-in for P2's cell simulator) ----------
 const NX = 90, NY = 104, HY = Math.sqrt(3) / 2;
@@ -101,15 +108,24 @@ label('local density (relative)', V(xa - 0.4, top + 1.2, za), 1.0, '#e8ecef').ce
 const colGeo = new THREE.CylinderGeometry(0.5 * S * 1.1, 0.5 * S * 1.1, 1, 6); colGeo.translate(0, 0.5, 0); colGeo.rotateY(Math.PI / 6);
 const colMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 });
 const cols = new THREE.InstancedMesh(colGeo, colMat, COUNT);
-const ghostMat = new THREE.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.022, depthWrite: false, blending: THREE.AdditiveBlending });
+// outside-selection look (?ghost=): grey (default) | rims | dim | flat | dots | lift
+const GHOST = Q.get('ghost') || 'grey', LIFT = 1.4;
+// greyscale context: dark overall, but each state keeps its own step so the wound still reads (linear RGB)
+const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.085, dividing: 0.14 };
+const ghostMat = new THREE.MeshBasicMaterial({ color: 0x0c1018, transparent: true, opacity: 0.55 });
 const ghosts = new THREE.InstancedMesh(colGeo, ghostMat, COUNT);
-const ghostEdges = new THREE.InstancedMesh(colGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.05, depthWrite: false }), COUNT);
-scene.add(cols, ghosts);
-const hNow = new Float32Array(COUNT).fill(0.5), m4 = new THREE.Matrix4(), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+const rimGeo = new THREE.RingGeometry(0.5 * S * 0.92, 0.5 * S * 1.1, 6, 1); rimGeo.rotateX(-Math.PI / 2);
+const ghostRims = new THREE.InstancedMesh(rimGeo, new THREE.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.32, depthWrite: false }), COUNT);
+const dotGeo = new THREE.CircleGeometry(0.5 * S * 0.38, 6); dotGeo.rotateX(-Math.PI / 2);
+const dots = new THREE.InstancedMesh(dotGeo, new THREE.MeshBasicMaterial(), COUNT);
+const dull = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial(), COUNT);   // matte, no specular sheen: greyscale context
+scene.add(cols, ghosts, ghostRims, dots, dull);
+const hNow = new Float32Array(COUNT).fill(0.5), m4 = new THREE.Matrix4(), m4r = new THREE.Matrix4(), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const pos = k => { const i = k % NX, j = (k / NX) | 0; return [X0 + cxOf(i, j) * S, Z0 + cyOf(j) * S]; };
 const states = new Array(COUNT).fill('intact');
 let sel = null;                                          // {x0,z0,x1,z1} in world coords
 const inSel = k => { if (!sel) return true; const [x, z] = pos(k); return x >= sel.x0 && x <= sel.x1 && z >= sel.z0 && z <= sel.z1; };
+const toGrey = (c, f) => { const l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; return c.setRGB(l, l, l).multiplyScalar(f); };
 
 function updateColumns(f, dt) {
   const ease = Math.min(1, dt * 6);
@@ -118,16 +134,27 @@ function updateColumns(f, dt) {
     const tgt = targetH(f, k, st) * (st === 'intact' ? 0.92 + 0.16 * rnd[k] : 1);   // subtle unevenness
     hNow[k] += (tgt - hNow[k]) * ease;
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
-    m4.makeScale(1, h, 1).setPosition(x, 0, z);
-    const on = inSel(k);
-    cols.setMatrixAt(k, on ? m4 : ZERO);
-    ghosts.setMatrixAt(k, on ? ZERO : m4);
-    ghostEdges.setMatrixAt(k, on ? ZERO : m4);
+    const on = inSel(k), lifted = sel && on && GHOST === 'lift';
+    m4.makeScale(1, h, 1).setPosition(x, lifted ? LIFT : 0, z);
     col.setHex(PAL[st]); if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
+    let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
+    if (!on) {
+      if (GHOST === 'rims') { showGhost = showRim = true; }
+      else if (GHOST === 'grey') { showDull = true; const g = DARK[st] * (st === 'intact' ? 0.85 + 0.3 * rnd[k] : 1); col.setRGB(g, g, g); dull.setColorAt(k, col); }
+      else if (GHOST === 'lift') { showCol = true; toGrey(col, 0.45); }
+      else if (GHOST === 'dim') { showCol = true; col.multiplyScalar(0.22); }
+      else if (GHOST === 'flat') { showCol = true; m4.makeScale(1, 0.015, 1).setPosition(x, 0, z); toGrey(col, 0.4); }
+      else if (GHOST === 'dots') { showDot = true; if (st === 'intact') col.multiplyScalar(0.7); dots.setColorAt(k, col); }
+    }
+    cols.setMatrixAt(k, showCol ? m4 : ZERO);
+    ghosts.setMatrixAt(k, showGhost ? m4 : ZERO);
+    ghostRims.setMatrixAt(k, showRim ? m4r.makeTranslation(x, h + 0.003, z) : ZERO);
+    dots.setMatrixAt(k, showDot ? m4r.makeTranslation(x, h, z) : ZERO);
+    dull.setMatrixAt(k, showDull ? m4 : ZERO);
     cols.setColorAt(k, col);
   }
-  cols.instanceMatrix.needsUpdate = ghosts.instanceMatrix.needsUpdate = ghostEdges.instanceMatrix.needsUpdate = true;
-  cols.instanceColor.needsUpdate = true;
+  cols.instanceMatrix.needsUpdate = ghosts.instanceMatrix.needsUpdate = ghostRims.instanceMatrix.needsUpdate = dots.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
+  cols.instanceColor.needsUpdate = true; if (dots.instanceColor) dots.instanceColor.needsUpdate = true; if (dull.instanceColor) dull.instanceColor.needsUpdate = true;
 }
 
 // ---------- selection: drag a box on the floor (SELECT mode) ----------
@@ -226,6 +253,8 @@ function setTime(tt) {
 slider.addEventListener('input', () => { playing = false; playBtn.textContent = 'PLAY'; setTime(+slider.value); });
 playBtn.addEventListener('click', () => { if (t >= T_END) setTime(0); playing = !playing; playBtn.textContent = playing ? 'PAUSE' : 'PLAY'; });
 playBtn.textContent = 'PAUSE'; setTime(0);
+if (Q.get('sel')) { const [x0, z0, x1, z1] = Q.get('sel').split(',').map(Number); sel = { x0, z0, x1, z1 }; drawSelBox(); $('selpanel').style.display = ''; }
+if (Q.has('bare')) { playing = false; setTime(+(Q.get('t') || 30)); const v = views[Q.get('view') || 'close']; camera.position.copy(v.p); controls.target.copy(v.t); }
 
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
