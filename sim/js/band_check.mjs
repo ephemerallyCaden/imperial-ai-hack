@@ -8,12 +8,12 @@ const cg = coarseGrain(c.occ, c.h, c.w, GRAIN), R = coarseGrain(reservoirMask(c.
 const t0 = performance.now();
 const b = net.band(cg.rho, cg.h, cg.w, c.Tm, c.bias, hours, { members, R, params: c.params });
 const ms = performance.now() - t0;
-let inside = 0, n = 0;
+let inside = 0, n = 0, ae = 0;
 console.log(`${c.position} cut ${c.cutoff} (frame ${c.frame}) ${c.h}x${c.w}, ${members} members, ${c.params ? c.params.length + ' fit members' : 'point fit'}, ${ms | 0} ms`);
 console.log('  dt_h  observed   q05    q50    q95');
 for (const [dt, y] of c.observed) {
   const k = Math.round(dt); if (k > hours) continue;
-  const ok = y >= b.q05[k] - 1e-4 && y <= b.q95[k] + 1e-4; if (k > 0) { n++; inside += ok; }
+  const ok = y >= b.q05[k] - 1e-4 && y <= b.q95[k] + 1e-4; if (k > 0) { n++; inside += ok; ae += Math.abs(y - b.q50[k]); }
   console.log(`  ${String(k).padStart(4)}  ${y.toFixed(4)}   ${b.q05[k].toFixed(4)} ${b.q50[k].toFixed(4)} ${b.q95[k].toFixed(4)} ${ok ? '' : ' <- outside'}`);
 }
-console.log(`  inside 90% band: ${inside}/${n}`);
+console.log(`  inside 90% band: ${inside}/${n}, MAE(q50) ${(ae / n).toFixed(4)}`);
