@@ -11,10 +11,12 @@ const loopArea = (l) => { let a = 0; for (let i = 0; i + 3 < l.length; i += 2) a
 const isClosed = (l) => l.length >= 6 && l[0] === l[l.length - 2] && l[1] === l[l.length - 1];
 
 // outline -> what to draw: { opacity 0..1, lines without tiny closed loops }
-export function displayOutline(o) {
+// rule = playback outline.display ({fade_from_level, fade_to_level, min_loop_area_sites}); defaults = the constants above
+export function displayOutline(o, rule = {}) {
+  const lo = rule.fade_from_level ?? FADE_LO, hi = rule.fade_to_level ?? FADE_HI, minA = rule.min_loop_area_sites ?? MIN_LOOP_SITES;
   if (o.level == null) return { opacity: 0, lines: [] };
-  const opacity = Math.min(1, Math.max(0, (FADE_HI - o.level) / (FADE_HI - FADE_LO)));
-  return { opacity, lines: o.lines.filter((l) => !isClosed(l) || loopArea(l) >= MIN_LOOP_SITES) };
+  const opacity = Math.min(1, Math.max(0, (hi - o.level) / (hi - lo)));
+  return { opacity, lines: o.lines.filter((l) => !isClosed(l) || loopArea(l) >= minA) };
 } // = Agent 4 defaults (96ef78f), same as playback files
 
 function kernel(s) {
