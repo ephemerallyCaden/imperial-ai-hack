@@ -29,6 +29,7 @@ class Params:
     dt: float = DT           # hours per step (keep <= smallest Tm: move prob = dt/Tm saturates at 1)
     blur: int = 6            # radius (sites) of the emptiness blur that defines "toward the wound"
     edge: int = 2            # reservoir band width (sites)
+    follow: bool = False     # PROTOTYPE (feature/p2-follower): sheet-like followers, see step()
 
 
 def box_mean(a, r):
@@ -53,8 +54,31 @@ def refill(occ, res):
     occ[res] = 1
 
 
-def step(occ, p: Params, rng):
-    """Advance one step in place. occ: (H,W) uint8, 1 = cell."""
+def dilate(m):
+    """Moore (8-neighbour) dilation of a bool mask."""
+    d = m.copy()
+    d[1:] |= m[:-1]; d[:-1] |= m[1:]
+    d2 = d.copy()
+    d2[:, 1:] |= d[:, :-1]; d2[:, :-1] |= d[:, 1:]
+    return d2
+
+
+def grow_connected(conn, occ):
+    """In place: extend conn to every occupied site Moore-connected to it (warm start; conn only grows)."""
+    occb = occ.astype(bool)
+    conn &= occb
+    while True:
+        nxt = dilate(conn) & occb
+        if (nxt == conn).all():
+            return conn
+        conn[:] = nxt
+
+
+def step(occ, p: Params, rng, conn=None):
+    """Advance one step in place. occ: (H,W) uint8, 1 = cell.
+    p.follow (prototype): a mover connected to the reservoir (conn) pulls the chain of cells behind it one site,
+    along an occupied path back to the reservoir, which refills; in occupancy terms its source stays occupied.
+    Movers not connected to the reservoir (islands) leave a vacancy as before. conn: bool mask, required if p.follow."""
     H, W = occ.shape
     ys, xs = np.nonzero(occ)
     if len(ys) == 0:
@@ -100,7 +124,8 @@ def step(occ, p: Params, rng):
     win = key == best[tgt]
     ys, xs, move, ty, tx = ys[win], xs[win], move[win], ty[win], tx[win]
     occ[ty, tx] = 1
-    occ[ys[move], xs[move]] = 0
+    vac = move & ~conn[ys, xs] if p.follow else move
+    occ[ys[vac], xs[vac]] = 0
     return occ
 
 
@@ -116,13 +141,16 @@ def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=GRAIN):
     occ = occ0.astype(np.uint8).copy()
     res = reservoir_mask(occ, p.edge)
     refill(occ, res)
+    conn = grow_connected(res.copy(), occ) if p.follow else None
     spf = max(1, round(frame_dt / p.dt))
     nf = int(round(hours / frame_dt)) + 1
     occs, dens = [occ.copy()], [coarse_grain(occ, grain)]
     for _ in range(nf - 1):
         for _ in range(spf):
-            step(occ, p, rng)
+            step(occ, p, rng, conn)
             refill(occ, res)
+            if p.follow:
+                grow_connected(conn, occ)
         occs.append(occ.copy())
         dens.append(coarse_grain(occ, grain))
     occs = np.stack(occs)
