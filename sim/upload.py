@@ -163,7 +163,89 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
         sha = hashlib.sha256(open(NCA_WEIGHTS, "rb").read()).hexdigest()[:12]
         out["nca_ensemble"] = build_doc("nca_ensemble", wound_id, condition, t_obs, a_obs, grid, nca, seg_quality, flags,
                                         notes + f" NCA emulator band from the same members; weights sha256 {sha}.")
+    # 90% band = P1's leave-one-wound-out conformal, as data/upload.py and the gate; the raw ensemble stays as raw_band
+    if len(masks) >= 2:
+        S, jobs = pool_jobs(float(t_obs[-1]), exclude_wound)
+        for model, tr in (("sim_ensemble", np.array(trajs)), ("nca_ensemble", nca)):
+            if model in out:
+                preds = pool_preds_sim(jobs) if model == "sim_ensemble" else pool_preds_nca(jobs)
+                calibrate_doc(out[model], conformal(t_obs, a_obs, grid, tr, S, preds, model), len(preds))
+    else:
+        for doc in out.values():
+            calibrate_doc(doc, None, 0)
     return out
+
+
+N_POOL = 20  # members per pool series for the conformal point predictions (member median)
+
+
+def pool_jobs(cut, exclude_wound):
+    """WHAD pool series usable at the upload's cut-off (P1's prepare() skips), minus exclude_wound, with follower members
+    fitted on their series frames <= cut (saved cubes; fits at most to 9.5 h)."""
+    S, rows = v2.series_rows()
+    S = {k: v for k, v in S.items() if v["wound"] != exclude_wound}
+    cubes, g = v2.load_cubes(RULE), v2.GRIDS[RULE]
+    jobs = []
+    for k, s in sorted(S.items()):
+        h = s["t"] <= cut + 1e-9
+        if h.sum() < 2 or (~h).sum() == 0 or s["a"][h][-1] <= 0.1:
+            continue
+        n = min(int(h.sum()), cubes[k].shape[2])
+        mem = v2.boot_fit(cubes[k], n, g, np.random.default_rng(zlib.crc32(f"{k}|{cut:g}".encode())))["members"][:N_POOL]
+        jobs.append((k, k, s["source"], s["t"], s["a"], *rows[k], cut, mem, RULE))
+    return S, jobs
+
+
+def pool_preds_sim(jobs):
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(v2.WORKERS) as ex:
+        res = dict(ex.map(v2.run_ens, jobs))
+    return {k: (ts + np.arange(tr.shape[1]), np.median(tr, 0)) for k, (ts, tr) in res.items()}
+
+
+def pool_preds_nca(jobs):
+    sys.path.insert(0, NCA_DIR)
+    from api import nca_forecast
+    out = {}
+    for _, k, source, t, a, frames, wf, cut, mem, _ in jobs:
+        ic = v2.n_obs(t, cut) - 1
+        hours = t[ic] + np.arange(1, int(v2.H_SIM - t[ic]) + 1)
+        A = np.asarray(nca_forecast(v2.lattice(k, source, frames[ic], wf[ic]), mem, t[:ic + 1], a[:ic + 1], hours,
+                                    stochastic=True, seed=0, weights=NCA_WEIGHTS))
+        out[k] = (np.concatenate([[t[ic]], hours]), np.concatenate([[a[ic]], np.median(A, 0)]))
+    return out
+
+
+def conformal(t_obs, a_obs, grid, up_trajs, S, preds, model):
+    """P1's eval/forecast_baselines.forecast_file with the upload as the only test series (no_truth) and the WHAD pool."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "eval"))
+    import forecast_baselines as FB
+    S = dict(S)
+    S["upload"] = dict(id="upload", wound="upload", cond="upload", source="upload", part="", t=t_obs, a=a_obs, no_truth=True)
+    key = lambda t, a: np.asarray(t, float).tobytes() + np.asarray(a, float).tobytes()
+    cut = float(t_obs[-1])
+    P = {key(S[k]["t"][S[k]["t"] <= cut + 1e-9], S[k]["a"][S[k]["t"] <= cut + 1e-9]): v for k, v in preds.items()}
+    P[key(t_obs, a_obs)] = (grid, np.median(up_trajs, 0))
+    FB.BASELINES[model] = lambda t_h, a_h, G: np.interp(G, *P[key(t_h, a_h)])
+    G_long = np.arange(grid[0], 20 * HORIZON, 0.25)  # as data/upload.py
+    pool = {k for k in preds}  # series with a prediction (P1's prepare() skips the rest anyway)
+    doc = FB.forecast_file("upload", "upload_vs_whad", model, cut, S, {"upload"}, pool, grid, G_long, float(HORIZON))
+    return doc["forecasts"][0] if doc["forecasts"] else None
+
+
+def calibrate_doc(doc, cal, n_pool):
+    fc = doc["forecasts"][0]
+    fc["raw_band"] = dict(label="uncalibrated spread", area_q05=fc["area_q05"], area_q50=fc["area_q50"],
+                          area_q95=fc["area_q95"], t50=fc["t50"], t90=fc["t90"], p_close_by_T=fc["p_close_by_T"])
+    if cal is None:
+        fc["band"] = ("90% band = population prior (one frame: 50 draws of fitted WHAD parameters); no conformal step, "
+                      "as data/upload.py's one-frame case")
+        return
+    assert np.allclose(cal["t_hours"], fc["t_hours"]), "conformal grid differs"
+    for k in ("area_q05", "area_q50", "area_q95", "t50", "t90", "p_close_by_T"):
+        fc[k] = cal[k]
+    fc["band"] = (f"90% band = P1's leave-one-wound-out conformal (eval/forecast_baselines.forecast_file), pool = {n_pool} "
+                  "WHAD series (the upload's own wound excluded); raw_band = uncalibrated ensemble spread")
 
 
 def nca_band(occ, members, t_obs, a_obs, grid):

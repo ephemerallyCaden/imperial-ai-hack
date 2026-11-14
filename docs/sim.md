@@ -6,6 +6,11 @@
 > Tm grid 0.05-500 h (fits are about 8-10x the free-rule Tm; part II about 4-8 h, part I stalls up to 500 h); fits in `sim/fits/whad_fits_follow.json` (sim/v2.py,
 > series time at P1's cut-offs, near-tie break); gate files `sim_follow*` via `python sim/v2.py gate sim_follow`; upload `sim/upload.py` (follower fits and
 > prior, NCA band only with the follower weights `nca/v2/weights.pt`). Results and the pre-declared criterion it did not pass: `docs/p2-results.md` "P2 v2".
+> Upload bands (Sun 00:15): `area_q05/q50/q95` = P1's leave-one-wound-out conformal (`forecast_file`, upload = test series, pool = WHAD series minus
+> the upload's own wound, point = member median; pool points from follower fits at the upload's cut-off), as `data/upload.py`. The raw ensemble is
+> kept in `raw_band` ("uncalibrated spread"); `band` says which was used. One frame: population-prior draws, with no conformal step (as `data/upload.py`).
+> The 3-frame sample (exp1_partII_CC_P2): the observed 0.06 at 19 h is inside the calibrated band (0.00-0.45), whereas the raw band was 0/0/0. The observation
+> is inside at 13 of 17 forecast hours, and just above the top at 7-10 h (by up to 0.02), because the follower sim closes this wound too fast mid-course.
 
 Run: `python3 sim/cellsim.py --hours 24 --Tm 0.1 [--Td 20] [--out run.npz]` (synthetic straight scratch, ~1 s).
 API: `simulate(occ0, Params(...), hours, frame_dt=1.0, seed=0, grain=GRAIN) -> dict`; `occ0` is an (H,W) uint8 array, 1 = cell.
