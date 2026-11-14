@@ -3,6 +3,7 @@
 Usage: python3 sim/export_playback.py run.npz name [--agents] [--stride N]
 JSON: {name, H, W, grain, t_hours[F], wound_frac[F],
        density: {h, w, frames: [base64 uint8 h*w row-major, round(density*255)]},
+       meta (optional, from make_playback.py: position, Tm, bias, observed curve),
        agents (optional, --agents): {encoding: "packbits-msb", frames: [base64 of ceil(H*W/8) bytes]}}
 Agents decoding: site i = y*W + x is occupied iff (bytes[i >> 3] >> (7 - (i & 7))) & 1.
 The last frame is always included, whatever the stride.
@@ -33,6 +34,8 @@ out = {
     "density": {"h": int(den.shape[1]), "w": int(den.shape[2]),
                 "frames": [b64(np.round(np.clip(f, 0, 1) * 255).astype(np.uint8)) for f in den]},
 }
+if "meta" in d:
+    out["meta"] = json.loads(str(d["meta"]))
 if a.agents:
     out["agents"] = {"encoding": "packbits-msb", "frames": [b64(np.packbits(f.ravel() > 0)) for f in occ]}
 os.makedirs(a.outdir, exist_ok=True)
