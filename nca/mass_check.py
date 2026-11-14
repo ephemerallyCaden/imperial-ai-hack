@@ -24,10 +24,11 @@ for i in range(a.n):
     with torch.no_grad():
         y = net(torch.tensor(D[:1, :1]), torch.tensor([encode(cfg, Tm, bias)], dtype=torch.float32), 19,
                 R=torch.tensor(R)[None, None], stochastic=False)[0].numpy()
+    iso = torch.stack(net.stats["source_isolated"]).numpy()[:, 0].sum() * g2 if "source_isolated" in net.stats else 0.0
     src = torch.stack(net.stats["source"]).numpy()[:, 0] * g2; res = torch.stack(net.stats["reservoir"]).numpy()[:, 0] * g2
     net.stats = None
     m_sim = D.sum((2, 3)).mean(0) * g2; m_nca = y.sum((1, 2)) * g2
     dm = m_nca[-1] - m_nca[0]; flux = dm - src.sum() - res.sum()
     print(f"Tm={Tm:6.2f} bias={bias:.2f} | mass (sites) t=0,4,8,12,19: sim {np.round(m_sim[[0,4,8,12,19]]).astype(int)} "
           f"nca {np.round(m_nca[[0,4,8,12,19]]).astype(int)} | NCA gain {dm:6.1f} = source {src.sum():6.1f} + reservoir {res.sum():5.1f} "
-          f"+ flux {flux:+.1e} | sim gain {m_sim[-1]-m_sim[0]:6.1f} | max mass {m_nca.max():.0f} <= sites {occ0[:32,:44].size}")
+          f"+ flux {flux:+.1e} | reservoir share {res.sum() / max(dm, 1e-9):.2f} | source at isolated sites {iso:.1e} | sim gain {m_sim[-1]-m_sim[0]:6.1f} | max mass {m_nca.max():.0f} <= sites {occ0[:32,:44].size}")

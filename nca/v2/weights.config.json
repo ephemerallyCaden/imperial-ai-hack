@@ -1,9 +1,15 @@
 {
  "version": "v2",
  "tm_min": 0.05,
- "tm_max": 50.0,
+ "tm_max": 500.0,
  "bias_min": 0.25,
  "bias_max": 0.9,
  "division": 1.0,
- "follow": true
+ "follow": true,
+ "data": {
+  "follow": true,
+  "tm_min": 0.05,
+  "tm_max": 500.0,
+  "early_t": 1.9
+ }
 }
