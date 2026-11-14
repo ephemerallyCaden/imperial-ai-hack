@@ -52,7 +52,8 @@ Use these agents and skills proactively without being asked:
 - When all edits for the request are done (not after each edit): run `/verify` once to check build/types/lint/tests. Use cheap checks (typecheck on touched files, reading the diff) while working instead.
 - When a build or test fails: run `/fix` with the error output
 - Before committing: run `git diff` and scan for debug code, hardcoded secrets, console.logs
-- When starting a new feature: read SPEC.md first to check scope and team ownership
+- When starting a new feature: read SPEC.md first to check scope and team ownership, and skim `docs/` for related brainstorming and decisions
+- When brainstorming or a choice is made: write it to `docs/brainstorm.md` or `docs/decisions.md` (see `docs/README.md`), then commit and push
 - When exploring unfamiliar code: use the `explorer` agent, don't read files one by one
 
 ## Team
