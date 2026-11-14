@@ -119,8 +119,9 @@ def norm_post(lp):
     return p / p.sum()
 
 
-def prior_mix(cubes, S, prior_ids, cut):
-    """Mixture prior: mean of the normalised likelihood surfaces of prior_ids at the same cut."""
+def prior_mix(cubes, S, prior_ids, cut, k):
+    """Mixture prior for series k: mean of the normalised likelihood surfaces of prior_ids at the same cut."""
+    assert all(S[c]["wound"] != S[k]["wound"] for c in prior_ids), f"prior for {k} contains its own wound"
     ps = [norm_post(loglik(cubes[c], n_obs(S[c]["t"], cut))) for c in prior_ids if n_obs(S[c]["t"], cut) >= 2]
     assert ps, "empty prior"
     return np.mean(ps, 0), len(ps)
@@ -131,7 +132,7 @@ def members(kind, k, cut, cubes, S, g, prior_ids, rng):
     err = cubes[k]
     if kind == "boot":
         return boot_fit(err, n, g, rng)["members"]
-    pri, _ = prior_mix(cubes, S, prior_ids, cut)
+    pri, _ = prior_mix(cubes, S, prior_ids, cut, k)
     if kind == "shrink":
         post = norm_post(loglik(err, n) + np.log(pri + 1e-300))
         cells = rng.choice(post.size, N_MEM, p=post.ravel())
@@ -251,16 +252,16 @@ def cmd_gate(variants):
                     continue
                 ts, tr = sims[(k, cut, json.dumps(np.round(mem, 6).tolist()))]
                 h = S[k]["t"] <= cut + 1e-9
-                pred[S[k]["t"][h].tobytes() + S[k]["a"][h].tobytes()] = (ts, tr)
+                pred[(cut, S[k]["t"][h].tobytes() + S[k]["a"][h].tobytes())] = (ts, tr)
 
-            def point(t_h, a_h, grid, pred=pred):
-                ts, tr = pred[np.asarray(t_h, float).tobytes() + np.asarray(a_h, float).tobytes()]
+            def point(t_h, a_h, grid, pred=pred, cut=None):
+                ts, tr = pred[(cut, np.asarray(t_h, float).tobytes() + np.asarray(a_h, float).tobytes())]
                 return np.interp(grid, ts + np.arange(tr.shape[1]), np.median(tr, 0))
 
-            FB.BASELINES[model] = point
             for cut in CUTS:
+                FB.BASELINES[model] = lambda t_h, a_h, grid, cut=cut: point(t_h, a_h, grid, cut=cut)
                 G = G_all[G_all > cut + 1e-9]
-                G_long = np.arange(G[0], 20 * G_all[-1], 0.25)
+                G_long = np.arange(G[0], 20 * G_all[-1], min(0.25, float(np.min(np.diff(G_all)))))  # as P1's main()
                 doc = FB.forecast_file("whad", split, model, cut, S, test, pool, G, G_long, T_CLOSE)
                 doc["notes"] = (f"P2 v2 {model} (sim/v2.py: rule={rule}, members={kind}), member median calibrated with P1's "
                                 "leave-one-wound-out conformal (eval/forecast_baselines.forecast_file); start = cut-off mask")
@@ -271,7 +272,7 @@ def cmd_gate(variants):
                         fc["segmentation_quality"]["reasons"] = [AUTO_REASON]
                     t, a = S[k]["t"], S[k]["a"]
                     h = t <= cut + 1e-9
-                    ts, tr = pred[t[h].tobytes() + a[h].tobytes()]
+                    ts, tr = pred[(cut, t[h].tobytes() + a[h].tobytes())]
                     grid = np.array(fc["t_hours"])
                     A = np.array([np.interp(grid, ts + np.arange(tr.shape[1]), m) for m in tr])
                     mts = np.concatenate([[ts], grid]); mas = [np.concatenate([[a[h][-1]], m]) for m in A]
