@@ -56,3 +56,53 @@ NCA (Agent 2, commit 6b6251b, same fits aed3174 and P1's conformal; `docs/nca.md
 - **Why does the playback show scattered holes rather than a front?** The frozen rules close by vacancy diffusion. A follower rule (the chain shifts behind a mover) closes as a front, linear R^2 0.999 vs data 0.978-0.996 (Agent 4, `feature/p2-follower`). It is not in the scored results.
 - **Do CC and C61 differ?** In normalised area C61 looks slower, but in part II that is mostly because C61 wounds start larger. Absolute closure (1.01 vs 1.19% of field/h) and fitted Tm (0.48 vs 0.50 h) overlap. The large effect is plate part (part I barely closes), not condition. Bias is weakly identified, so we don't claim a bias difference.
 - **Does the simulator beat simple baselines?** Only with enough data: at 9.5 h it matches or beats linear (loo_all 0.0301 vs 0.0311). At 1.9-5.7 h edge_speed is better by 14-39%: a two-parameter cell model fitted on 2-6 frames is not more accurate than a fitted front speed.
+
+## P2 v2: follower rule (feature/p2-v2-sim; NOT adopted)
+**Tuned and evaluated on WHAD; no external test set** (a WHiM-BC check is with Agent 4). Code `sim/v2.py`; rule `Params(rule="follow")`
+(Agent 4, 3dd4fcf). Fits are at P1's cut-offs in series time (`sim/fits/whad_fits_follow.json`, 490b4c7: Tm grid 0.05-500 h, near-tie break),
+and the start, members and conformal are exactly as for sim_ensemble. The **pre-declared primary is sim_follow** (#68, declared before any v2 score
+was read). Adopt rule: beat sim_ensemble on qscore in >= 7 of 12 groups AND have coverage in 0.85-0.95 in at least as many groups.
+Scores: `python eval/score_forecasts.py eval/forecasts`, Sat 23:33, gate vs statistical baselines only (qscore <= 1.1 x best, cov 0.85-0.95).
+
+| fold | cut (h) | best statistical baseline | sim_follow | sim_ensemble | sim_follow_raw | sim_ensemble_raw |
+|---|---|---|---|---|---|---|
+| loo_all | 1.9 | edge_speed 0.0657 / 0.93 | 0.0749 / 0.93 | 0.0772 / 0.93 | 0.1181 / 0.22 | 0.1385 / 0.12 |
+| loo_all | 3.8 | edge_speed 0.0385 / 0.93 | 0.0459 / 0.93 | 0.0492 / 0.93 | 0.0802 / 0.31 | 0.0907 / 0.21 |
+| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0398 / 0.92 | 0.0409 / 0.92 | 0.0627 / 0.30 | 0.0673 / 0.17 |
+| loo_all | 9.5 | linear 0.0311 / 0.92 | 0.0292 / 0.92 PASS | 0.0301 / 0.92 PASS | 0.0451 / 0.32 | 0.0515 / 0.19 |
+| loo_manual | 1.9 | edge_speed 0.0412 / 0.87 | 0.0506 / 0.87 | 0.0572 / 0.87 | 0.1371 / 0.16 | 0.1542 / 0.14 |
+| loo_manual | 3.8 | gompertz 0.0393 / 0.87 | 0.0454 / 0.87 | 0.0464 / 0.87 | 0.1106 / 0.16 | 0.1028 / 0.20 |
+| loo_manual | 5.7 | edge_speed 0.0362 / 0.87 | 0.0461 / 0.87 | 0.0432 / 0.86 | 0.0714 / 0.31 | 0.0672 / 0.22 |
+| loo_manual | 9.5 | linear 0.0330 / 0.88 | 0.0337 / 0.85 PASS | 0.0334 / 0.88 PASS | 0.0418 / 0.34 | 0.0543 / 0.16 |
+| CC_to_C61 | 1.9 | edge_speed 0.0794 / 0.78 | 0.0914 / 0.79 | 0.0908 / 0.79 | 0.1642 / 0.06 | 0.1737 / 0.07 |
+| CC_to_C61 | 3.8 | edge_speed 0.0345 / 0.92 | 0.0394 / 0.92 | 0.0392 / 0.96 | 0.0948 / 0.24 | 0.0993 / 0.24 |
+| CC_to_C61 | 5.7 | edge_speed 0.0344 / 0.86 | 0.0380 / 0.84 | 0.0320 / 0.91 PASS | 0.0795 / 0.24 | 0.0779 / 0.11 |
+| CC_to_C61 | 9.5 | linear 0.0305 / 0.91 | 0.0313 / 0.79 | 0.0307 / 0.81 | 0.0537 / 0.12 | 0.0461 / 0.16 |
+
+#68: sim_follow qscore wins vs sim_ensemble 6/12; coverage in 0.85-0.95: sim_follow 9/12 vs sim_ensemble 9/12 -> DO NOT ADOPT
+
+**Result: DO NOT ADOPT.** sim_follow beats sim_ensemble in 6 of 12 groups (needs 7), and coverage is in range in 9 of 12 for both. It passes the gate in
+2 of 12 groups (both loo at 9.5 h), against 3 of 12 for sim_ensemble. Its wins are small (2-12% lower qscore, at all four loo_all cut-offs and loo_manual 1.9-3.8 h); it loses
+all four CC_to_C61 groups (most at 5.7 h: 0.0380 vs 0.0320). At 1.9-5.7 h it still loses to the best statistical baseline by 10-27%. Raw coverage rises from 0.07-0.24 to 0.06-0.34, but stays far
+from 0.90. Bias stays unidentified under the follow rule: before the tie-break, 45 of 56 bias fits sat at the 0.25 floor at 1.9 h; after it, 5 of 56.
+
+**Ablations (variant selected on WHAD, not independently held out):**
+| fold | cut (h) | best statistical baseline | sim_follow_shrink | sim_follow_fixbias | sim_frozen_shrink |
+|---|---|---|---|---|---|
+| loo_all | 1.9 | edge_speed 0.0657 / 0.93 | 0.0683 / 0.93 PASS | 0.0743 / 0.93 | 0.0702 / 0.93 PASS |
+| loo_all | 3.8 | edge_speed 0.0385 / 0.93 | 0.0427 / 0.93 | 0.0457 / 0.93 | 0.0491 / 0.93 |
+| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0398 / 0.92 | 0.0401 / 0.92 | 0.0411 / 0.93 |
+| loo_all | 9.5 | linear 0.0311 / 0.92 | 0.0285 / 0.92 PASS | 0.0293 / 0.91 PASS | 0.0298 / 0.92 PASS |
+| loo_manual | 1.9 | edge_speed 0.0412 / 0.87 | 0.0403 / 0.88 PASS | 0.0505 / 0.87 | 0.0485 / 0.87 |
+| loo_manual | 3.8 | gompertz 0.0393 / 0.87 | 0.0463 / 0.86 | 0.0456 / 0.87 | 0.0486 / 0.87 |
+| loo_manual | 5.7 | edge_speed 0.0362 / 0.87 | 0.0477 / 0.86 | 0.0451 / 0.88 | 0.0446 / 0.86 |
+| loo_manual | 9.5 | linear 0.0330 / 0.88 | 0.0313 / 0.86 PASS | 0.0331 / 0.85 PASS | 0.0332 / 0.87 PASS |
+| CC_to_C61 | 1.9 | edge_speed 0.0794 / 0.78 | 0.0657 / 0.92 PASS | 0.0918 / 0.79 | 0.0744 / 0.87 PASS |
+| CC_to_C61 | 3.8 | edge_speed 0.0345 / 0.92 | 0.0351 / 0.96 | 0.0396 / 0.91 | 0.0368 / 0.96 |
+| CC_to_C61 | 5.7 | edge_speed 0.0344 / 0.86 | 0.0387 / 0.84 | 0.0380 / 0.85 | 0.0337 / 0.88 PASS |
+| CC_to_C61 | 9.5 | linear 0.0305 / 0.91 | 0.0359 / 0.81 | 0.0315 / 0.79 | 0.0314 / 0.83 |
+
+The empirical-Bayes shrink variants (a pool-only mixture prior at the same cut, with sigma = 0.01 fixed a priori) are the only P2 models that beat
+edge_speed at 1.9 h: sim_follow_shrink at loo_manual (0.0403 vs 0.0412) and CC_to_C61 (0.0657 vs 0.0794), and sim_frozen_shrink at CC_to_C61
+(0.0744). Both shrink variants pass 5 of 12 groups.
+They were chosen after looking at WHAD errors, so treat them as a hypothesis for an external test, not a result.
