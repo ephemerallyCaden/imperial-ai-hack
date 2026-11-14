@@ -7,14 +7,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
 // colour-blind-safe teal/vermillion: min ΔE ~26 under protan/deutan/tritan sim (Machado 2009), and states step
-// ~20-30 apart in lightness (L 5/31/65/82/100) so they still read in greyscale
-const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF2B8F5, dividing: 0xFFFFFF, wound: 0x0B1116 };
+// ~20-30 apart in lightness (L 5/31/65/89/100); dividing is told from new tissue by height (tall spike) so they still read in greyscale
+const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFFFFF, wound: 0x0B1116 };
 // look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
 const Q = new URLSearchParams(location.search);
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
 document.querySelectorAll('.legend .st i').forEach((el, i) => { el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
 if (Q.has('bare')) document.body.classList.add('bare');
-const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
+const HEIGHT = { intact: 1.0, dividing: 1.4, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
@@ -111,7 +111,7 @@ const cols = new THREE.InstancedMesh(colGeo, colMat, COUNT);
 // outside-selection look (?ghost=): grey (default) | rims | dim | flat | dots | lift
 const GHOST = Q.get('ghost') || 'grey', LIFT = 1.4;
 // greyscale context: dark overall, but each state keeps its own step so the wound still reads (linear RGB)
-const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.085, dividing: 0.14 };
+const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11, dividing: 0.16 };
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0x0c1018, transparent: true, opacity: 0.55 });
 const ghosts = new THREE.InstancedMesh(colGeo, ghostMat, COUNT);
 const rimGeo = new THREE.RingGeometry(0.5 * S * 0.92, 0.5 * S * 1.1, 6, 1); rimGeo.rotateX(-Math.PI / 2);
