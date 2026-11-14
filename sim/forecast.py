@@ -1,6 +1,6 @@
 """Simulator-ensemble forecasts for held-out WHAD wounds (#26: the sim_ensemble scorecard rows; 00:00 gate fallback).
 
-  python3 sim/forecast.py   -> sim/fits/whad_auto_fits.json + sim/forecasts/whad/sim_ensemble_{fold}_t{cutoff}.json
+  python3 sim/forecast.py [--reuse-fits]  -> sim/fits/whad_auto_fits.json + sim/forecasts/whad/sim_ensemble_{fold}_t{cutoff}.json
 
 Folds (R15): "loo" = leave-one-wound-out over every WHAD MCF10A position (16 manual + 44 auto); both parts of a physical
 wound are held out together. "B_CC_to_C61" = train CC, test every C61 position.
@@ -90,18 +90,21 @@ def event(obs_t, obs_a, member_ts, member_as, thr):
 def forecast_one(args):
     """All cut-offs for one test position. members_by_t0[t0] = list of [Tm, bias] (fit or fallback preset)."""
     pos, c, source, members_by_t0, cond, part = args
-    occ0 = start_state(c, source)
-    f0 = int(c.frame.iloc[0])
     obs_t_all, obs_a_all, qc_all = c.t_hours.values, c.area_norm.values, c.qc.values
     out = {}
     for t0, members in members_by_t0.items():
         seen = (obs_t_all <= t0) & (qc_all == "ok")
         grid = np.arange(t0 + 1, HORIZON + 1, dtype=float)
+        # start = last qc-ok frame <= t0, rescaled to its observed area (same as nca/forecast_whad.py)
+        ic = np.nonzero(seen)[0][-1]
+        ts, a_start = float(obs_t_all[ic]), float(obs_a_all[ic])
+        occ = (mask_to_lattice(*load_png_mask(pos, int(c.frame.values[ic])), SITE_UM) if source == "manual"
+               else band_start(c.wound_frac.values[ic], zlib.crc32(pos.encode())))
         trajs = []
         for i, (Tm, bias) in enumerate(members):
-            r = simulate(occ0, Params(Tm=Tm, bias=bias), HORIZON - f0, seed=1000 + i)
-            trajs.append(r["wound_frac"] / r["wound_frac"][0])
-        trajs = np.array(trajs)[:, (grid - f0).astype(int)]
+            r = simulate(occ, Params(Tm=Tm, bias=bias), HORIZON - ts, seed=1000 + i)
+            trajs.append(a_start * r["wound_frac"] / r["wound_frac"][0])
+        trajs = np.array(trajs)[:, (grid - ts).astype(int)]
         # events: observed frames up to t0, then each member from the last observed area onward
         ot, oa = obs_t_all[seen], obs_a_all[seen]
         mts = np.concatenate([[ot[-1]], grid])
@@ -133,17 +136,21 @@ def preset(fits, meta, t0, test_pos, fold):
     return [float(np.median([x["Tm"] for x in xs])), float(np.median([x["bias"] for x in xs]))], len(xs)
 
 
-def main():
+def main(reuse_fits=False):
     df = load_curves()
     groups = {p: c for p, c in df.groupby("position")}
     meta = {p: dict(wound=c.wound.iloc[0], condition=c.condition.iloc[0], part=c.part.iloc[0], source=c.source.iloc[0])
             for p, c in groups.items()}
     fits = json.load(open(calibrate.OUT))["fits"]  # manual positions: same members Agent 2's NCA uses
     auto = [p for p in groups if meta[p]["source"] == "auto"]
-    with ProcessPoolExecutor() as ex:
-        auto_fits = dict(ex.map(fit_auto, [(p, groups[p]) for p in auto]))
-    json.dump(dict(params=dict(note="auto positions; start = synthetic band, see sim/forecast.py; layout as whad_fits.json"),
-                   fits=auto_fits), open(AUTO_FITS, "w"), indent=1)
+    if reuse_fits:  # forecasts only: keep the committed auto fits
+        auto_fits = json.load(open(AUTO_FITS))["fits"]
+        assert set(auto_fits) == set(auto), "auto fits do not match the auto positions"
+    else:
+        with ProcessPoolExecutor() as ex:
+            auto_fits = dict(ex.map(fit_auto, [(p, groups[p]) for p in auto]))
+        json.dump(dict(params=dict(note="auto positions; start = synthetic band, see sim/forecast.py; layout as whad_fits.json"),
+                       fits=auto_fits), open(AUTO_FITS, "w"), indent=1)
     fits = {**fits, **auto_fits}
     print(f"fits: {len(fits)} positions ({len(auto_fits)} auto)", flush=True)
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -173,8 +180,10 @@ def main():
                        p_close_by_T_hours=T_CLOSE,
                        notes=("Cell-agent simulator ensemble (sim/forecast.py, docs/sim.md). 50 members = per-wound bootstrap "
                               "(Tm, bias) fits on frames <= cutoff, one simulator seed each; fold preset (training wounds "
-                              "only) when < 2 frames observed. Manual-mask-only subset: segmentation_quality.status == "
-                              "'manual_mask'; auto-segmented wounds start from a synthetic band (see reasons)."),
+                              "only) when < 2 frames observed. Start = observed mask at the last qc-ok frame <= cutoff, "
+                              "rescaled to its observed area (as nca_ensemble; frame-0 start = model sim_ensemble_f0). "
+                              "Manual-mask-only subset: segmentation_quality.status == 'manual_mask'; auto-segmented wounds "
+                              "start from a synthetic band with the observed area (see reasons)."),
                        forecasts=fc)
             path = os.path.join(OUT_DIR, f"sim_ensemble_{fold}_t{t0}.json")
             json.dump(doc, open(path, "w"))
@@ -183,4 +192,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(reuse_fits="--reuse-fits" in sys.argv)
