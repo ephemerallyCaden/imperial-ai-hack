@@ -104,7 +104,7 @@ Cut order if late (15c): LLM roles, then secondary datasets, then Zaritsky, then
 
 ## P3: Joanne (viewer, Figma, README, video)
 
-Build from the existing HTML mockups and shared renderer (`design/shared/cellfield.js`, `ncamock.js`); deck.gl only where the zoom needs it.
+Build on P2's browser code (`web/public/sim/js/`, see `docs/p2-handoff.md`; the old HTML mockups are archived at git tag `archive/mockups-2026-11-15`); deck.gl only where the zoom needs it.
 
 | When | ID | Task | Done when |
 |---|---|---|---|
