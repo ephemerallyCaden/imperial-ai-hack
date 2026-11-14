@@ -11,43 +11,42 @@ import numpy as np
 from multiprocessing import Pool
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.environ.get("SIM_DIR", os.path.join(HERE, "..", "sim"))); sys.path.insert(0, HERE)
-from cellsim import simulate, Params, reservoir_mask, coarse_grain
+sys.path.insert(0, os.path.join(HERE, "..", "sim")); sys.path.insert(0, HERE)
+from cellsim import simulate, Params, reservoir_mask, coarse_grain, SITE_UM, GRAIN
 from start_state import load_png_mask, mask_to_lattice
 from model import TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX
 
-SITE_UM, GRAIN = 10.0, 4
 MASKS = os.path.join(HERE, "..", "data", "processed", "whad_masks")
 _cache = {}
 
 
 def whad_shapes():
     if not _cache:
-        # same loader + resample as sim/calibrate.py (full-res PNG -> 64 x 88 lattice at 10 um)
+        # same loader + resample as sim/calibrate.py (full-res PNG -> 32 x 44 lattice at SITE_UM = 20 um)
         for pos in sorted(os.path.basename(f)[:-4] for f in glob.glob(f"{MASKS}/*.npz")):
             fr = []
             for k in range(11):
                 try:
                     fr.append(mask_to_lattice(*load_png_mask(pos, k), SITE_UM))
-                except (IndexError, ValueError):
+                except (IndexError, ValueError, FileNotFoundError):
                     pass
             _cache[pos] = [o for o in fr if (o == 0).any()]
     return _cache
 
 
-def synthetic(rng, H=64, W=88):  # WHAD lattice at site_um=10 (sim/start_state.py)
+def synthetic(rng, H=32, W=44):  # WHAD lattice at SITE_UM (sim/start_state.py)
     occ = np.ones((H, W), np.uint8)
     yy, xx = np.mgrid[:H, :W]
     if rng.random() < 0.75:  # tilted, wobbly scratch crossing the field (like WHAD)
         ang = rng.normal(0, 0.2); w = rng.uniform(0.1, 0.4) * W
-        c = W / 2 + rng.normal(0, 6)
-        wob = rng.normal(0, 2.5) * np.sin(yy / rng.uniform(8, 25) + rng.uniform(0, 6))
+        c = W / 2 + rng.normal(0, 3)
+        wob = rng.normal(0, 1.2) * np.sin(yy / rng.uniform(4, 12) + rng.uniform(0, 6))
         d = (xx - c) - np.tan(ang) * (yy - H / 2) + wob
         occ[np.abs(d) < w / 2] = 0
     else:
         for _ in range(rng.integers(1, 3)):
-            cy, cx = rng.uniform(15, H - 15), rng.uniform(20, W - 20)
-            ry, rx = rng.uniform(6, 20), rng.uniform(6, 25)
+            cy, cx = rng.uniform(8, H - 8), rng.uniform(10, W - 10)
+            ry, rx = rng.uniform(3, 10), rng.uniform(3, 12)
             occ[((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2 < 1] = 0
     return occ
 
@@ -72,7 +71,7 @@ def one(args):
     occ0 = start_state(rng); Tm, bias = sample_params(rng)
     p = Params(Tm=Tm, bias=bias)
     r = simulate(occ0, p, hours, seed=seed0 + i, grain=GRAIN)
-    R = coarse_grain(reservoir_mask(occ0, p.edge, getattr(p, "res_dist", None)).astype(np.uint8), GRAIN)
+    R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return r["density"], R, np.array([Tm, bias], np.float32)
 
 

@@ -90,7 +90,7 @@ class NCA(nn.Module):
 
 
 TM_MIN, TM_MAX = 0.05, 5.0   # sim/calibrate.py grid (dt = 0.05 h)
-BIAS_MIN, BIAS_MAX = 0.2, 1.0
+BIAS_MIN, BIAS_MAX = 0.25, 0.9  # agreed with Agent 1 (sim/calibrate.py grid)
 
 
 def norm_params(Tm, bias):
