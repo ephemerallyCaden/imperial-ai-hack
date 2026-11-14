@@ -15,7 +15,7 @@
 //     { rho:Float32Array(h*w) coarse density, h, w, R? }     -> used as is (R defaults to 0)
 //   -> { type:'band', t_hours[0..hours], q05, q50, q95 } (wound_frac per hour from the start state), or { type:'band-error', error }
 //   Independent of the draw engine (no 'init' needed).
-import { Engine, GRAIN, reservoirMask, FIELD_H, FIELD_W, presetLabelFor } from './engine.js';
+import { Engine, GRAIN, reservoirMask, FIELD_H, FIELD_W, presetLabelFor, presetCaptionFor } from './engine.js';
 import { NCA, coarseGrain } from './nca.js';
 import { fineDensity, outline, displayOutline, SMOOTH_K, SMOOTH_SIGMA } from './smooth.js';
 
@@ -25,7 +25,7 @@ let eng = null, init = null, running = false, hpf = 0.5, timer = null;
 
 function post() {
   const occ = eng.occ.slice(), wf = eng.wound_frac;
-  const msg = { type: 'frame', w: eng.w, h: eng.h, rule: eng.rule, label: presetLabelFor(eng.rule), occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
+  const msg = { type: 'frame', w: eng.w, h: eng.h, rule: eng.rule, label: presetLabelFor(eng.rule), caption: presetCaptionFor(eng.rule), occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
   if (init.resampled_from) msg.resampled_from = init.resampled_from;
   const sm = init.smooth === false ? null : { k: SMOOTH_K, sigma: SMOOTH_SIGMA, ...(init.smooth || {}) };
   if (sm) {

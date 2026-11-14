@@ -10,15 +10,18 @@ export const PRESETS = {
   CC: { Tm: 0.4815544732805177, Td: null, bias: 0.25 }, // n 7 (4 manual); Tm IQR 0.39-0.63, bias IQR 0.25-0.57
   C61: { Tm: 0.4805468482096445, Td: null, bias: 0.362584527178654 }, // n 7 (3 manual); Tm IQR 0.44-0.53, bias IQR 0.29-0.41
 };
-// rule 'follow' presets = sim/fits/whad_fits_follow.json presets.draw_tool (Agent 1, 1d88802, feature/p2-v2-sim): part II
-// medians at cut-off 9.5 h under rule = "follow". Tm is ~9x the free-rule value: never mix the two sets.
+// rule 'follow' presets = sim/fits/whad_fits_follow.json presets.draw_tool (Agent 1, 490b4c7, feature/p2-v2-sim; sha256
+// b5859c8c0993): part II medians at cut-off 9.5 h under rule = "follow". Tm is ~9x the free-rule value: never mix the sets.
+// Caption (Agent 1): bias is not identified from these data; Tm carries the signal.
 export const PRESET_LABEL_FOLLOW = 'simulation, preset parameters (WHAD part II fits, follow rule)';
+export const PRESET_CAPTION_FOLLOW = 'bias not identified from these data; Tm carries the signal';
 export const PRESETS_FOLLOW = {
-  CC: { Tm: 4.2867591533230405, Td: null, bias: 0.9 }, // n 7 (4 manual); Tm IQR 4.06-7.38, bias IQR 0.70-0.90
-  C61: { Tm: 4.601599808471412, Td: null, bias: 0.4666197199506065 }, // n 7 (3 manual); Tm IQR 4.34-5.04, bias IQR 0.36-0.54
+  CC: { Tm: 4.2867591533230405, Td: null, bias: 0.7541227302000011 }, // n 7 (4 manual); Tm IQR 4.06-7.34, bias IQR 0.64-0.90
+  C61: { Tm: 4.707304000226463, Td: null, bias: 0.5330060647425588 }, // n 7 (3 manual); Tm IQR 4.42-5.04, bias IQR 0.43-0.66
 };
 export const presetsFor = (rule) => (rule === 'follow' ? PRESETS_FOLLOW : PRESETS);
 export const presetLabelFor = (rule) => (rule === 'follow' ? PRESET_LABEL_FOLLOW : PRESET_LABEL);
+export const presetCaptionFor = (rule) => (rule === 'follow' ? PRESET_CAPTION_FOLLOW : null);
 export const DT = 0.05; // hours per step, = cellsim.DT
 export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
 export const FIELD_H = 32, FIELD_W = 44; // draw tool is locked to the WHAD field (presets were fitted at this size)
