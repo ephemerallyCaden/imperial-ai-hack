@@ -24,15 +24,18 @@ function loop() {
   post();
   timer = setTimeout(loop, Math.max(0, 33 - (performance.now() - t0)));
 }
+function stop() { running = false; clearTimeout(timer); timer = null; }
 onmessage = (e) => {
   const m = e.data;
-  if (m.type === 'init') { init = m; eng = new Engine(m); running = false; post(); }
-  else if (m.type === 'reset') { eng = new Engine(init); post(); }
+  if (m.type === 'init') { stop(); init = m; eng = new Engine(m); post(); return; }
+  if (m.type === 'nca-load') { nca = new NCA(m.weights, m.opts); postMessage({ type: 'nca-ready' }); return; }
+  if (!eng) return; // ignore everything else until init
+  if (m.type === 'reset') { stop(); eng = new Engine(init); post(); }
   else if (m.type === 'preset') eng.setPreset(m.preset, m.params);
   else if (m.type === 'step') { eng.advance(m.hours || hpf); post(); }
   else if (m.type === 'run') { hpf = m.hoursPerFrame || hpf; if (!running) { running = true; loop(); } }
-  else if (m.type === 'nca-load') { nca = new NCA(m.weights, m.opts); postMessage({ type: 'nca-ready' }); }
   else if (m.type === 'band') {
+    if (!nca) return;
     const cg = coarseGrain(eng.occ, eng.h, eng.w, 4);
     const b = nca.band(cg.rho, cg.h, cg.w, m.Tm ?? eng.p.Tm, m.bias ?? eng.p.bias, m.hours || 24, { members: m.members || 20, seed: m.seed || 1 });
     postMessage({ type: 'band', t0_hours: eng.t_hours, t_hours: b.t_hours, q05: b.q05, q50: b.q50, q95: b.q95 });
