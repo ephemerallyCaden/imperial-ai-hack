@@ -6,9 +6,12 @@ JSON: {name, H, W, grain, t_hours[F], wound_frac[F],
        meta (optional, from make_playback.py: position, Tm, bias, observed curve),
        agents (optional, --agents): {encoding: "packbits-msb", frames: [base64 of ceil(H*W/8) bytes]}}
        density_fine (optional, --fine K): {scale: K fine px per site, sigma: blur in sites, h: H*K, w: W*K,
-                    frames: [base64 uint8 row-major, round(smoothed occupancy*255)]}  (sim/smooth_view.py)
+                    frames (only with --fine-frames): [base64 uint8 row-major, round(smoothed occupancy*255)]}
+                    Without frames the viewer recomputes it from agents (sim/smooth_view.py == sim/js/smooth.js).
        outline (optional, --fine K): {units: "sites", rule: "area-matched", levels: [F],
-                    frames: [[flat [x0,y0,x1,y1,...] polyline, ...] per frame]}; outlined area = wound_frac.
+                    display: {fade_above_level: 0.85, min_loop_sites: 4} (fade the outline when the level is above it;
+                    drop loops enclosing fewer sites), frames: [[flat [x0,y0,x1,y1,...] polyline, ...] per frame]};
+                    outlined area = wound_frac.
 Agents decoding: site i = y*W + x is occupied iff (bytes[i >> 3] >> (7 - (i & 7))) & 1.
 The last frame is always included, whatever the stride.
 """
@@ -21,6 +24,7 @@ ap.add_argument("--agents", action="store_true")
 ap.add_argument("--stride", type=int, default=1)
 ap.add_argument("--fine", type=int, default=0)
 ap.add_argument("--sigma", type=float, default=2.5)
+ap.add_argument("--fine-frames", action="store_true")
 ap.add_argument("--outdir", default=os.path.join(os.path.dirname(__file__), "..", "web", "public", "sim"))
 a = ap.parse_args()
 
@@ -49,9 +53,11 @@ if a.fine:
     from smooth_view import fine_density, outline
     fine = fine_density(occ, a.fine, a.sigma)
     lines = [outline(f, w, a.fine) for f, w in zip(fine, out["wound_frac"])]
-    out["density_fine"] = {"scale": a.fine, "sigma": a.sigma, "h": int(fine.shape[1]), "w": int(fine.shape[2]),
-                           "frames": [b64(np.round(f * 255).astype(np.uint8)) for f in fine]}
+    out["density_fine"] = {"scale": a.fine, "sigma": a.sigma, "h": int(fine.shape[1]), "w": int(fine.shape[2])}
+    if a.fine_frames:
+        out["density_fine"]["frames"] = [b64(np.round(f * 255).astype(np.uint8)) for f in fine]
     out["outline"] = {"units": "sites", "rule": "area-matched", "levels": [None if l is None else round(l, 4) for l, _ in lines],
+                      "display": {"fade_above_level": 0.85, "min_loop_sites": 4},
                       "frames": [ls for _, ls in lines]}
 os.makedirs(a.outdir, exist_ok=True)
 p = os.path.join(a.outdir, a.name + ".json")
