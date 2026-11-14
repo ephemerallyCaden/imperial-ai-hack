@@ -31,7 +31,7 @@ NCA_DIR = os.environ.get("NCA_DIR", os.path.join(os.path.dirname(os.path.abspath
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "forecasts", "upload")
-HORIZON, T_CLOSE, N_MEMBERS, PRIOR_T0 = 19, 12, 50, "10"
+HORIZON, T_CLOSE, N_MEMBERS, PRIOR_T0 = 19, 19, 50, "9.5"
 FIELD_UM = (F.LATTICE[0] * SITE_UM, F.LATTICE[1] * SITE_UM)  # 640 x 880 um, the WHAD field the fits are valid for
 
 
