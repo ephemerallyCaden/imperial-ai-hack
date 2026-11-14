@@ -15,8 +15,10 @@ const KERN = [
 
 export function normParams(Tm, bias) { return [Math.log(Tm) / 2 + 1.5, bias * 2 - 1]; }
 
+import { hashSeed } from './engine.js';
+
 export function randn(seed = 1) {
-  let s = seed >>> 0 || 1;
+  let s = hashSeed(seed);
   const u = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return (s + 0.5) / 4294967296; };
   return () => Math.sqrt(-2 * Math.log(u())) * Math.cos(2 * Math.PI * u());
 }
