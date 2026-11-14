@@ -24,6 +24,7 @@ OUT = os.path.join(HERE, "forecasts")
 LEVEL = 0.90
 MODELS = ["lvcf", "linear", "edge_speed", "logistic", "gompertz"]
 EVENTS = [(0.5, "t50"), (0.1, "t90")]
+STALL_KEEP = 0.9  # stall = area at the horizon still >= 90% of the area at the cut-off
 
 
 def q_levels(m, level=LEVEL):
@@ -114,6 +115,8 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
             ev[key] = {"median": fin(q[1]), "q05": fin(q[0]), "q95": fin(q[2]),
                        "censored_prob": round(float(np.mean(samp > G[keep][-1])), 3)}
             ev[key + "_samples"] = samp
+        a_cut = s["a"][s["t"] <= cut + 1e-9][-1]
+        p_stall = float(np.mean(E[:, keep][:, -1] >= STALL_KEEP * a_cut))  # members closing < 10% more after the cut-off
         order = np.argsort(E[:, keep][:, -1])
         pick = order[np.linspace(0, len(order) - 1, min(5, len(order))).astype(int)]
         r4 = lambda x: [round(float(v), 4) for v in x]
@@ -121,7 +124,7 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
             "wound_id": k, "wound": s["wound"], "condition": s["cond"], "part": s["part"],
             "t_hours": r4(G[keep]), "area_q05": r4(lo[keep]), "area_q50": r4(med[keep]), "area_q95": r4(hi[keep]),
             "t50": ev["t50"], "t90": ev["t90"],
-            "p_close_by_T": round(float(np.mean(ev["t90_samples"] <= T)), 3), "p_stall": None, "flags": [],
+            "p_close_by_T": round(float(np.mean(ev["t90_samples"] <= T)), 3), "p_stall": round(p_stall, 3), "flags": [],
             "segmentation_quality": {"status": "manual_mask" if s["source"] == "manual" else "ok", "reasons": []},
             "observed": {"t_hours": r4(s["t"]), "area": r4(s["a"])},
             "members": [r4(E[i, keep]) for i in pick],
