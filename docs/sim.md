@@ -1,5 +1,11 @@
 # Cell simulator: rules and output format (P2, `sim/cellsim.py`)
 
+> **Scope.** Stitch's simulator is a mechanistic lattice model of collective epithelial migration in 2D in-vitro scratch assays
+> (MCF10A cells, WHAD dataset). It forecasts the closure of the assay's cell-free gap; it does **not** model skin wounds in patients. In-vivo healing
+> adds haemostasis, inflammation, granulation tissue, contraction and remodelling, and none of these is modelled. Cell division is switched off for
+> WHAD (our modelling choice for a 19 h migration assay; whether WHAD used a proliferation inhibitor is not verified here). The wound-bias
+> parameter is not identified from these data, so Tm carries the signal. All tuning and evaluation are on WHAD only.
+
 > **P2 v2 (Sun 00:00): the follower rule is the default for WHAD forecasts, upload, draw tool and playback.** Use `Params(rule="follow")`
 > (Agent 4, 3dd4fcf). A cell that moves pulls the chain behind it, so the sheet stays packed and the wound closes as a front, and fitted Tm no longer
 > depends on field size. The code default stays `rule="free"`, so the v1 results (sim_ensemble, rules below) reproduce bit for bit. Under the follower rule:
