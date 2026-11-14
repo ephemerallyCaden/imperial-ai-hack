@@ -1,6 +1,7 @@
 // Module Web Worker around Engine. Frame = same fields as cellsim npz: occ, t_hours, wound_frac.
 //   const wk = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 //   wk.postMessage({ type:'init', w, h, wound:Uint8Array(w*h), preset:'CC'|'C61', seed });  // lattice locked to 32x44
+//     optional rule:'follow' (sheet-like followers, cellsim Params.follow); default 'frozen' = the gate rules
 //   wk.postMessage({ type:'run', hoursPerFrame: 0.5 });  // also 'pause','step','preset','reset'
 //   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac, fine, outline }
 //   fine = { scale:k, sigma, h:h*k, w:w*k, data:Uint8Array round(smoothed occupancy*255) }   (sim/js/smooth.js,
@@ -24,7 +25,7 @@ let eng = null, init = null, running = false, hpf = 0.5, timer = null;
 
 function post() {
   const occ = eng.occ.slice(), wf = eng.wound_frac;
-  const msg = { type: 'frame', w: eng.w, h: eng.h, occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
+  const msg = { type: 'frame', w: eng.w, h: eng.h, rule: eng.rule, occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
   if (init.resampled_from) msg.resampled_from = init.resampled_from;
   const sm = init.smooth === false ? null : { k: SMOOTH_K, sigma: SMOOTH_SIGMA, ...(init.smooth || {}) };
   if (sm) {
