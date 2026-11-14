@@ -97,8 +97,8 @@ def frac_below(path):
 
 
 def reliability():
-    sets = [("whad/loo_all/edge_speed_3.8h.json", "WHAD held-out wounds"),
-            ("whad/CC_to_C61/edge_speed_3.8h.json", "WHAD held-out condition"),
+    sets = [("whad/loo_all/edge_speed_4h.json", "WHAD held-out wounds"),
+            ("whad/CC_to_C61/edge_speed_4h.json", "WHAD held-out condition"),
             ("whimbc/Monolayer_to_Sphere/edge_speed_6h.json", "WHiM-BC ordinary to stem-cell")]
     fig, ax = plt.subplots(figsize=(4.8, 4.6))
     ax.plot([0, 1], [0, 1], color=MUTED, lw=1, ls=(0, (4, 3)))
@@ -111,12 +111,12 @@ def reliability():
     ax.set_xticks([0.05, 0.5, 0.95]); ax.set_xticklabels(["5%", "50%", "95%"])
     ax.set_xlabel("forecast quantile"); ax.set_ylabel("share of observations below it")
     ax.set_title("Quantile reliability", loc="left", fontsize=11.5, fontweight="bold")
-    fig.text(0.13, -0.02, "Edge-speed + conformal; WHAD at 3.8 h, WHiM-BC at 6 h of history.", fontsize=8.5, color=MUTED)
+    fig.text(0.13, -0.02, "Edge-speed + conformal; WHAD at 4 h, WHiM-BC at 6 h of history.", fontsize=8.5, color=MUTED)
     fig.savefig(f"{OUT}/reliability.png"); plt.close(fig)
 
 
 def worst_wounds():
-    path = f"{FC}/whad/loo_all/edge_speed_3.8h.json"
+    path = f"{FC}/whad/loo_all/edge_speed_4h.json"
     doc = json.load(open(path)); cut = doc["cutoff_hours"]
     import score_forecasts as sf
     scored = [(sf.score_series(f, cut, doc["p_close_by_T_hours"]) or {}).get("qscore", np.nan) for f in doc["forecasts"]]
