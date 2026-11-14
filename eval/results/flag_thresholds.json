@@ -1,22 +1,22 @@
 {
- "1.9": {
-  "p_stall": 0.278,
+ "2": {
+  "p_stall": 0.296,
   "measure_again_signal": "width_h",
-  "measure_again": 0.4068
+  "measure_again": 0.6496
  },
- "3.8": {
-  "p_stall": 0.315,
+ "4": {
+  "p_stall": 0.302,
   "measure_again_signal": "width_h",
-  "measure_again": 0.4972
+  "measure_again": 0.49019999999999997
  },
- "5.7": {
-  "p_stall": 0.566,
-  "measure_again_signal": "width_h",
-  "measure_again": 0.4904
- },
- "9.5": {
-  "p_stall": 0.122,
+ "6": {
+  "p_stall": 0.519,
   "measure_again_signal": "ambiguity",
-  "measure_again": 0.137
+  "measure_again": 0.491
+ },
+ "10": {
+  "p_stall": 0.143,
+  "measure_again_signal": "ambiguity",
+  "measure_again": 0.082
  }
 }
