@@ -149,8 +149,10 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
                                      seg_quality, flags, notes)}
     nca = nca_band(mask_to_lattice(masks[-1], um_per_px, SITE_UM), members, t_obs, a_obs, grid)
     if nca is not None:
+        import hashlib
+        sha = hashlib.sha256(open(os.path.join(NCA_DIR, "weights.pt"), "rb").read()).hexdigest()[:12]
         out["nca_ensemble"] = build_doc("nca_ensemble", wound_id, condition, t_obs, a_obs, grid, nca, seg_quality, flags,
-                                        notes + " NCA emulator band from the same members.")
+                                        notes + f" NCA emulator band from the same members; weights sha256 {sha}.")
     return out
 
 
