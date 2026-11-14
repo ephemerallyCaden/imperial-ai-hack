@@ -7,14 +7,14 @@
 // NOT calibrated (see docs/p2-handoff.md).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { NCA, coarseGrain, normParams } from './nca.js';
+import { NCA, coarseGrain } from './nca.js';
 import { reservoirMask, GRAIN } from './engine.js';
 
 const [wPath, cPath, out, mArg] = process.argv.slice(2);
 const wRaw = readFileSync(wPath), net = new NCA(JSON.parse(wRaw)), c = JSON.parse(readFileSync(cPath));
 const members = +(mArg || 50), hours = Math.round(c.observed_all.t_hours.at(-1) - c.t_start);
 const cg = coarseGrain(c.occ, c.h, c.w, GRAIN), R = coarseGrain(reservoirMask(c.occ, c.h, c.w), c.h, c.w, GRAIN).rho;
-const hw = cg.h * cg.w, par = normParams(c.Tm, c.bias);
+const hw = cg.h * cg.w, par = net.normParams(c.Tm, c.bias);
 
 // deterministic rollout, recording every substep
 let rho = new Float32Array(hw), hid = new Float32Array(net.nh * hw);
