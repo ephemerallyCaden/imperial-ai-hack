@@ -41,8 +41,18 @@ def load(dataset):
         df = pd.concat([man, auto], ignore_index=True)
         df = df[df.wound_frac <= 0.70]  # segmentation sanity; <1% late in a series is real closure
         key = "position"
-    else:
+    elif dataset == "whimbc":
         df = pd.read_csv(f"{PROC}/whimbc_curves.csv").assign(source="manual", position=lambda d: d.wound)
+        key = "position"
+    elif dataset == "embryo":  # secondary: minutes -> hours; area_norm already relative to frame 0
+        df = pd.read_csv(f"{PROC}/embryo_curves.csv")
+        df = df.assign(position=df.wound_id, wound=df.wound_id, condition=df.group, source="manual",
+                       t_hours=df.t_min / 60, wound_frac=df.area_norm)
+        key = "position"
+    else:  # zaritsky, secondary
+        df = pd.read_csv(f"{PROC}/zaritsky_curves.csv")
+        df = df.assign(position=df.wound_id, wound=df.wound_id, condition=df.cell_line + "_" + df.condition,
+                       source="manual", t_hours=df.t_min / 60, wound_frac=df.area_norm)
         key = "position"
     series = {}
     for sid, g in df.groupby(key):
@@ -60,6 +70,8 @@ def splits(dataset, S):
         man = {k for k, s in S.items() if s["source"] == "manual"}
         return {"loo_all": (set(S), set(S)), "loo_manual": (man, man),
                 "CC_to_C61": ({k for k in S if S[k]["cond"] == "C61"}, {k for k in S if S[k]["cond"] == "CC"})}
+    if dataset in ("embryo", "zaritsky"):
+        return {"loo": (set(S), set(S))}
     return {"loo": (set(S), set(S)),
             "Monolayer_to_Sphere": ({k for k in S if S[k]["cond"] == "Sphere"}, {k for k in S if S[k]["cond"] == "Monolayer"})}
 
@@ -137,7 +149,12 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
 def main():
     import warnings
     warnings.filterwarnings("ignore")
-    cfg = {"whad": dict(cuts=[1.9, 3.8, 5.7, 9.5], T=19.0), "whimbc": dict(cuts=[3.0, 6.0, 9.0], T=24.0)}
+    import sys
+    cfg = {"whad": dict(cuts=[1.9, 3.8, 5.7, 9.5], T=19.0), "whimbc": dict(cuts=[3.0, 6.0, 9.0], T=24.0),
+           # secondary sets: cut-offs = 10/20/30/50% of the median time to 90% closed (embryo 66 min, Zaritsky 754 min)
+           "embryo": dict(cuts=[0.11, 0.22, 0.33, 0.55], T=1.1), "zaritsky": dict(cuts=[1.26, 2.51, 3.77, 6.28], T=12.6)}
+    if len(sys.argv) > 1:
+        cfg = {k: v for k, v in cfg.items() if k in sys.argv[1:]}
     for dataset, c in cfg.items():
         S = load(dataset)
         G_all = np.unique(np.concatenate([s["t"] for s in S.values()]))
@@ -145,7 +162,7 @@ def main():
         for split, (test, pool) in splits(dataset, S).items():
             for cut in c["cuts"]:
                 G = G_all[G_all > cut + 1e-9]
-                G_long = np.arange(G[0], 20 * G_all[-1], 0.25)
+                G_long = np.arange(G[0], 20 * G_all[-1], min(0.25, float(np.min(np.diff(G_all)))))
                 for model in MODELS:
                     doc = forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, c["T"])
                     d = f"{OUT}/{dataset}/{split}"
