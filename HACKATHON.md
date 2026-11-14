@@ -43,7 +43,7 @@ Because we are targeting Best Designed AI Product: design the 3 demo screens in 
 
 ## Timeline
 
-Building starts 12:10 Sat 14 Nov. **Building closes 21:00 Sat (no overnight hacking); reopens 10:00 Sun. Submissions close 12:00 sharp Sun** (video and last commit before 12:00). Confirm with organisers whether work elsewhere overnight is allowed; until then plan for about 9 h Sat + 2 h Sun.
+Building starts 12:10 Sat 14 Nov. **Building closes 21:00 Sat (no overnight hacking); reopens 10:00 Sun. Submissions close 12:00 sharp Sun** (video and last commit before 12:00). Working elsewhere overnight is allowed (confirmed, design.md R12); see docs/team-plan.md for the overnight timeline.
 
 | Time | Activity | Who |
 |------|----------|-----|
