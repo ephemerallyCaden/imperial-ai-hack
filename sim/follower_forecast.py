@@ -15,8 +15,14 @@ assert not out.startswith(os.path.abspath(os.path.join(os.path.dirname(__file__)
 mp.set_start_method("fork", force=True)
 cal.Params = fc.Params = functools.partial(Params, follow=True)
 cal.TM_GRID = np.geomspace(0.05, 50.0, 31)
+frozen = [cal.OUT, fc.AUTO_FITS] + [os.path.join(fc.OUT_DIR, f) for f in os.listdir(fc.OUT_DIR)]
+stamp = {f: os.path.getmtime(f) for f in frozen if os.path.exists(f)}
 cal.OUT = os.path.join(out, "whad_fits_follow.json")
 fc.AUTO_FITS = os.path.join(out, "whad_auto_fits_follow.json")
+if hasattr(cal, "AUTO_FITS"):
+    cal.AUTO_FITS = fc.AUTO_FITS
 fc.OUT_DIR = os.path.join(out, "forecasts")
 cal.run_all()
 fc.main()
+assert all(os.path.getmtime(f) == t for f, t in stamp.items()), "a frozen fits/forecast file was modified"
+print("frozen fits and forecasts untouched:", len(stamp), "files")
