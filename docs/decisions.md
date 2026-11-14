@@ -52,3 +52,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED: add 22 auto-segmented WHAD MCF10A wounds (exp1 remainder + exp2) and WHiM-BC (12 monolayer + 12 sphere) as data; report manual-mask-only results too.
 - DECIDED: held-out conditions = WHAD CC to C61, WHiM-BC monolayer to sphere. Gate at 00:00 Sun.
 - DROPPED: HUVEC/SKOV-3 (Zenodo 21779854) and the diabetic study (19738270): only 2-4 time points per series.
+
+## 2026-11-14 22:40 [randodeh] Flags (R16 in design.md)
+- DECIDED: ship the stall flag (validated). Out-of-band shown as an observation only. No measure-again flag until a signal passes (AUC > 0.7).
