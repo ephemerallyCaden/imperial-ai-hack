@@ -7,6 +7,7 @@ point serves every cut-off (the start state does not depend on t0). Bootstrap ov
 
   python3 sim/calibrate.py <position> [t0]   one fit + curve printout
   python3 sim/calibrate.py --all             all positions x cut-offs -> sim/fits/whad_fits.json + range check
+  python3 sim/calibrate.py --draw-presets    add draw-tool presets to an existing whad_fits.json
 """
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -95,6 +96,15 @@ def range_check(df, meta, train, preset, seeds=3, tol=0.0):
     return inside / total
 
 
+def add_draw_presets(out, meta, t0=10):
+    """Draw-tool presets: median over ALL positions per condition at t0=10. Display only (label "simulation, preset
+    parameters"); never used for held-out scoring, because they include every test wound."""
+    pr = presets(out["fits"], meta, lambda p, c: True, t0)
+    pr["note"] = "all positions, t0=10; draw tool only, not for scoring"
+    out["presets"]["draw_tool"] = pr
+    print("draw_tool", pr)
+
+
 def run_all():
     df = pd.read_csv(CURVES)
     meta = df.drop_duplicates("position").set_index("position")[["part", "condition"]].apply(tuple, axis=1).to_dict()
@@ -114,6 +124,7 @@ def run_all():
             pr["in_range_frac"] = float(range_check(df, meta, train, pr))
             out["presets"][name][str(t0)] = pr
             print(name, f"t0={t0}", pr, flush=True)
+    add_draw_presets(out, meta)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(out, open(OUT, "w"), indent=1)
     print("wrote", OUT)
@@ -122,6 +133,12 @@ def run_all():
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--all"]:
         run_all()
+    elif sys.argv[1:2] == ["--draw-presets"]:  # add draw-tool presets to an existing whad_fits.json without refitting
+        df = pd.read_csv(CURVES)
+        meta = df.drop_duplicates("position").set_index("position")[["part", "condition"]].apply(tuple, axis=1).to_dict()
+        out = json.load(open(OUT))
+        add_draw_presets(out, meta)
+        json.dump(out, open(OUT, "w"), indent=1)
     else:
         df = pd.read_csv(CURVES)
         pos = sys.argv[1] if len(sys.argv) > 1 else "exp1_partII_C61_P1"
