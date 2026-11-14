@@ -28,6 +28,10 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 | `CC` | 0.948 | 0.25 |
 | `C61` | 1.052 | 0.383 |
 
+> **Under this model, the CC and C61 fits heal almost identically.** A drawn disc starting at a wound fraction of 0.18 reaches 0.066 (CC) and 0.068 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). The presets stay exactly as fitted. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
+>
+> **The CC bias of 0.25 sits on the lower edge of the fit range (0.25–0.9), so treat it as poorly identified** (Agent 1's caveat). Don't present it as a measured property of CC cells.
+
 Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
 
 **Messages to the worker:**
