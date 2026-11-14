@@ -10,8 +10,10 @@ S = pd.read_csv(f"{HERE}/results/scorecard.csv")
 F = pd.read_csv(f"{HERE}/results/flags.csv")
 OUT = os.path.join(HERE, "..", "docs", "results.md")
 NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz",
-         "lvcf": "typical-wound curve"}
-MAIN_CUT = {"whad": 4.0, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
+         "lvcf": "typical-wound curve", "nca_ensemble": "NCA ensemble (calibrated)",
+         "sim_ensemble": "cell-agent simulator ensemble (calibrated)"}
+STAT = ["lvcf", "linear", "edge_speed", "logistic", "gompertz"]
+MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
 SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
           ("whad", "CC_to_C61", "WHAD MCF10A", "held-out condition: CC to C61"),
@@ -27,7 +29,8 @@ def ci(m, lo, hi, f="{:.2f}"):
 
 def best(ds, sp, cut):
     g = S[(S.dataset == ds) & (S.split == sp) & (S.cutoff_h.round(2) == round(cut, 2))]
-    return g.loc[g.qscore.idxmin()], g
+    st = g[g.model.isin(STAT)]
+    return st.loc[st.qscore.idxmin()], g[g.model.isin(NAMES)]
 
 
 lines = ["# Stitch: results", "",
@@ -42,17 +45,17 @@ lines = ["# Stitch: results", "",
          "| Zaritsky 2015 (GigaDB 100118, CC0) | DA3, MDCK, +/- HGF, Met inhibitor | 19 wells | 14.5 min | authors' (noisy) | secondary |",
          "", "WHAD part II is the same wounds as part I filmed later (same position ids, mask IoU 0.82-0.90), so splits are by physical wound (design.md R15). "
          "Segmenter vs WHAD manual masks: IoU 0.84 (part I) / 0.60 (part II), wound-area error 2.1 / 1.5 points of the field.", "",
-         "## Headline: unseen WHAD wounds, forecast from the first 4 h of a 19 h series", "",
+         "## Headline: unseen WHAD wounds, forecast from the first 3.8 h (20%) of a 19 h series", "",
          "| Forecaster | Quantile score (CRPS approx., lower better) | 90% band coverage | Band width | Median abs. error | Brier P(90% closed by 19 h) |",
          "|---|---|---|---|---|---|"]
-_, g = best("whad", "loo_all", 4.0)
+_, g = best("whad", "loo_all", 3.8)
 for _, r in g.sort_values("qscore").iterrows():
     lines.append(f"| {NAMES[r.model]} | {ci(r.qscore, r.qscore_lo, r.qscore_hi, '{:.4f}')} | {ci(r.coverage, r.cov_lo, r.cov_hi)} | "
                  f"{r.width:.2f} | {r.mae:.3f} | {r.brier:.3f} |")
 lines += ["", "Area is relative to the first frame (1 = as wounded). Target coverage is 0.90. "
           "**Typical-wound curve** = 'no change' plus the conformal step: adding other wounds' errors moves its median onto "
           "the typical closure curve, so it is a population-average forecast that ignores this wound's own rate.", "",
-          "## Calibration everywhere (best forecaster per row, ~20% of history seen)", "",
+          "## Calibration everywhere (best statistical forecaster per row, ~20% of history seen)", "",
           "| Dataset | Test | Cut-off | Best forecaster | 90% band coverage | Quantile score | t50 in range (n) | t90 in range (n) |",
           "|---|---|---|---|---|---|---|---|"]
 for ds, sp, dname, test in SPLITS:
@@ -60,8 +63,8 @@ for ds, sp, dname, test in SPLITS:
     mark = "" if r.cov_lo <= 0.90 <= r.cov_hi or r.coverage >= 0.85 else " **(fails)**"
     lines.append(f"| {dname} | {test} | {r.cutoff_h:g} h | {NAMES[r.model]} | {ci(r.coverage, r.cov_lo, r.cov_hi)}{mark} | {r.qscore:.4f} | "
                  f"{r.t50_in:.2f} ({int(r.t50_n)}) | {r.t90_in:.2f} ({int(r.t90_n)}) |")
-f = F[F.cut_h.round(1) == 4.0]
-lines += ["", "## Flags (WHAD, unseen wounds, 4 h; thresholds tuned leave-one-wound-out)", "",
+f = F[F.cut_h.round(1) == 3.8]
+lines += ["", "## Flags (WHAD, unseen wounds, 3.8 h; thresholds tuned leave-one-wound-out)", "",
           "| Flag | Shipped | Precision | Recall | AUC | Note |", "|---|---|---|---|---|---|"]
 notes = {"stall": ("yes", "area at 19 h still >= 90% of the area at the cut-off"),
          "out_of_band": ("as an observation only", "does not predict a forecast going off-track"),
@@ -82,7 +85,20 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "- **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.",
           "- **Time-to-90% is often censored**: most WHAD series do not reach 90% closure within 19 h, so t90 medians are often open-ended.", "",
           "## NCA vs baselines (gate, design.md 5.3)", "",
-          "_Pending: scored at the 00:00 gate with `python eval/score_forecasts.py eval/forecasts --gate nca_ensemble`._", "",
+          "Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator "
+          "forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).", "",
+          "| Split | Cut-off | NCA ensemble | coverage | Simulator ensemble | Best statistical | ratio NCA / best | Gate |",
+          "|---|---|---|---|---|---|---|---|"] + [
+          f"| {sp} | {cut:g} h | {n.qscore:.4f} | {n.coverage:.2f} | {s_.qscore:.4f} | {b.model.replace('_', ' ')} {b.qscore:.4f} | "
+          f"{n.qscore / b.qscore:.2f} | {'PASS' if n.qscore <= 1.1 * b.qscore and 0.85 <= n.coverage <= 0.95 else 'fail'} |"
+          for sp in ("loo_all", "loo_manual", "CC_to_C61") for cut in (1.9, 3.8, 5.7, 9.5)
+          for g_ in [S[(S.dataset == "whad") & (S.split == sp) & (S.cutoff_h.round(2) == cut)]]
+          for n in [g_[g_.model == "nca_ensemble"].iloc[0]] for s_ in [g_[g_.model == "sim_ensemble"].iloc[0]]
+          for b in [g_[g_.model.isin(["lvcf", "linear", "edge_speed", "logistic", "gompertz"])].sort_values("qscore").iloc[0]]] + ["",
+          "**Decision (design.md R18): not passable at the headline cut-off (3.8 h: 0.0495 vs 0.0385, 29% worse).** The calibrated "
+          "edge-speed forecaster ships for forecasts; the NCA ships as the fast emulator of the cell-agent simulator for the "
+          "draw tool, labelled 'emulator'. The NCA catches up by 9.5 h. Without the conformal step the NCA and simulator bands "
+          "cover only 14% and 21% of the future (raw ensembles are too narrow); with it, 93%.", "",
           "## Figures", "",
           "`eval/figures/calibration.png`, `error_vs_history.png`, `reliability.png`, `worst_wounds.png` (regenerate with `python eval/figures.py`)."]
 open(OUT, "w", encoding="utf-8").write("\n".join(lines) + "\n")
