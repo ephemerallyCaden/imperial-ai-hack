@@ -1,8 +1,8 @@
 """NCA training data from the cell-agent simulator (sim/cellsim.py, Agent 1's canonical rules).
 
-Start states: real WHAD mask shapes (any position, frames 0-10, via sim/start_state.py at SITE_UM) and synthetic
-scratches/blobs on a WHAD-sized lattice; parameters sampled over the calibration range (log Tm, bias). Only start
-shapes are taken from WHAD, never the observed dynamics, so held-out wounds' outcomes do not leak into training.
+Start states: real WHAD mask shapes from frames t <= EARLY_T only (the earliest cut-off, so every forecast already
+has them at t0; no held-out wound's later shapes or dynamics enter training), flipped, and synthetic WHAD-like
+scratches/blobs on the same 32 x 44 lattice; parameters sampled over the calibration range (log Tm, bias).
 python nca/gen_data.py --n 1200 --out /tmp/nca_data.npz
 Saves density (N,F,h,w), R (N,h,w) coarse reservoir fraction, params (N,2) [Tm, bias].
 """
@@ -17,6 +17,7 @@ from start_state import load_png_mask, mask_to_lattice
 from model import TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX
 
 MASKS = os.path.join(HERE, "..", "data", "processed", "whad_masks")
+EARLY_T = 2  # frames <= the earliest cut-off t0 (sim/fits/whad_fits.json cutoffs[0])
 _cache = {}
 
 
@@ -25,12 +26,13 @@ def whad_shapes():
         # same loader + resample as sim/calibrate.py (full-res PNG -> 32 x 44 lattice at SITE_UM = 20 um)
         for pos in sorted(os.path.basename(f)[:-4] for f in glob.glob(f"{MASKS}/*.npz")):
             fr = []
-            for k in range(11):
+            for k in range(EARLY_T + 1):
                 try:
                     fr.append(mask_to_lattice(*load_png_mask(pos, k), SITE_UM))
                 except (IndexError, ValueError, FileNotFoundError):
                     pass
-            _cache[pos] = [o for o in fr if (o == 0).any()]
+            if fr := [o for o in fr if (o == 0).any()]:
+                _cache[pos] = fr
     return _cache
 
 
@@ -56,7 +58,7 @@ def sample_params(rng):
 
 
 def start_state(rng):
-    if rng.random() < 0.6:
+    if rng.random() < 0.5:
         sh = whad_shapes(); k = sorted(sh)[rng.integers(len(sh))]
         occ = sh[k][rng.integers(len(sh[k]))].copy()
         if rng.random() < 0.5: occ = occ[::-1]
