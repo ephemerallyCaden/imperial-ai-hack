@@ -113,3 +113,26 @@ Rough timeline: hour 0 to 1, load the embryo data and run the simple baselines. 
 - What we take from it for the cell simulator: make cell movement density-dependent (more crowding, more spreading), not a fixed random walk. Fit D and lambda separately per starting density and report how much they drift; that drift is itself a result to show.
 - Test it gives us: hold out one starting density, calibrate on the others, and check that the cell simulation and the automaton both predict the held-out profile and closure time. Compare Fisher-Kolmogorov vs Porous-Fisher vs our cell model vs the automaton.
 - Caveats: the Elsevier supplement licence is unclear (cite the paper, do not re-host the .xls files); the data are 1D density profiles, so this anchors the density-level behaviour, not the shape of individual cells.
+
+## Extension: a "how it works" readout (movement vs multiplication) and where it applies
+Idea (from the team): besides forecasting closure, split each wound's closure into how much comes from cells moving and how much from cells multiplying. This is what makes the tool useful beyond one assay: different diseases and drugs stall different parts of healing. The use cases below are the team's; none is validated by our data or by the research so far, so they go on the "path to the lab" slide as applications, not as claims.
+
+**What the readout is:** per wound or well, an estimate of cell movement (diffusivity D) and cell multiplication (rate lambda), with intervals, plus a plain flag: "movement-limited", "multiplication-limited", "both" or "cannot tell".
+
+**Where it could apply (applications, unvalidated)**
+- Diabetic and chronic wounds: patient-derived cells that close scratches slowly could be classed as moving less or multiplying less, pointing to different treatments.
+- Infected wounds: test which step stalls under infection-related signals (for example inflammatory signals).
+- Cancer: drugs that block cell movement but not multiplication behave differently from the reverse; the split shows it directly. Caveat: scratch-assay migration is only a proxy for spread of cancer.
+- Fibrosis and scarring: check whether a treatment calms over-active repair.
+- Drug screening: many treatments side by side; mechanism per video plus an early closure forecast saves time and lab space.
+
+**The honest catch: the split is hard to identify.** Closure curves alone mix the two (front speed depends on D and lambda together, roughly 2 x sqrt(D x lambda)); Nardini et al. found scratch closure cannot separate migration from proliferation, and in their fits some parameters had intervals spanning the whole prior. Jin 2016 found D and lambda drift with starting density. So the tool must say "cannot tell" when it cannot, and show the joint (D, lambda) uncertainty, not two confident numbers.
+
+**How we make the split credible**
+- Use a proliferation-blocked arm as ground truth: Zenodo 4991621 includes mitomycin C data (MDCK; unchecked). If the model, given only closure data, attributes the control-vs-mitomycin difference to multiplication, that is a real validation. Same logic for the CK666 arm (blocks a migration mechanism).
+- Use density profiles (shape of the front, not just area) and the cell simulator to break the trade-off; report profile-likelihood or ABC intervals.
+- Test on simulated wounds where we know D and lambda: recover them, and show where recovery fails.
+- Keep the split a hypothesis-generator for the lab: "run a proliferation-block control next".
+
+**Added to the evaluation:** recovery error and coverage for D and lambda on simulated wounds; agreement with the mitomycin and CK666 arms; fraction of wounds flagged "cannot tell".
+**Added to the open checks:** confirm what is inside the 4991621 zips (cell type, frame interval, whether mitomycin vs control are paired); look for any open scratch-assay set with diabetic or patient-derived cells, infection or fibrosis conditions (none found so far).
