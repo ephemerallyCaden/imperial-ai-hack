@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Stitch M7 Figure panels, black (mockup)</title>
+<meta name="viewport" content="width=1440">
+<style>
+:root{--ink:#ECECEC;--sec:#B4B4B4;--ter:#7E7E7E;--hair:#2B2B2B;--panel:#0A0A0A;--paper:#000;--blue:#56B4E9;--violet:#B8A9E8;
+--serif:Charter,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;--sans:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);font:13px/1.4 var(--sans);font-variant-numeric:tabular-nums}
+button{font:500 13px var(--sans);color:var(--ink);background:#0A0A0A;border:1px solid var(--ter);border-radius:2px;min-height:24px;padding:0 10px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+button.on{background:var(--ink);color:#000;border-color:var(--ink)}
+button.pri{border-color:var(--blue);color:var(--blue);font-weight:600}
+header{height:44px;border-bottom:1px solid var(--hair);display:flex;align-items:baseline;gap:16px;padding:8px 16px 0;background:var(--paper)}
+header h1{font:600 24px/1 var(--serif)}
+header .sub{font:13px var(--sans);color:var(--sec)}
+header .help{margin-left:auto;align-self:center;display:flex;gap:8px;align-items:center;color:var(--sec);font-size:12px}
+header .help b{display:inline-grid;place-items:center;width:24px;height:24px;border:1px solid var(--ter);border-radius:50%;font-weight:600;color:var(--ink)}
+main{position:relative;height:744px;display:flex}
+#stage{position:relative;width:880px;height:744px;border-right:1px solid var(--ter);overflow:hidden}
+#cv{width:880px;height:744px;display:block}
+.fl{position:absolute;background:#000;border:1px solid var(--ter);border-radius:2px}
+#tools{left:12px;top:12px;padding:8px;width:332px}#tools button{white-space:nowrap}
+#tools .r{display:flex;gap:8px;align-items:center}
+#tools .r+.r{margin-top:8px}
+.seg{display:flex}.seg button{border-radius:0;margin-left:-1px}.seg button:first-child{border-radius:2px 0 0 2px;margin:0}.seg button:last-child{border-radius:0 2px 2px 0}
+.seg button.on{position:relative}
+.kick{font:600 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--sec)}
+#ladder{left:12px;top:112px;width:112px;padding:8px}
+#ladder div.s{display:flex;align-items:center;gap:8px;height:28px;padding:0 6px;color:var(--sec);border-left:2px solid transparent}
+#ladder div.s.on{color:var(--ink);font-weight:600;border-left-color:var(--blue);background:var(--panel)}
+#ladder .n{font:11px var(--mono);color:var(--ter);width:30px}
+#zoom{right:12px;top:12px;padding:8px 8px 6px;width:416px}
+#zoom .row{display:flex;gap:8px;margin-top:6px}
+#zoom figure{width:124px}
+#zoom canvas{width:124px;height:90px;display:block;border:1px solid var(--ter)}
+#zoom figcaption{font-size:11px;color:var(--sec);margin-top:2px;line-height:1.3}
+#zoom figcaption b{color:var(--ink);font-family:var(--mono)}
+#chip{right:12px;top:182px;padding:4px 10px;font:600 12px var(--sans);border-color:var(--ink);color:var(--ink);letter-spacing:.02em}
+#zr{right:12px;top:216px;padding:3px 8px;font:12px var(--mono);color:var(--ink)}
+#legend{left:12px;bottom:34px;width:372px;padding:8px 10px}
+#legend table{border-collapse:collapse;width:100%;margin-top:4px}
+#legend td{padding:2px 0;vertical-align:top;font-size:11.5px;line-height:1.3;border-top:1px solid var(--hair)}
+#legend td.sw{width:26px;padding-top:3px}
+#legend td.nm{width:76px;font-weight:600}
+#legend td .c{color:var(--sec)}
+.sw svg{display:block}
+#mini{right:12px;bottom:34px;padding:6px;width:174px}
+#mini canvas{width:160px;height:108px;display:block;border:1px solid var(--ter)}
+#scale{left:400px;bottom:34px;padding:4px 8px;font:12px var(--mono);display:flex;align-items:center;gap:8px}
+#scale i{display:block;width:60px;height:0;border-top:2px solid var(--ink);border-left:1px solid var(--ink);border-right:1px solid var(--ink);height:6px;border-bottom:0}
+#src{left:0;right:0;bottom:0;height:24px;background:var(--paper);border-top:1px solid var(--ter);padding:3px 12px;font-size:11.5px;color:var(--sec)}
+#ghost{position:absolute;left:420px;top:600px;border:1.5px dashed #fff;padding:30px 40px;border-radius:50%;font:italic 13px var(--serif);color:#fff;text-shadow:0 0 3px rgba(0,0,0,.9);pointer-events:none}
+#drawer{width:560px;height:744px;background:var(--paper);display:flex;flex-direction:column}
+#dh{height:36px;padding:0 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--hair)}
+#dh .t{font:600 14px var(--serif)}
+#dh button{margin-left:auto;font-size:12px}
+#fig{flex:1;padding:8px 12px 0;display:grid;grid-template-columns:1fr 1fr;column-gap:16px;grid-template-rows:auto auto auto;align-content:start}
+.pn{position:relative;padding-left:0;min-width:0}
+.pn.w{grid-column:1 / 3}
+.pn+.pn{margin-top:0}
+.pl{font:700 15px var(--sans);position:absolute;left:0;top:0}
+.pn svg{display:block;margin-left:0;overflow:visible}
+.cap{font:11.5px/1.4 var(--serif);color:var(--sec);margin:2px 0 6px 0}
+.cap b{color:var(--ink);font-family:var(--sans);font-weight:700;font-size:14px;margin-right:2px}
+.sum{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;font-size:12px;margin:2px 0 4px;border-top:1px solid var(--hair)}
+.sum div{display:flex;justify-content:space-between;border-bottom:1px solid var(--hair);padding:2px 0}
+.sum span:first-child{color:var(--sec)}
+.sum span:last-child{font-family:var(--mono);text-align:right}
+table.bk{border-collapse:collapse;width:100%;font-size:12px;margin-top:22px}
+table.bk th{font-weight:600;text-align:right;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--ink);padding:3px 4px}
+table.bk td{text-align:right;padding:3px 4px;font-family:var(--mono)}
+table.bk tr:last-child td{border-bottom:1.5px solid var(--ink)}
+table.bk th:first-child,table.bk td:first-child{text-align:left;font-family:var(--sans)}
+table.bk td:first-child{font-size:12px}
+#dock{height:112px;border-top:1px solid var(--ter);background:var(--panel);position:relative}
+#dock .tr{position:absolute;left:16px;top:10px;display:flex;gap:8px;align-items:center}
+#dock .tr button{min-width:32px}
+#dock .rd{font:12px var(--mono);color:var(--ink);margin-left:8px}
+#dock svg{position:absolute;left:0;top:44px}
+.flag{fill:none}
+</style></head><body>
+<header><h1>Stitch</h1><span class="sub">Wound-closure forecaster - research prototype</span>
+<span class="help"><span>Space play · arrows step · +/- zoom</span><b>?</b></span></header>
+<main>
+<section id="stage">
+<canvas id="cv"></canvas>
+<div id="ghost">Draw a wound here</div>
+<div class="fl" id="tools">
+<div class="r"><button class="on" aria-pressed="true">Draw wound</button><button class="pri">Heal</button><button>Clear wound</button></div>
+<div class="r"><span class="kick">Preset</span><div class="seg"><button class="on">MCF10A control (CC)</button><button>CYR61 shRNA (C61)</button></div></div>
+</div>
+<div class="fl" id="ladder"><div class="kick" style="margin-bottom:4px">Magnification</div>
+<div class="s"><span class="n">x40</span>Cells</div><div class="s on"><span class="n">x20</span>Cells</div></div>
+<div class="fl" id="zoom"><div class="kick">Zoom strip · same field, three scales</div><div class="row" id="zrow"></div></div>
+<div class="fl" id="chip">SIMULATED CELLS - not tracked cells</div>
+<div class="fl" id="zr">zoom 20x</div>
+<div class="fl" id="legend"><div class="kick">State legend · rules and non-colour cues</div><table id="lt"></table></div>
+<div class="fl" id="scale"><i></i>100 um</div>
+<div class="fl" id="mini"><div class="kick" style="margin-bottom:3px">Minimap</div><canvas id="mm"></canvas></div>
+<div class="fl" id="src" style="border-width:1px 0 0">Source: simulated cell agents, MCF10A-CC preset; not tracked cells. Values illustrative.</div>
+</section>
+<aside id="drawer">
+<div id="dh"><span class="t">Figure 1 | Forecast panel</span><span style="font-size:12px;color:var(--sec)">simulated, n = 1 field</span><button aria-label="Collapse panel">Collapse &#8250;</button></div>
+<div id="fig"></div>
+</aside>
+</main>
+<footer id="dock"></footer>
+<script src="../../shared/cellfield.js"></script>
+<script>
+(function(){
+var tone=(new URLSearchParams(location.search).get('tone'))||'deep';
+if(!CellField.PAL[tone])tone='deep';
+var P=CellField.PAL[tone],SEED=7,PROG=0.62;
+var WND={cx:0.45,cy:0.48,a:0.27,b:0.19,rot:-0.35};
+var cv=document.getElementById('cv');
+var res=CellField.render(cv,{tone:tone,seed:SEED,progress:PROG,r:11,wound:WND,dpr:1});
+// zoom strip: x1,x10,x40
+var zs=[{k:'x1',r:3,a:0.30,b:0.20,cx:0.5,t:'whole wound'},{k:'x10',r:7,a:0.9,b:0.6,cx:0.5+0.54,t:'edge, ~10 cells across'},{k:'x40',r:17,a:2.2,b:1.5,cx:0.5+1.32,t:'single cells'}];
+var zr=document.getElementById('zrow');
+zs.forEach(function(z){var f=document.createElement('figure'),c=document.createElement('canvas');c.width=124;c.height=90;f.appendChild(c);
+ var cap=document.createElement('figcaption');cap.innerHTML='<b>'+z.k+'</b> '+z.t;f.appendChild(cap);zr.appendChild(f);
+ CellField.render(c,{tone:tone,seed:SEED,progress:PROG,r:z.r,overlays:false,wound:{cx:z.cx,cy:0.5,a:z.a,b:z.b,rot:0}});
+ if(z.k!=='x40'){var x=c.getContext('2d');x.strokeStyle='#ECECEC';x.lineWidth=1.5;var s=z.k==='x1'?[29,37,22,16]:[62,37,22,16];x.strokeRect(s[0],s[1],s[2],s[3]);}});
+// ladder
+var L=document.getElementById('ladder');L.innerHTML='<div class="kick" style="margin-bottom:4px">Magnification</div>';
+[['Field','1x'],['Wound','5x'],['Colony','10x'],['Cells','20x']].forEach(function(s,i){var d=document.createElement('div');d.className='s'+(i==3?' on':'');d.innerHTML='<span class="n">'+s[1]+'</span>'+s[0];L.appendChild(d);});
+// legend
+var lt=document.getElementById('lt');
+CellField.RULES.forEach(function(r){var tr=document.createElement('tr');
+ tr.innerHTML='<td class="sw">'+CellField.swatch(r.key,tone,20)+'</td><td class="nm">'+r.name+'</td><td>'+r.rule+'<br><span class="c">Cue: '+r.cue+'</span></td>';lt.appendChild(tr);});
+// minimap
+var mm=document.getElementById('mm');mm.width=160;mm.height=108;
+CellField.render(mm,{tone:tone,seed:SEED,progress:PROG,r:4,overlays:false,wound:WND});
+var mx=mm.getContext('2d');mx.strokeStyle='#ECECEC';mx.lineWidth=1.5;mx.strokeRect(40,28,66,48);
+mx.fillStyle='rgba(0,0,0,.85)';mx.fillRect(2,2,52,13);mx.fillStyle='#ECECEC';mx.font='10px ui-monospace,Menlo,monospace';mx.fillText('viewport',5,12);
+// helpers
+var NS='http://www.w3.org/2000/svg';
+function S(w,h){return {w:w,h:h,o:'<svg xmlns="'+NS+'" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" font-family="-apple-system,Helvetica Neue,Arial,sans-serif" font-size="11">'};}
+function med(t){var u=t/17.5,s;if(u<=1){s=0.9*(3*u*u-2*u*u*u);}else s=0.9+0.1*(1-Math.exp(-(u-1)*3));return 100*(1-s);}
+function band(t,k){return t<=6?0:k*(1-Math.exp(-(t-6)/5))*14*(0.4+0.6*Math.min(1,t/17));}
+function obs(t){return Math.max(0,med(t)+Math.sin(t*2.3)*1.1+(t>6?-1.6*Math.min(1,(t-6)/6):0));}
+var BLUE='#56B4E9',INK='#ECECEC',SEC='#B4B4B4',TER='#7E7E7E',HAIR='#2B2B2B',VIO='#B8A9E8';
+// panel a
+function panelA(){var W=536,H=176,m={l:40,r:10,t:8,b:30},pw=W-m.l-m.r,ph=H-m.t-m.b;var s=S(W,H),o=s.o;
+ function X(t){return m.l+t/20*pw;}function Y(a){return m.t+(1-a/100)*ph;}
+ [0,25,50,75,100].forEach(function(a){o+='<line x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+Y(a)+'" y2="'+Y(a)+'" stroke="'+HAIR+'" stroke-width=".7"/><text x="'+(m.l-5)+'" y="'+(Y(a)+4)+'" text-anchor="end" fill="'+SEC+'">'+a+'</text>';});
+ [0,4,8,12,16,20].forEach(function(t){o+='<text x="'+X(t)+'" y="'+(H-14)+'" text-anchor="middle" fill="'+SEC+'">'+t+'</text>';});
+ o+='<line x1="'+m.l+'" x2="'+m.l+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+INK+'"/><line x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+(m.t+ph)+'" y2="'+(m.t+ph)+'" stroke="'+INK+'"/>';
+ o+='<text x="'+(m.l+pw/2)+'" y="'+(H-1)+'" text-anchor="middle" fill="'+INK+'">Time since wounding (h)</text>';
+ o+='<text transform="translate(10,'+(m.t+ph/2)+') rotate(-90)" text-anchor="middle" fill="'+INK+'">Wound area (% of initial)</text>';
+ // ensemble members
+ for(var e=0;e<12;e++){var d='';for(var t=6;t<=20;t+=0.5){var v=med(t)+Math.sin(e*2.1+t*0.5)*band(t,1.1)*0.7+(e-6)*band(t,0.12);v=Math.max(0,Math.min(100,v));d+=(t==6?'M':'L')+X(t).toFixed(1)+' '+Y(v).toFixed(1);}o+='<path d="'+d+'" fill="none" stroke="'+BLUE+'" stroke-opacity=".18" stroke-width=".8"/>';}
+ function bd(k,op){var u='',l='';for(var t=6;t<=20;t+=0.5){u+=(t==6?'M':'L')+X(t).toFixed(1)+' '+Y(Math.max(0,med(t)-band(t,k))).toFixed(1);}
+  var w='';for(var t=20;t>=6;t-=0.5){w+='L'+X(t).toFixed(1)+' '+Y(Math.min(100,med(t)+band(t,k))).toFixed(1);}o+='<path d="'+u+w+'Z" fill="'+BLUE+'" fill-opacity="'+op+'"/>';}
+ bd(1,.15);bd(.5,.28);
+ var d='';for(var t=6;t<=20;t+=0.5)d+=(t==6?'M':'L')+X(t).toFixed(1)+' '+Y(med(t)).toFixed(1);
+ o+='<path d="'+d+'" fill="none" stroke="'+BLUE+'" stroke-width="1.8" stroke-dasharray="6 3"/>';
+ d='';for(var t=0;t<=14;t+=0.5)d+=(t==0?'M':'L')+X(t).toFixed(1)+' '+Y(obs(t)).toFixed(1);
+ o+='<path d="'+d+'" fill="none" stroke="'+INK+'" stroke-width="1.8"/>';
+ o+='<line x1="'+X(6)+'" x2="'+X(6)+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+INK+'" stroke-dasharray="3 3"/><text x="'+(X(6)-4)+'" y="'+(Y(12))+'" text-anchor="end" fill="'+INK+'">t0 = forecast origin (6 h)</text>';
+ o+='<line x1="'+X(14)+'" x2="'+X(14)+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+TER+'" stroke-width=".8"/>';
+ o+='<line x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+Y(10)+'" y2="'+Y(10)+'" stroke="'+TER+'" stroke-dasharray="1 3"/><text x="'+(W-m.r-2)+'" y="'+(Y(10)-3)+'" text-anchor="end" fill="'+SEC+'">90% closure</text>';
+ // legend
+ var lx=X(9.2),ly=Y(96);
+ o+='<line x1="'+lx+'" x2="'+(lx+16)+'" y1="'+ly+'" y2="'+ly+'" stroke="'+INK+'" stroke-width="1.8"/><text x="'+(lx+20)+'" y="'+(ly+4)+'" fill="'+INK+'">Observed</text>';
+ o+='<line x1="'+(lx+80)+'" x2="'+(lx+96)+'" y1="'+ly+'" y2="'+ly+'" stroke="'+BLUE+'" stroke-width="1.8" stroke-dasharray="5 2"/><text x="'+(lx+100)+'" y="'+(ly+4)+'" fill="'+INK+'">Median</text>';
+ o+='<rect x="'+(lx+148)+'" y="'+(ly-5)+'" width="10" height="10" fill="'+BLUE+'" fill-opacity=".28"/><rect x="'+(lx+160)+'" y="'+(ly-5)+'" width="10" height="10" fill="'+BLUE+'" fill-opacity=".15"/><text x="'+(lx+174)+'" y="'+(ly+4)+'" fill="'+INK+'">50%, 90%</text>';
+ return o+'</svg>';}
+// panel b
+function panelB(){var W=258,H=236,px=50,py=6,sz=160,s=S(W,H),o=s.o;
+ function X(v){return px+v*sz;}function Y(v){return py+(1-v)*sz;}
+ [0,.25,.5,.75,1].forEach(function(v){o+='<line x1="'+X(v)+'" x2="'+X(v)+'" y1="'+py+'" y2="'+(py+sz)+'" stroke="'+HAIR+'" stroke-width=".6"/><line x1="'+px+'" x2="'+(px+sz)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+HAIR+'" stroke-width=".6"/>';
+  o+='<text x="'+(px-5)+'" y="'+(Y(v)+4)+'" text-anchor="end" fill="'+SEC+'">'+v.toFixed(2).replace(/0$/,'').replace(/\.$/,'')+'</text>';});
+ [0,.25,.5,.75,1].forEach(function(v){o+='<text x="'+X(v)+'" y="'+(py+sz+13)+'" text-anchor="middle" fill="'+SEC+'">'+v.toFixed(2).replace(/0$/,'').replace(/\.$/,'')+'</text>';});
+ o+='<rect x="'+px+'" y="'+py+'" width="'+sz+'" height="'+sz+'" fill="none" stroke="'+INK+'"/>';
+ o+='<line x1="'+X(0)+'" y1="'+Y(0)+'" x2="'+X(1)+'" y2="'+Y(1)+'" stroke="'+TER+'" stroke-width="1"/>';
+ var pts=[[.1,.08,.04],[.3,.27,.06],[.5,.46,.07],[.7,.64,.07],[.9,.88,.05]];
+ pts.forEach(function(p,i){var cx=X(p[0]),cy=Y(p[1]),e=p[2]*sz;o+='<line x1="'+cx+'" x2="'+cx+'" y1="'+(cy-e)+'" y2="'+(cy+e)+'" stroke="'+BLUE+'"/><line x1="'+(cx-3)+'" x2="'+(cx+3)+'" y1="'+(cy-e)+'" y2="'+(cy-e)+'" stroke="'+BLUE+'"/><line x1="'+(cx-3)+'" x2="'+(cx+3)+'" y1="'+(cy+e)+'" y2="'+(cy+e)+'" stroke="'+BLUE+'"/>';});
+ var d='';pts.forEach(function(p,i){d+=(i?'L':'M')+X(p[0])+' '+Y(p[1]);});o+='<path d="'+d+'" fill="none" stroke="'+BLUE+'" stroke-width="1" stroke-dasharray="4 2"/>';
+ pts.forEach(function(p){o+='<circle cx="'+X(p[0])+'" cy="'+Y(p[1])+'" r="3.5" fill="#000" stroke="'+BLUE+'" stroke-width="1.6"/>';});
+ o+='<text x="'+(X(.62))+'" y="'+(Y(.42)+16)+'" fill="'+SEC+'" font-size="11" transform="rotate(-45 '+X(.62)+' '+(Y(.42)+16)+')">perfect calibration</text>';
+ o+='<text x="'+(px+sz/2)+'" y="'+(py+sz+27)+'" text-anchor="middle" fill="'+INK+'">Predicted probability (nominal level)</text>';
+ o+='<text transform="translate(9,'+(py+sz/2)+') rotate(-90)" text-anchor="middle" fill="'+INK+'">Observed frequency</text>';
+ var cn=[18,34,52,60,41,24,13,9,6,4],hy=py+sz+36,hh=24;
+ o+='<line x1="'+px+'" x2="'+(px+sz)+'" y1="'+(hy+hh)+'" y2="'+(hy+hh)+'" stroke="'+INK+'"/>';
+ cn.forEach(function(c,i){var bw=sz/10,h=c/60*hh;o+='<rect x="'+(px+i*bw+1)+'" y="'+(hy+hh-h)+'" width="'+(bw-2)+'" height="'+h+'" fill="'+TER+'"/>';});
+ o+='<text x="'+(px-5)+'" y="'+(hy+hh)+'" text-anchor="end" fill="'+SEC+'" font-size="11">count</text>';
+ return o+'</svg>';}
+// panel d
+function panelD(){var W=536,H=82,m={l:100,r:10},pw=W-m.l-m.r,s=S(W,H),o=s.o;
+ function X(t){return m.l+t/20*pw;}
+ o+='<defs><pattern id="hv" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="'+VIO+'" stroke-opacity=".55" stroke-width="1.4"/></pattern></defs>';
+ o+='<text x="0" y="22" fill="'+INK+'">Stall flag</text><text x="0" y="52" fill="'+INK+'">Ensemble spread</text>';
+ o+='<rect x="'+m.l+'" y="10" width="'+pw+'" height="18" fill="none" stroke="'+HAIR+'"/><rect x="'+X(11)+'" y="10" width="'+(X(13.2)-X(11))+'" height="18" fill="url(#hv)" stroke="'+VIO+'"/>';
+ o+='<text x="'+(X(13.6))+'" y="23" fill="'+VIO+'" font-weight="600">Stall possible, 11-13 h</text>';
+ o+='<rect x="'+m.l+'" y="40" width="'+pw+'" height="18" fill="none" stroke="'+HAIR+'"/>';
+ [[6,10,.25,'low'],[10,15,.55,'moderate'],[15,20,.35,'low-moderate']].forEach(function(b){o+='<rect x="'+X(b[0])+'" y="40" width="'+(X(b[1])-X(b[0]))+'" height="18" fill="#8EA0C8" fill-opacity="'+b[2]*0.5+'"/><text x="'+((X(b[0])+X(b[1]))/2)+'" y="53" text-anchor="middle" fill="'+INK+'" font-size="11">'+b[3]+'</text>';});
+ o+='<line x1="'+X(6)+'" x2="'+X(6)+'" y1="6" y2="62" stroke="'+INK+'" stroke-dasharray="3 3"/>';
+ [0,4,8,12,16,20].forEach(function(t){o+='<text x="'+X(t)+'" y="'+(H-8)+'" text-anchor="middle" fill="'+SEC+'">'+t+'</text>';});
+ o+='<text x="'+(X(20)+0)+'" y="'+(H-8)+'" text-anchor="start" dx="6" fill="'+INK+'" font-size="11">h</text>';
+ return o+'</svg>';}
+var fig=document.getElementById('fig');
+fig.innerHTML=
+'<div class="pn w"><span class="pl">a</span><div style="margin-left:0;padding-top:0">'+panelA()+'</div>'+
+'<div class="cap"><b>a</b> Wound area vs time. Observed (ink), predicted median (dashed), 50% and 90% bands, 12 ensemble members (faint). n = 1 simulated field. Illustrative.</div>'+
+'<div class="sum"><div><span>Time to 90% closure</span><span>17.5 h (15.0-21.0)</span></div><div><span>P(close by 24 h)</span><span>0.93</span></div><div><span>Stall flag</span><span>Stall unlikely (P = 0.08)</span></div><div><span>Ensemble flag</span><span>Spread: moderate</span></div></div></div>'+
+'<div class="pn"><span class="pl">b</span><div style="margin-left:0">'+panelB()+'</div><div class="cap"><b>b</b> Reliability, 90% nominal. Coverage 88% vs 90% nominal, n = 240 forecasts (illustrative). Bars: forecasts per bin.</div></div>'+
+'<div class="pn"><span class="pl">c</span><table class="bk"><tr><th>Model</th><th>CRPS</th><th>90% cov.</th><th>n</th></tr><tr><td>NCA ensemble</td><td>3.1</td><td>0.88</td><td>240</td></tr><tr><td>Gompertz</td><td>4.6</td><td>0.79</td><td>240</td></tr><tr><td>Fisher-KPP</td><td>4.2</td><td>0.82</td><td>240</td></tr><tr><td>Persistence</td><td>7.8</td><td>0.55</td><td>240</td></tr></table><div class="cap" style="margin-top:8px"><b>c</b> Scorecard. CRPS in % of initial area, lower is better. Illustrative values, not results.</div></div>'+
+'<div class="pn w" style="margin-top:2px"><span class="pl">d</span><div>'+panelD()+'</div><div class="cap"><b>d</b> Flag timeline. Violet hatch: stall flag; slate shading: ensemble spread. Words always accompany colour.</div></div>';
+// fix panel label placement: place letters in the margin above each caption
+document.querySelectorAll('.pl').forEach(function(e){e.style.display='none';});
+// dock
+var dk=document.getElementById('dock');
+dk.innerHTML='<div class="tr"><button aria-label="Step back">&#9664;&#9664;</button><button class="on" aria-label="Play or pause">&#9654; Play</button><button aria-label="Step forward">&#9654;&#9654;</button><span class="seg" style="margin-left:8px"><button>0.5x</button><button class="on">1x</button><button>2x</button><button>4x</button></span><span class="rd">t = 14 h of 20 h</span></div>';
+(function(){var W=1440,H=66,l=16,r=16,pw=W-l-r;function X(t){return l+t/20*pw;}var o='<svg xmlns="'+NS+'" width="'+W+'" height="'+H+'" font-family="-apple-system,Helvetica Neue,Arial,sans-serif" font-size="11">';
+ o+='<defs><pattern id="hd" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="'+BLUE+'" stroke-width="1.5"/></pattern></defs>';
+ // compact sparkline
+ var d='';for(var t=0;t<=20;t+=.5){}
+ o+='<text x="'+(W-r)+'" y="12" text-anchor="end" fill="'+SEC+'" font-size="11">Compact timeline. Full ribbon: Figure 1a</text>';
+ var ty=34,th=12;
+ o+='<rect x="'+X(0)+'" y="'+ty+'" width="'+(X(6)-X(0))+'" height="'+th+'" fill="'+INK+'"/>';
+ o+='<rect x="'+X(6)+'" y="'+ty+'" width="'+(X(20)-X(6))+'" height="'+th+'" fill="url(#hd)" stroke="'+BLUE+'"/>';
+ o+='<line x1="'+X(6)+'" x2="'+X(6)+'" y1="'+(ty-8)+'" y2="'+(ty+th+4)+'" stroke="'+INK+'" stroke-width="2"/><text x="'+(X(6)+5)+'" y="'+(ty-1)+'" fill="'+INK+'" font-weight="600" font-size="11.5">t0 = forecast origin</text>';
+ o+='<rect x="'+(X(14)-3)+'" y="'+(ty-4)+'" width="6" height="'+(th+8)+'" fill="#000" stroke="'+INK+'" stroke-width="1.5"/>';
+ [0,2,4,6,8,10,12,14,16,18,20].forEach(function(t){o+='<line x1="'+X(t)+'" x2="'+X(t)+'" y1="'+(ty+th)+'" y2="'+(ty+th+4)+'" stroke="'+SEC+'"/><text x="'+X(t)+'" y="'+(ty+th+16)+'" text-anchor="'+(t==20?'end':t==0?'start':'middle')+'" fill="'+SEC+'">'+t+(t==20?' h':'')+'</text>';});
+ o+='<text x="'+(X(3))+'" y="'+(ty+th+16)+'" text-anchor="middle" fill="'+INK+'" font-size="11" dy="0"></text>';
+ o+='<text x="'+(X(10))+'" y="'+(ty-1)+'" fill="'+BLUE+'" font-size="11" text-anchor="middle" dx="60">forecast (hatched)</text><text x="'+X(0.3)+'" y="'+(ty-1)+'" fill="'+INK+'" font-size="11">observed history (solid)</text>';
+ dk.querySelector('svg')||dk.insertAdjacentHTML('beforeend',o+'</svg>');})();
+})();
+</script>
+</body></html>
