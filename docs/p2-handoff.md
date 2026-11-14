@@ -108,7 +108,7 @@ The band does not depend on the draw engine and does not need `init`.
 >
 > The median tracks the observed curve well: q50 MAE is about 0.003–0.08 of the field at cut-off 4, and about 0.004–0.045 at cut-off 10, mostly around 0.01. Agent 2's official `nca_ensemble` forecasts use the same construction.
 >
-> For a forecast band with a coverage claim, use the calibrated forecast JSON (`contracts/forecast.schema.json`, from P1's scorer). If you show this live band, caption it "NCA ensemble spread (uncalibrated)". To reproduce: `python3 sim/js/band_check.py <agent1 root> <position> <cutoff> case.json`, then `node sim/js/band_check.mjs web/public/sim/nca_weights.json case.json 50`.
+> For a forecast band with a coverage claim, use the calibrated forecast JSON (`contracts/forecast.schema.json`, from P1's scorer). If you show this live band, caption it "NCA emulator ensemble spread (uncalibrated)". To reproduce: `python3 sim/js/band_check.py <agent1 root> <position> <cutoff> case.json`, then `node sim/js/band_check.mjs web/public/sim/nca_weights.json case.json 50`.
 
 ```js
 const weights = await (await fetch('./public/sim/nca_weights.json')).json();
