@@ -11,25 +11,25 @@ coverage 0.85-0.95.
 3. Each member drives one cell-agent simulation (Migliaccio 2023 rules, division off), rescaled to the observed area at the start, as the NCA. The member median is the point forecast for P1's leave-one-wound-out conformal (`eval/forecast_baselines.forecast_file`, called unchanged), giving `sim_ensemble`. `sim_ensemble_raw` is the uncalibrated ensemble (`sim/forecast_gate.py`, commit 8ea9691).
 
 ## Gate (WHAD; P1's series, folds, cut-offs 1.9/3.8/5.7/9.5 h and calibration pools; files `eval/forecasts/whad/{fold}/sim_ensemble{,_raw}_{cut}h.json`)
-| fold | cut (h) | best baseline: qscore / cov | sim_ensemble: qscore / cov | gate | sim_ensemble_raw: qscore / cov |
-|---|---|---|---|---|---|
-| loo_all | 1.9 | edge_speed 0.0657 / 0.93 | 0.0772 / 0.93 | FAIL | 0.1385 / 0.12 |
-| loo_all | 3.8 | edge_speed 0.0385 / 0.93 | 0.0492 / 0.93 | FAIL | 0.0907 / 0.21 |
-| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0409 / 0.92 | FAIL | 0.0673 / 0.17 |
-| loo_all | 9.5 | linear 0.0311 / 0.92 | 0.0301 / 0.92 | PASS | 0.0515 / 0.19 |
-| loo_manual | 1.9 | edge_speed 0.0412 / 0.87 | 0.0572 / 0.87 | FAIL | 0.1542 / 0.14 |
-| loo_manual | 3.8 | gompertz 0.0393 / 0.87 | 0.0464 / 0.87 | FAIL | 0.1028 / 0.20 |
-| loo_manual | 5.7 | edge_speed 0.0362 / 0.87 | 0.0432 / 0.86 | FAIL | 0.0672 / 0.22 |
-| loo_manual | 9.5 | linear 0.0330 / 0.88 | 0.0334 / 0.88 | PASS | 0.0543 / 0.16 |
-| CC_to_C61 | 1.9 | edge_speed 0.0794 / 0.78 | 0.0908 / 0.79 | FAIL | 0.1737 / 0.07 |
-| CC_to_C61 | 3.8 | edge_speed 0.0345 / 0.92 | 0.0392 / 0.96 | FAIL | 0.0993 / 0.24 |
-| CC_to_C61 | 5.7 | edge_speed 0.0344 / 0.86 | 0.0320 / 0.91 | PASS | 0.0779 / 0.11 |
-| CC_to_C61 | 9.5 | linear 0.0305 / 0.91 | 0.0307 / 0.81 | FAIL | 0.0461 / 0.16 |
+| fold | cut (h) | best baseline: qscore / cov | sim_ensemble: qscore / cov | gate | sim_ensemble_raw: qscore / cov | nca_ensemble: qscore / cov | NCA gate |
+|---|---|---|---|---|---|---|---|
+| loo_all | 1.9 | edge_speed 0.0657 / 0.93 | 0.0772 / 0.93 | FAIL | 0.1385 / 0.12 | 0.0782 / 0.93 | FAIL |
+| loo_all | 3.8 | edge_speed 0.0385 / 0.93 | 0.0492 / 0.93 | FAIL | 0.0907 / 0.21 | 0.0495 / 0.93 | FAIL |
+| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0409 / 0.92 | FAIL | 0.0673 / 0.17 | 0.0397 / 0.93 | FAIL |
+| loo_all | 9.5 | linear 0.0311 / 0.92 | 0.0301 / 0.92 | PASS | 0.0515 / 0.19 | 0.0304 / 0.92 | PASS |
+| loo_manual | 1.9 | edge_speed 0.0412 / 0.87 | 0.0572 / 0.87 | FAIL | 0.1542 / 0.14 | 0.0559 / 0.87 | FAIL |
+| loo_manual | 3.8 | gompertz 0.0393 / 0.87 | 0.0464 / 0.87 | FAIL | 0.1028 / 0.20 | 0.0458 / 0.87 | FAIL |
+| loo_manual | 5.7 | edge_speed 0.0362 / 0.87 | 0.0432 / 0.86 | FAIL | 0.0672 / 0.22 | 0.0404 / 0.85 | FAIL |
+| loo_manual | 9.5 | linear 0.0330 / 0.88 | 0.0334 / 0.88 | PASS | 0.0543 / 0.16 | 0.0318 / 0.88 | PASS |
+| CC_to_C61 | 1.9 | edge_speed 0.0794 / 0.78 | 0.0908 / 0.79 | FAIL | 0.1737 / 0.07 | 0.0921 / 0.82 | FAIL |
+| CC_to_C61 | 3.8 | edge_speed 0.0345 / 0.92 | 0.0392 / 0.96 | FAIL | 0.0993 / 0.24 | 0.0394 / 0.99 | FAIL |
+| CC_to_C61 | 5.7 | edge_speed 0.0344 / 0.86 | 0.0320 / 0.91 | PASS | 0.0779 / 0.11 | 0.0328 / 0.86 | PASS |
+| CC_to_C61 | 9.5 | linear 0.0305 / 0.91 | 0.0307 / 0.81 | FAIL | 0.0461 / 0.16 | 0.0311 / 0.86 | PASS |
 
 **Summary:** calibrated, the simulator passes 3 of 12 groups. It beats the best baseline at loo_all 9.5 h (0.0301 vs 0.0311) and CC_to_C61 5.7 h
 (0.0320 vs 0.0344), and ties at loo_manual 9.5 h. CC_to_C61 9.5 h matches on qscore (0.0307 vs 0.0305) but fails on coverage (0.81). It is 14-39% worse than edge_speed at the early cut-offs, including the headline loo_all
 3.8 h (0.0492 vs 0.0385). Raw, it is badly under-dispersed: coverage 0.07-0.24.
-NCA rows (nca_ensemble, nca_ensemble_raw, nca_deterministic): Agent 2's gate files, in the same groups.
+NCA (Agent 2, commit 6b6251b, same fits aed3174 and P1's conformal; `docs/nca.md`): nca_ensemble passes 4 of 12 (both 9.5 h loo groups, and CC_to_C61 at 5.7 h and 9.5 h). Its qscore is within 7% of the calibrated sim in every group (within 3% in 9 of 12; the NCA is slightly better on loo_manual): the two models are nearly indistinguishable once both start from the cut-off mask and are conformal-calibrated. nca_deterministic is within about 5% of the ensemble; nca_ensemble_raw coverage is 0.01-0.24. Note that P1's gate() also counts the other P2 models as baselines; the best-baseline column here uses the statistical baselines only.
 **#24 (NCA emulates the simulator) is NOT met:** NCA area error vs the sim is 0.042, against the sim's own member spread of 0.014 (`nca/eval_vs_sim.py`, Agent 2). It is fine for Tm > 0.5 h, but for Tm < 0.2 h the NCA closes fully while the sim leaves 2-6% open, and its member spread is about 6x too small. The fine-tune was dropped for time.
 
 ## Honest findings (one line each)
