@@ -23,10 +23,9 @@ from start_state import load_png_mask, mask_to_lattice
 from model import NCA, norm_params
 
 T_END, LEVEL = 19.0, 0.9
-FOLDS = {  # fold -> held-out predicate on (part, condition); names follow contracts/example_forecast.json
-    "A_partI_to_partII": lambda p, c: p == "II",
-    "A_partII_to_partI": lambda p, c: p == "I",
-    "B_CC_to_C61": lambda p, c: c == "C61",
+FOLDS = {  # fold -> held-out predicate on (part, condition). design.md R15: fold A dropped (part II = same wounds)
+    "loo": lambda p, c: True,                 # leave-one-wound-out: every wound, nothing from its own physical wound
+    "B_CC_to_C61": lambda p, c: c == "C61",   # train CC, test C61
 }
 
 
@@ -93,13 +92,19 @@ def entry(row, obs_t, obs_a, t0, t_fc, A, T, keep_members):
     return f
 
 
-def params_for(fits, fold, row, t0):
+def params_for(fits, fold, row, t0, pos):
+    """The wound's own fit on frames <= t0; if null (too few frames) a preset from TRAINING wounds only:
+    loo = median fit over other physical wounds with the same condition (all conditions if none); B = CC median."""
     f = fits["fits"].get(row.position, {}).get(str(t0))
     if f:
         return np.array([f["Tm"], f["bias"]]), np.array(f["members"]), "fit"
-    pr = fits["presets"][fold][str(t0)]
-    c = pr.get(row.condition) or pr["CC"]
-    return np.array([c["Tm"], c["bias"]]), np.array([[c["Tm"], c["bias"]]] * 50), "preset"
+    def ok(r):
+        return r.wound != row.wound and fits["fits"].get(r.position, {}).get(str(t0))
+    train = [r for r in pos.itertuples() if ok(r) and (r.condition == "CC" if fold == "B_CC_to_C61" else r.condition == row.condition)]
+    train = train or [r for r in pos.itertuples() if ok(r)]
+    v = np.array([[fits["fits"][r.position][str(t0)]["Tm"], fits["fits"][r.position][str(t0)]["bias"]] for r in train])
+    point = np.array([np.exp(np.median(np.log(v[:, 0]))), np.median(v[:, 1])])
+    return point, v[np.random.default_rng(t0).integers(len(v), size=50)], "preset"
 
 
 if __name__ == "__main__":
@@ -131,7 +136,7 @@ if __name__ == "__main__":
                 occ, rho, R = start(r.position, d.frame.iloc[ic])
                 t_fc = [float(t) for t in np.arange(int(obs_t[ic]) + 1, T_END + 1)]
                 n = len(t_fc)
-                point, mem, src[r.position] = params_for(fits, fold, r, t0)
+                point, mem, src[r.position] = params_for(fits, fold, r, t0, pos)
                 scale = lambda wf: obs_a[ic] * wf[:, 1:] / wf[:, :1]
                 seed = 7919 * k + t0
                 out["nca_ensemble"].append(entry(r, obs_t, obs_a, t0, t_fc, scale(nca_rollout(net, rho, R, mem, n, True, seed)), a.T, True))
@@ -144,7 +149,7 @@ if __name__ == "__main__":
                         "sim_ensemble": "cell-agent simulator, 50 bootstrapped (Tm, bias) members, one seed each"}[model]
                 n_pre = sum(v == "preset" for v in src.values())
                 doc = dict(version="1.0", model=model, dataset="whad", fold=fold, cutoff_hours=float(t0), level=LEVEL,
-                           p_close_by_T_hours=a.T, notes=f"{note}; start = observed mask at t0; {n_pre} wound(s) use the fold preset (fit needs >= 2 frames)",
+                           p_close_by_T_hours=a.T, notes=f"{note}; start = observed mask at t0; {n_pre} wound(s) have no own fit (< 2 frames) and use training-wound fits (preset; members = resampled training fits)",
                            forecasts=fcs)
                 fn = f"{a.out}/whad_{model}_{fold}_t{t0}.json"
                 json.dump(doc, open(fn, "w"))
