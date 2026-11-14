@@ -150,7 +150,7 @@ def main():
     import warnings
     warnings.filterwarnings("ignore")
     import sys
-    cfg = {"whad": dict(cuts=[1.9, 3.8, 5.7, 9.5], T=19.0), "whimbc": dict(cuts=[3.0, 6.0, 9.0], T=24.0),
+    cfg = {"whad": dict(cuts=[2.0, 4.0, 6.0, 10.0], T=19.0), "whimbc": dict(cuts=[3.0, 6.0, 9.0], T=24.0),
            # secondary sets: cut-offs = 10/20/30/50% of the median time to 90% closed (embryo 66 min, Zaritsky 754 min)
            "embryo": dict(cuts=[0.11, 0.22, 0.33, 0.55], T=1.1), "zaritsky": dict(cuts=[1.26, 2.51, 3.77, 6.28], T=12.6)}
     if len(sys.argv) > 1:
