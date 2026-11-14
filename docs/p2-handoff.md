@@ -19,7 +19,27 @@ The files import each other by relative path. Use a module worker; `file://` wil
 
 `sim/js/` is the source of truth. After a change there, recopy with `cp sim/js/{engine,nca,smooth,worker,playback}.js web/public/sim/js/`.
 
-These have been tested in Node with a stubbed worker, but not yet in a real browser.
+The worker, the weights fetch and playback have been smoke-tested in headless Chrome (see the browser smoke test).
+
+## 0. v2 defaults: the follower rule (demo, user decision recorded on #68)
+
+The demo uses the **follower rule everywhere**. This is an *open departure* from the pre-declared criterion (#68). The free rule, which the 00:00 gate used, stays selectable and clearly named.
+
+| What | v2 default (follow) | Still available (free, v1) |
+|---|---|---|
+| Draw tool | `init` with no `rule` means `'follow'`, with `PRESETS_FOLLOW` (CC Tm 4.287 / bias 0.754, C61 Tm 4.707 / bias 0.533) | `rule:'free'` uses `PRESETS` (CC 0.482 / 0.25, C61 0.481 / 0.363) |
+| Draw label (frame `label`) | `"simulation, preset parameters (WHAD part II fits, follow rule)"` | `"simulation, preset parameters (WHAD part II fits)"` |
+| Draw caption (frame `caption`) | **`"bias not identified from these data; Tm carries the signal"`** | none |
+| NCA weights for the band | `web/public/sim/nca_v2_weights.json` + `nca_v2_weights.config.json` (follower emulator), *pending Agent 2's final weights* | `web/public/sim/nca_weights.json` (v1, free-rule emulator, no config) |
+| Video run | `whad_partII_C61_P2_follow.json` | `whad_partII_C61_P2.json` |
+| Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` (*pending*) + `meta.observed` | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
+| Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 39 frames at 0.5 h; display only, not scored | none |
+
+Rules that hold for both rules:
+- **No band on drawn wounds.** The band is only for uploaded or real wounds with fitted parameters.
+- **The band is uncalibrated.** Caption it "NCA emulator ensemble spread (uncalibrated)", and never call it a 90% interval.
+- **Never mix weights and fits across rules.** v2 weights need follow fits (`sim/fits/whad_fits_follow.json`), and v1 weights need free fits. `make_nca_playback.mjs` refuses a mismatch.
+- **Load v2 with its config:** `{type:'nca-load', weights, config}`, where `config` is the parsed `nca_v2_weights.config.json`. It sets the source gate, the Tm range (to 500 h) and the clip. Without a config the worker runs v1.
 
 ## 1. Draw tool (worker)
 
