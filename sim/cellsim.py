@@ -13,6 +13,10 @@ Boundary: border-band sites (width `edge`) that are occupied at t0 are a reservo
 from dataclasses import dataclass, asdict
 import numpy as np
 
+DT = 0.05  # hours per step; shared by calibrate.py, NCA data generation and sim/js/engine.js
+SITE_UM = 20.0  # one lattice site = one cell; WHAD lattice is 32 x 44 (start_state.mask_to_lattice)
+GRAIN = 2  # coarse-grain factor: WHAD density grid is 16 x 22
+
 NB = np.array([(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)])
 
 
@@ -22,7 +26,7 @@ class Params:
     Td: float | None = None  # hours per division attempt; None = division off
     bias: float = 7 / 9      # prob of choosing a wound-ward target
     dens_exp: float = 0.5    # migration rate scales with rho_local ** dens_exp (0 = off)
-    dt: float = 0.1          # hours per step
+    dt: float = DT           # hours per step (keep <= smallest Tm: move prob = dt/Tm saturates at 1)
     blur: int = 6            # radius (sites) of the emptiness blur that defines "toward the wound"
     edge: int = 2            # reservoir band width (sites)
 
@@ -106,7 +110,7 @@ def coarse_grain(occ, g):
     return occ[:H, :W].reshape(H // g, g, W // g, g).mean((1, 3)).astype(np.float32)
 
 
-def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=4):
+def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=GRAIN):
     """Run and record. Returns dict matching docs/sim.md (npz-ready)."""
     rng = np.random.default_rng(seed)
     occ = occ0.astype(np.uint8).copy()
