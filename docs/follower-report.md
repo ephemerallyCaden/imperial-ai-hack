@@ -8,6 +8,8 @@ and JS re-port do not fit). The frozen rules are unchanged on every agent branch
 field-size dependence, and matches the near-linear WHAD part II closure (R^2 0.999 vs data 0.98-0.996). Forecast
 error after t0 = 10 drops for part II wounds (manual median rmse_out 0.0166 -> 0.0089; auto 0.0212 -> 0.0126), is
 similar or slightly better at t0 = 4, and is mixed for part I: their stalls need Tm beyond the 50 h grid edge.
+Ensemble 90% band coverage rises in every fold and cut-off (loo t10: manual 0.24 -> 0.53, auto 0.18 -> 0.51), but
+stays well under nominal.
 
 ## Rule
 A mover connected to the reservoir (Moore path through occupied sites to the refilled border band) pulls the chain of
@@ -76,12 +78,25 @@ stalled wounds that a front rule closes too fast even at 50 h, so the grid would
 stall mechanism. Per manual wound at t0 = 10, rmse_out frozen -> follow: C61_P2 0.031 -> 0.008, N61_P1 0.024 -> 0.007,
 CC_P4 0.019 -> 0.010; worse for part I NC_P1 0.028 -> 0.042 and CC_P3 0.008 -> 0.015.
 
-### 6. Ensemble coverage (`sim/follower_forecast.py` + `/tmp/sanity_keep.py`, loo)
-PENDING: the job was still running at the 23:15 cut-off (nice 19, 4 workers, behind the gate's NCA jobs). To finish
-or re-run: `nice -n 19 python3 sim/follower_forecast.py /tmp/follower_scratch && python3 /tmp/sanity_keep.py
-/tmp/follower_scratch/forecasts` (writes only under the scratch dir; asserts the frozen fits and forecasts are
-untouched). Frozen baseline (sim/forecasts/whad on 98dae8b, same check): loo t0 = 4 manual MAE 0.127 / cov90 0.18,
-auto 0.118 / 0.14; t0 = 10 manual 0.080 / 0.24, auto 0.077 / 0.18.
+### 6. Ensemble coverage (`sim/follower_forecast.py` + `/tmp/sanity_keep.py`)
+Full sim_ensemble pipeline (calibrate.run_all + forecast.main unchanged, 50 bootstrap members, old cut-offs t2/4/6/10)
+under follow, written only to /tmp/follower_scratch (frozen fits and forecasts asserted untouched). Frozen = the
+committed sim/forecasts/whad at 98dae8b, same check. MAE of area_norm (median member) / fraction of observed points
+inside the 90% band (nominal 0.90):
+
+| fold, t0 | manual frozen | manual follow | auto frozen | auto follow |
+|---|---|---|---|---|
+| loo t2 | 0.180 / 0.15 | 0.176 / 0.21 | 0.128 / 0.27 | 0.108 / 0.45 |
+| loo t4 | 0.127 / 0.18 | 0.128 / 0.26 | 0.118 / 0.14 | 0.100 / 0.35 |
+| loo t6 | 0.094 / 0.27 | 0.095 / 0.39 | 0.096 / 0.15 | 0.087 / 0.36 |
+| loo t10 | 0.080 / 0.24 | **0.058 / 0.53** | 0.077 / 0.18 | **0.062 / 0.51** |
+| B_CC_to_C61 t4 | 0.141 / 0.03 | 0.134 / 0.21 | 0.137 / 0.07 | 0.139 / 0.29 |
+| B_CC_to_C61 t10 | 0.082 / 0.17 | 0.062 / 0.37 | 0.089 / 0.18 | 0.094 / 0.28 |
+
+Coverage rises in every row (loo t10 about doubles), and MAE is equal or lower except B auto (slightly higher). Bands
+are still far below the nominal 90% (under-dispersed), so the follower rule helps but does not fix calibration alone.
+Re-run: `nice -n 19 python3 sim/follower_forecast.py /tmp/follower_scratch && python3 /tmp/sanity_keep.py
+/tmp/follower_scratch/forecasts` (about 24 min at 4 workers under load).
 
 ## What switching would take
 In order, about 3-5 h of work at today's machine load:
