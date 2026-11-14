@@ -6,11 +6,12 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 |---|---|
 | `sim/js/engine.js` | Cell-agent engine (JS port of `sim/cellsim.py`, statistically matched over 20 seeds) |
 | `sim/js/nca.js` | NCA inference (matches torch `nca/model.py` to 2.4e-7) |
-| `sim/js/worker.js` | Module Web Worker that wraps both |
+| `sim/js/smooth.js` | Smoothed occupancy and wound outline (JS port of Agent 4's `sim/smooth_view.py`; exact match) |
+| `sim/js/worker.js` | Module Web Worker that wraps all of the above |
 | `sim/js/playback.js` | Decoder for `web/public/sim/<name>.json` |
 | `nca/weights.json` | NCA weights (P2's branch) |
 
-**Serving:** the viewer is served from `web/`, so copy the four `sim/js/*.js` files together into one folder under `web/`, for example `web/public/sim/js/`. Copy `nca/weights.json` into `web/` too. The files import each other by relative path. Use a module worker; `file://` will not work.
+**Serving:** the viewer is served from `web/`, so copy all `sim/js/*.js` files together into one folder under `web/`, for example `web/public/sim/js/`. Copy `nca/weights.json` into `web/` too. The files import each other by relative path. Use a module worker; `file://` will not work.
 
 ## 1. Draw tool (worker)
 
@@ -36,15 +37,26 @@ Show `PRESET_LABEL` = `"simulation, preset parameters"` next to the draw tool. *
 | `{type:'reset'}` | Stops and restarts from the last `init` |
 | `{type:'preset', preset}` | Switches CC/C61 live |
 
-**Frames from the worker:** `{type:'frame', w, h, occ: Uint8Array(w*h) (1 = cell), t_hours, wound_frac}`. `wound_frac` is `1 - mean(occ)`, the same definition as `whad_curves.csv`.
+**Frames from the worker:** `{type:'frame', w, h, t_hours, wound_frac, occ, fine, outline}`
 
-**Speed:** a 24 h run on 32×44 takes about 30 ms, so frame rate is not a concern.
+| Field | Contents |
+|---|---|
+| `wound_frac` | `1 - mean(occ)`, the same definition as `whad_curves.csv` |
+| `occ` | `Uint8Array(w*h)`, raw agents, 1 = cell |
+| `fine` | `{scale: 2, sigma: 2.5, h: 2h, w: 2w, data: Uint8Array}`. Smoothed occupancy, `round(v*255)`, row-major. Each site is `scale × scale` fine px. |
+| `outline` | `{units:'sites', rule:'area-matched', level, lines}`. `lines` is a list of flat `[x0,y0,x1,y1,...]` polylines in site coords (`x` = col, `y` = row, the lattice spans `[0,w]×[0,h]`). The outlined area equals `wound_frac`. When there is no wound, `level` is null and `lines` is empty. |
+
+`fine` and `outline` use the same parameters as Agent 4's playback files (`density_fine`, `outline`), so live and precomputed views look identical. Turn them off with `smooth:false` in `init`.
+
+> **Rendering rule:** draw `fine` plus `outline` by default. Use raw `occ` agents only at deep zoom. The raw lattice shows scattered single-site holes after a few hours, which is the sheet thinning, not a wound front.
+
+**Speed per frame** (0.5 h of sim time plus smoothing and outline): about 3.5 ms on 32×44, and about 35 ms on 120×160 (19k agents).
 
 ```js
 const wk = new Worker(new URL('./public/sim/js/worker.js', import.meta.url), { type: 'module' });
 const w = 44, h = 32, wound = new Uint8Array(w * h);           // fill 1s where the user drew
 wk.onmessage = ({ data: m }) => {
-  if (m.type === 'frame') draw(m.occ, m.w, m.h, m.t_hours, m.wound_frac);
+  if (m.type === 'frame') zoomDeep ? drawAgents(m.occ, m.w, m.h) : drawSmooth(m.fine, m.outline);  // + m.t_hours, m.wound_frac
 };
 wk.postMessage({ type: 'init', w, h, wound, preset: 'CC', seed: 1 });
 wk.postMessage({ type: 'run', hoursPerFrame: 0.5 });
@@ -86,6 +98,7 @@ wk.postMessage({ type: 'band', Tm, bias, hours: 24, members: 20, start: { occ, h
 
 - **Agents:** site `i = y*W + x` is occupied iff `(bytes[i>>3] >> (7-(i&7))) & 1`. The `agents` key is only present if the file was exported with `--agents`.
 - **Stride:** the last frame is always included.
+- **Optional `density_fine` and `outline` keys:** written with `--fine`, and they have the same meaning as the worker's `fine` and `outline`. The file stores them per frame as `outline.levels[F]` and `outline.frames[F]`. Decode `density_fine.frames[f]` like `density.frames[f]`. The same rendering rule applies: smoothed plus outline by default, agents only at deep zoom.
 - **Checked:** I exported a real 32×44 run with `sim/export_playback.py` (f5709e4) and decoded it with `playback.js`. All agent sites matched, density matched to within 1e-5 of the 0–255 value, and the decoded `wound_frac` equalled the file's.
 
 ```js
