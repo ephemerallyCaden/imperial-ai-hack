@@ -4,7 +4,7 @@
 <script type="module">
 // Offline renderer for P2 playback JSON (video footage). Opened by render.mjs in headless Chrome over file://
 // (needs --allow-file-access-from-files). Query: ?mode=sheet  -> contact sheet of all layers
-//                                               ?mode=frame&layer=smooth|agents|nca|panel&file=..&t=..  -> one frame
+//                                               ?mode=frame&layer=smooth|agents|nca|nca_smooth|panel&file=..&t=..  -> one frame
 import { viewFrame, agentFrame, densityFrame } from '../../sim/js/playback.js';
 const C = { paper: '#000', panel: '#0A0A0A', hair: '#2B2B2B', ink: '#ECECEC', sec: '#B4B4B4', ter: '#7E7E7E', blue: '#56B4E9', violet: '#B8A9E8' };
 const q = new URLSearchParams(location.search), SIM = '../../web/public/sim/';
@@ -42,8 +42,29 @@ function agentTile(pb, f, x0, y0, s, crop) { // deep zoom: raw agents as cells, 
   lines(x0 - cx * s, y0 - cy * s, s, v.outline.display.lines, C.blue, v.outline.display.opacity, 2.5);
   g.restore();
 }
-function ncaTile(pb, f, x0, y0, s) { // NCA density field (coarse, grain x grain sites per cell)
+function ncaTile(pb, f, x0, y0, s) { // NCA density on its native grid (grain x grain sites per cell)
   field(x0, y0, pb.W * s, pb.H * s, densityFrame(pb, f), pb.density.w, pb.density.h, '#000', [184, 169, 232]);
+}
+// DISPLAY INTERPOLATION ONLY: bilinear upsample of the NCA density (cell centres at (i + 0.5) * grain sites) to the
+// sim's fine grid (k px per site), edge-clamped. Not model output; label it wherever it is shown.
+function bilinear(pb, f, k = 2) {
+  const d = densityFrame(pb, f), h = pb.density.h, w = pb.density.w, gr = pb.grain, H = pb.H * k, W = pb.W * k, out = new Float32Array(H * W);
+  const cl = (v, n) => Math.min(n - 1, Math.max(0, v));
+  for (let y = 0; y < H; y++) {
+    const fy = ((y + 0.5) / k) / gr - 0.5, y0 = Math.floor(fy), ty = fy - y0;
+    for (let x = 0; x < W; x++) {
+      const fx = ((x + 0.5) / k) / gr - 0.5, x0 = Math.floor(fx), tx = fx - x0;
+      const a = d[cl(y0, h) * w + cl(x0, w)], b = d[cl(y0, h) * w + cl(x0 + 1, w)], c = d[cl(y0 + 1, h) * w + cl(x0, w)], e = d[cl(y0 + 1, h) * w + cl(x0 + 1, w)];
+      out[y * W + x] = (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + e * tx) * ty;
+    }
+  }
+  return { data: out, w: W, h: H };
+}
+function ncaSmoothTile(pb, f, x0, y0, s) {
+  const b = bilinear(pb, f);
+  field(x0, y0, pb.W * s, pb.H * s, b.data, b.w, b.h, '#000', [184, 169, 232]);
+  g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(x0, y0 + pb.H * s - 16, 150, 16);
+  g.fillStyle = C.sec; g.font = font(10); g.fillText('display interpolation', x0 + 4, y0 + pb.H * s - 4);
 }
 function panel(sim, nca, x0, y0, W, H, tMax = 19) { // data vs sim vs NCA wound fraction, same start and fit
   const o = nca.meta.observed, b = nca.meta.band, ymax = Math.max(...o.wound_frac) * 1.08, pad = 48;
@@ -61,17 +82,23 @@ function panel(sim, nca, x0, y0, W, H, tMax = 19) { // data vs sim vs NCA wound 
   g.fill();
   const curve = (ts, vs, color, lw) => { g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); ts.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(vs[i]))); g.stroke(); };
   curve(sim.t_hours, sim.wound_frac, C.blue, 2.5); curve(nca.t_hours, nca.wound_frac, C.violet, 2.5);
-  g.fillStyle = C.ink; o.t_hours.forEach((t, i) => { g.beginPath(); g.arc(X(t), Y(o.wound_frac[i]), 3.5, 0, 2 * Math.PI); g.fill(); });
-  const lg = [[C.ink, 'data (WHAD, manual mask)'], [C.blue, 'cell-agent simulation'], [C.violet, 'NCA emulator'], ['rgba(184,169,232,0.5)', 'NCA ensemble spread (uncalibrated)']];
-  lg.forEach(([c, s], i) => { g.fillStyle = c; g.fillRect(X(tMax) - 280, y0 + 26 + i * 18, 14, 8); g.fillStyle = C.sec; g.fillText(s, X(tMax) - 260, y0 + 34 + i * 18); });
+  const cut = nca.meta.cutoff_hours, dot = (x, y, fit) => { g.beginPath(); g.arc(x, y, 3.8, 0, 2 * Math.PI); if (fit) { g.strokeStyle = C.ink; g.lineWidth = 1.6; g.fillStyle = C.panel; g.fill(); g.stroke(); } else { g.fillStyle = C.ink; g.fill(); } };
+  o.t_hours.forEach((t, i) => dot(X(t), Y(o.wound_frac[i]), t <= cut + 1e-9));
+  const lx = X(tMax) - 345, ly = y0 + 26;
+  [['fit', `data used for fit (t <= ${cut} h)`], ['held', 'data held out (not seen by the model)'], [C.blue, 'cell-agent simulation'],
+   [C.violet, 'NCA emulator'], ['rgba(184,169,232,0.5)', 'NCA emulator ensemble spread (uncalibrated)']].forEach(([c, txt], i) => {
+    if (c === 'fit' || c === 'held') dot(lx + 7, ly + i * 18 + 4, c === 'fit'); else { g.fillStyle = c; g.fillRect(lx, ly + i * 18, 14, 8); }
+    g.fillStyle = C.sec; g.fillText(txt, lx + 20, ly + 8 + i * 18);
+  });
 }
 
 async function sheet() {
   const [vid, sim, nca] = await Promise.all(['whad_partII_C61_P2.json', 'whad_partII_C61_P2_sim38.json', 'whad_partII_C61_P2_nca.json'].map(load));
   const T = [0, 3, 6, 9, 12, 15, 19], s = 5, tw = vid.W * s, th = vid.H * s, gap = 12, lab = 250, top = 64;
   const rows = [['VIDEO RUN', 'sim, smoothed + outline', 'frame-0 start, t0=10 fit'], ['DEEP ZOOM', 'same run, raw agents', '14 x 18 sites'],
-    ['PANEL: SIM', 'smoothed + outline', 'start = 3.8 h cut-off'], ['PANEL: NCA', 'emulator density 16 x 22', 'same start + fit']];
-  cv.width = lab + T.length * (tw + gap); cv.height = top + rows.length * (th + 30) + 386;
+    ['PANEL: SIM', 'smoothed + outline', 'start = 3.8 h cut-off'], ['PANEL: NCA', 'emulator, display interp.', 'bilinear to 64 x 88'],
+    ['PANEL: NCA', 'emulator, native grid', '16 x 22 model output']];
+  cv.width = lab + T.length * (tw + gap); cv.height = top + rows.length * (th + 30) + 386;  // = render.mjs sheet size
   g.fillStyle = C.paper; g.fillRect(0, 0, cv.width, cv.height);
   g.fillStyle = C.ink; g.font = font(18, 600); g.fillText('Stitch P2 footage: contact sheet (exp1_partII_C61_P2, 32x44 sites, 20 um)', 12, 28);
   g.fillStyle = C.ter; g.font = font(12); g.fillText('simulated cells, not tracked cells; draft render, colours/layout to be agreed with P3', 12, 46);
@@ -87,6 +114,7 @@ async function sheet() {
       else if (r === 1) agentTile(vid, nearest(vid, t), x, y, zs, crop);
       else if (t < sim.t_hours[0] - 1e-6) { g.strokeStyle = C.hair; g.strokeRect(x, y, tw, th); g.fillStyle = C.ter; g.fillText('before start', x + 8, y + 18); }
       else if (r === 2) smoothTile(sim, nearest(sim, t), x, y, s);
+      else if (r === 3) ncaSmoothTile(nca, nearest(nca, t), x, y, s);
       else ncaTile(nca, nearest(nca, t), x, y, s);
     });
   });
@@ -99,6 +127,7 @@ async function frame() { // one layer at one time, for final footage
   if (layer === 'smooth') smoothTile(pb, f, 0, 0, s);
   else if (layer === 'agents') agentTile(pb, f, 0, 0, s, [0, 0, pb.H, pb.W]);
   else if (layer === 'nca') ncaTile(pb, f, 0, 0, s);
+  else if (layer === 'nca_smooth') ncaSmoothTile(pb, f, 0, 0, s);
 }
 try { await (q.get('mode') === 'frame' ? frame() : sheet()); document.title = 'done'; }
 catch (e) { document.title = 'error'; g.fillStyle = '#f66'; g.font = font(16); g.fillText(String(e), 10, 30); console.error(e); }
