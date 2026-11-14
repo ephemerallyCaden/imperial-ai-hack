@@ -35,7 +35,7 @@ def score_series(f, cut, T):
     y = a[m]
     q = {p: np.interp(t[m], ft, f[k]) for p, k in zip(QS, ("area_q05", "area_q50", "area_q95"))}
     pin = lambda p, qq: np.maximum(p * (y - qq), (p - 1) * (y - qq))
-    r = {"wound": f.get("wound", f["wound_id"]), "n_pts": int(m.sum()),
+    r = {"wound": f["wound"], "n_pts": int(m.sum()),
          "inside": int(((y >= q[0.05]) & (y <= q[0.95])).sum()),
          "coverage": float(np.mean((y >= q[0.05]) & (y <= q[0.95]))), "width": float(np.mean(q[0.95] - q[0.05])),
          "qscore": float(np.mean([2 * pin(p, q[p]) for p in QS])), "mae": float(np.mean(np.abs(q[0.5] - y)))}
@@ -74,8 +74,28 @@ def wilson(x, n, z=1.96):
     return c - h, c + h
 
 
+FOLD_ALIAS = {("whad", "loo"): "loo_all", ("whad", "B_CC_to_C61"): "CC_to_C61"}
+_WOUND = None
+
+
+def physical_wound(dataset, wid):
+    """WHAD position -> physical wound (part I and II of one wound share it), for files without a `wound` field."""
+    global _WOUND
+    if dataset != "whad":
+        return wid
+    if _WOUND is None:
+        proc = os.path.join(HERE, "..", "data", "processed")
+        m = pd.read_csv(f"{proc}/whad_curves.csv")[["position", "wound"]].drop_duplicates()
+        a = pd.read_csv(f"{proc}/whad_auto_curves.csv")[["position", "wound"]].drop_duplicates()
+        _WOUND = {**dict(zip(m.position, "exp1_" + m.wound)), **dict(zip(a.position, a.wound))}
+    return _WOUND.get(wid, wid)
+
+
 def score_file(path):
     doc = json.load(open(path))
+    doc["fold"] = FOLD_ALIAS.get((doc["dataset"], doc["fold"]), doc["fold"])
+    for f in doc["forecasts"]:
+        f.setdefault("wound", physical_wound(doc["dataset"], f["wound_id"]))
     rows = [r for f in doc["forecasts"] if (r := score_series(f, doc["cutoff_hours"], doc["p_close_by_T_hours"]))]
     df = pd.DataFrame(rows)
     s = {"dataset": doc["dataset"], "split": doc["fold"], "cutoff_h": doc["cutoff_hours"], "model": doc["model"],
