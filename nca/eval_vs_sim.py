@@ -11,14 +11,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "sim")); sys.path.insert(0, HERE)
 from cellsim import simulate, Params, reservoir_mask, coarse_grain
 from gen_data import start_state, sample_params, GRAIN
-from model import NCA, norm_params
+from model import NCA, build, load_config, encode
 
 
 def run(args):
-    i, m, hours = args
+    i, m, hours, cfg = args
     rng = np.random.default_rng(10 ** 6 + i)  # disjoint from training seeds
-    occ0 = start_state(rng); Tm, bias = sample_params(rng)
-    p = Params(Tm=Tm, bias=bias)
+    occ0 = start_state(rng); Tm, bias = sample_params(rng, cfg)
+    p = Params(Tm=Tm, bias=bias, follow=True) if cfg["follow"] else Params(Tm=Tm, bias=bias)
     D = np.stack([simulate(occ0, p, hours, seed=10 ** 6 + 100 * i + s, grain=GRAIN)["density"] for s in range(m)])
     R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return D, R, (Tm, bias)
@@ -29,13 +29,14 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=24); ap.add_argument("--m", type=int, default=8); ap.add_argument("--hours", type=int, default=19)
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
+    cfg = load_config(a.weights)
     with Pool(8) as p:
-        res = p.map(run, [(i, a.m, a.hours) for i in range(a.n)])
-    net = NCA(); net.load_state_dict(torch.load(a.weights, map_location="cpu")); net.eval()
+        res = p.map(run, [(i, a.m, a.hours, cfg) for i in range(a.n)])
+    net = build(cfg); net.load_state_dict(torch.load(a.weights, map_location="cpu")); net.eval()
     rows = []
     for D, R, (Tm, bias) in res:
         A = 1 - D.mean((2, 3)); A = A / A[:, :1]  # area relative to frame 0, (m, F)
-        x0 = torch.tensor(D[:1, :1]); r = torch.tensor(R)[None, None]; par = torch.tensor([norm_params(Tm, bias)], dtype=torch.float32)
+        x0 = torch.tensor(D[:1, :1]); r = torch.tensor(R)[None, None]; par = torch.tensor([encode(cfg, Tm, bias)], dtype=torch.float32)
         with torch.no_grad():
             det = net(x0, par, D.shape[1] - 1, R=r, stochastic=False)[0].numpy()
             ens = net(x0.repeat(a.m, 1, 1, 1), par.repeat(a.m, 1), D.shape[1] - 1, R=r.repeat(a.m, 1, 1, 1), stochastic=True).numpy()

@@ -6,12 +6,15 @@ Per step (dt = 1/K hour):
   MLP (1x1, 2 layers) on [perception, params, noise] -> 9 flux logits (8 neighbours + stay), source logit, hidden delta
   flux: frac = softmax(logits); cell i wants to send rho_i*frac_k*(1-rho_j) to neighbour j, each target caps its total
         inflow at its room -> 0 <= rho <= 1 and sum(rho) conserved exactly (except source and reservoir); see step()
-  source: division * sigmoid(.) * (1-rho) / K >= 0 (division gate = 0 for WHAD: hard off)
+  source: division * sigmoid(.) * (1-rho) / K >= 0. Gate 0 in v1 (frozen rules: mass only enters at the reservoir).
+          v2 (follower rule) sets the gate to 1: the follower sim fills a front site without leaving a vacancy (the chain
+          behind shifts to the reservoir), so at the coarse level mass appears at the front; the source head is that
+          front term (non-negative, capped by the room left after the flux).
   reservoir: rho = max(rho, R), R = coarse-grained sim reservoir mask (sites refilled every step, fixed at t0)
   hidden channels: tanh-bounded
 Everything is 3x3 fixed filters + a small MLP, so the JS port is a few loops.
 """
-import torch, torch.nn as nn, torch.nn.functional as F
+import os, torch, torch.nn as nn, torch.nn.functional as F
 
 NB = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]  # same order as sim.NB (dy, dx)
 KERN = torch.tensor([
@@ -71,9 +74,15 @@ class NCA(nn.Module):
         sent = want * F.conv2d(F.pad(scale, (1, 1, 1, 1)), self.gather)
         new = rho - sent.sum(1, keepdim=True) + F.conv2d(F.pad(sent, (1, 1, 1, 1)), self.scatter)
         if self.division:
-            new = new + self.division * torch.sigmoid(src - 3.0) * (1 - new) / self.K
+            add = self.division * torch.sigmoid(src - 3.0) * (1 - new) / self.K
+            new = new + add
+        out = torch.maximum(new, R)
+        st = getattr(self, "stats", None)  # optional mass accounting (nca/mass_check.py): per-sample sums
+        if st is not None:
+            st.setdefault("source", []).append((add if self.division else torch.zeros_like(new)).sum((1, 2, 3)))
+            st.setdefault("reservoir", []).append((out - new).sum((1, 2, 3)))
         hid = torch.tanh(hid + dh / self.K)
-        return torch.maximum(new, R), hid
+        return out, hid
 
     def forward(self, rho0, par, n_frames, R=None, stochastic=True):
         """rho0 (B,1,H,W); par (B,n_params); R (B,1,H,W) reservoir fraction (default 0).
@@ -93,8 +102,31 @@ TM_MIN, TM_MAX = 0.05, 5.0   # sim/calibrate.py grid (dt = 0.05 h)
 BIAS_MIN, BIAS_MAX = 0.25, 0.9  # agreed with Agent 1 (sim/calibrate.py grid)
 
 
-def norm_params(Tm, bias):
-    """Network input encoding: both roughly in [-1, 1] over the fitted range."""
+def norm_params(Tm, bias, tm_min=TM_MIN, tm_max=TM_MAX):
+    """Network input encoding: both roughly in [-1, 1] over the fitted range (v1: Tm 0.05-5; v2 follower: 0.05-50)."""
     import math
-    lo, hi = math.log(TM_MIN), math.log(TM_MAX)
+    lo, hi = math.log(tm_min), math.log(tm_max)
     return [2 * (math.log(Tm) - lo) / (hi - lo) - 1, 2 * bias - 1]
+
+
+V1_CONFIG = dict(version="v1", tm_min=TM_MIN, tm_max=TM_MAX, bias_min=BIAS_MIN, bias_max=BIAS_MAX, division=0.0, follow=False)
+
+
+def config_path(weights):
+    return os.path.splitext(weights)[0] + ".config.json"
+
+
+def load_config(weights):
+    """Per-weights config (nca/v2/weights.config.json); missing = the merged v1 model (frozen rules, no source)."""
+    import json
+    p = config_path(weights)
+    return {**V1_CONFIG, **json.load(open(p))} if os.path.exists(p) else dict(V1_CONFIG)
+
+
+def build(cfg):
+    net = NCA(division=cfg["division"]); net.cfg = cfg
+    return net
+
+
+def encode(cfg, Tm, bias):
+    return norm_params(Tm, bias, cfg["tm_min"], cfg["tm_max"])

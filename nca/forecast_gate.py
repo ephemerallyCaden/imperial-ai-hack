@@ -1,6 +1,7 @@
 """Gate forecasts (#25/#26): NCA on P1's WHAD series, splits, cut-offs and conformal calibration.
 
 python nca/forecast_gate.py [--fits sim/fits/whad_fits.json] [--self-fit]  -> eval/forecasts/whad/{split}/{model}_{cut}h.json
+v2 (follower rule): python nca/forecast_gate.py --weights nca/v2/weights.pt --name nca_follow --no-det --fits <follower fits>
 Series, splits (loo_all, loo_manual, CC_to_C61), cut-offs (1.9/3.8/5.7/9.5 h), forecast grid, T = 19 h and the
 calibration all come from P1's eval/forecast_baselines.py (imported, not reimplemented). The NCA only supplies the
 point trajectory that P1's leave-one-wound-out conformal step wraps, exactly as for the statistical baselines:
@@ -22,7 +23,6 @@ from baselines import BASELINES  # noqa: E402
 from cellsim import SITE_UM  # noqa: E402
 from start_state import load_png_mask, mask_to_lattice  # noqa: E402
 from api import load, lattice_to_state, rollout  # noqa: E402
-from model import TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX  # noqa: E402
 
 H_LONG = 100  # hours of NCA rollout for the event-time (t50/t90) extrapolation
 N_MEM = 50
@@ -45,7 +45,8 @@ def start_lattice(pos, g, i):
 
 def self_fit(net, occ0, t_obs, a_obs, rng, nboot=N_MEM):
     """Grid fit of (Tm, bias) through the NCA from the first frame on frames <= cut; residual bootstrap."""
-    TG = np.geomspace(TM_MIN, TM_MAX, 16); BG = np.linspace(BIAS_MIN, BIAS_MAX, 6)
+    c = net.cfg
+    TG = np.geomspace(c["tm_min"], c["tm_max"], 21); BG = np.linspace(c["bias_min"], c["bias_max"], 6)
     grid = np.array([(x, y) for x in TG for y in BG])
     rho, R = lattice_to_state(occ0)
     n = int(round(t_obs[-1]))
@@ -67,6 +68,8 @@ def main():
     ap.add_argument("--self-fit", action="store_true", help="fit (Tm, bias) through the NCA instead of Agent 1's fits")
     ap.add_argument("--weights", default=os.path.join(HERE, "weights.pt"))
     ap.add_argument("--out", default=os.path.join(ROOT, "eval", "forecasts"))
+    ap.add_argument("--name", default="nca_ensemble", help="model name of the calibrated ensemble (v2: nca_follow); raw = <name>_raw")
+    ap.add_argument("--no-det", action="store_true", help="skip the calibrated deterministic ablation")
     a = ap.parse_args()
     import warnings; warnings.filterwarnings("ignore")
     import torch; torch.set_num_threads(4)
@@ -108,7 +111,8 @@ def main():
             wf = rollout(net, rho, R, mem[np.arange(N_MEM) % len(mem)], n, stochastic=True, seed=zlib.crc32(f"{k}{cut}".encode()))
             wd = rollout(net, rho, R, point[None], n, stochastic=False)
             traj[k] = dict(grid=ts + np.arange(n + 1), A=a0 * wf / wf[:, :1], det=(a0 * wd / wd[:, :1])[0],
-                           src="fit" if k in own else "preset")
+                           src="fit" if k in own else "preset",
+                           clip=int((mem[:, 0] > net.cfg["tm_max"]).sum()), nmem=len(mem))  # rollout() clips Tm to the trained range
         # fingerprint -> series, so P1's prepare() can call a plain f(t_obs, a_obs, G)
         fp = {S[k]["a"][S[k]["t"] <= cut + 1e-9].round(8).tobytes(): k for k in traj}
         def make(kind):
@@ -117,22 +121,27 @@ def main():
                 y = np.median(tr["A"], 0) if kind == "median" else tr["det"]
                 return np.interp(Gq, tr["grid"], y)
             return f
-        BASELINES["nca_ensemble"] = make("median"); BASELINES["nca_deterministic"] = make("det")
+        BASELINES[a.name] = make("median"); BASELINES["nca_deterministic"] = make("det")
         for split, (test, pool) in FB.splits("whad", S).items():
             test = {k for k in test if k in traj}; pool = {k for k in pool if k in traj}
             d = f"{a.out}/whad/{split}"; os.makedirs(d, exist_ok=True)
-            for model in ("nca_ensemble", "nca_deterministic"):
+            for model in (a.name,) + (() if a.no_det else ("nca_deterministic",)):
                 doc = FB.forecast_file("whad", split, model, cut, S, test, pool, G, G_long, T)
                 n_pre = sum(traj[f["wound_id"]]["src"] == "preset" for f in doc["forecasts"])
-                doc["notes"] = (f"P2 NCA ({'median of 50 stochastic members' if model == 'nca_ensemble' else 'deterministic, point fit'}) "
+                n_clip = sum(traj[f["wound_id"]]["clip"] for f in doc["forecasts"]); n_mem = sum(traj[f["wound_id"]]["nmem"] for f in doc["forecasts"])
+                n_ser_clip = sum(traj[f["wound_id"]]["clip"] > 0 for f in doc["forecasts"])
+                doc["notes"] = (f"P2 NCA {net.cfg['version']}{' (follower rule)' if net.cfg['follow'] else ''} ({'median of 50 stochastic members' if model == a.name else 'deterministic, point fit'}) "
                                 f"+ P1 leave-one-wound-out conformal (eval/forecast_baselines.py); params: "
                                 f"{'NCA self-fit' if a.self_fit else 'Agent 1 sim fits'} on frames <= cut-off; "
-                                f"start = observed mask at the last frame <= cut-off (auto: synthetic band); {n_pre} series used other wounds' fits")
+                                f"start = observed mask at the last frame <= cut-off (auto: synthetic band); {n_pre} series used other wounds' fits; "
+                                f"{n_clip} of {n_mem} fit members ({n_ser_clip} series) had Tm > {net.cfg['tm_max']:g} h and were clipped to it (trained range)")
                 json.dump(doc, open(f"{d}/{model}_{cut:g}h.json", "w"))
+                if model == a.name:
+                    main_doc = doc
             # raw ensemble on the same series and grid, no calibration
-            raw = json.loads(json.dumps(doc))
-            raw["model"] = "nca_ensemble_raw"
-            raw["notes"] = "P2 NCA raw 50-member quantiles, NO calibration (for comparison with the calibrated nca_ensemble)"
+            raw = json.loads(json.dumps(main_doc))
+            raw["model"] = f"{a.name}_raw"
+            raw["notes"] = f"P2 NCA {net.cfg['version']} raw 50-member quantiles, NO calibration (for comparison with the calibrated {a.name})"
             for f in raw["forecasts"]:
                 tr = traj[f["wound_id"]]; tq = np.array(f["t_hours"])
                 M = np.stack([np.interp(tq, tr["grid"], m) for m in tr["A"]])
@@ -150,8 +159,8 @@ def main():
                               "censored_prob": round(float(np.mean(et > tq[-1])), 3)}
                 et90 = np.array([FB.event_time(G_long, m, 0.1) or np.inf for m in Ml])
                 f["p_close_by_T"] = round(float(np.mean(et90 <= T)), 3)
-            json.dump(raw, open(f"{d}/nca_ensemble_raw_{cut:g}h.json", "w"))
-            print(f"cut {cut:g} {split}: {len(doc['forecasts'])} series", flush=True)
+            json.dump(raw, open(f"{d}/{a.name}_raw_{cut:g}h.json", "w"))
+            print(f"cut {cut:g} {split}: {len(main_doc['forecasts'])} series", flush=True)
 
 
 if __name__ == "__main__":
