@@ -4,7 +4,7 @@
 // S = 2 + nh state channels [rho, R (reservoir fraction, fixed), hid...]. Input order: perception (channel*4+filter),
 // 2 params (normParams), 1 noise. Output: 9 flux logits (8 NB + stay), 1 source (gated off), nh hidden delta.
 // Flux capped per target so 0<=rho<=1 and mass is conserved; reservoir floor rho = max(rho, R).
-// Grid: Float32Array(h*w) row-major density on the coarse grid (cellsim lattice block-mean, grain 4).
+// Grid: Float32Array(h*w) row-major density on the coarse grid (cellsim lattice block-mean, grain 2).
 
 const NB = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]; // (dy,dx) = model.NB
 const KERN = [
@@ -30,7 +30,7 @@ export function randn(seed = 1) {
 }
 
 // block-mean coarse grain, same as cellsim.coarse_grain (crops to a multiple of g)
-export function coarseGrain(occ, h, w, g = 4) {
+export function coarseGrain(occ, h, w, g = 2) {
   const H = (h / g) | 0, W = (w / g) | 0, out = new Float32Array(H * W);
   for (let y = 0; y < H * g; y++) for (let x = 0; x < W * g; x++) out[((y / g) | 0) * W + ((x / g) | 0)] += occ[y * w + x];
   for (let i = 0; i < out.length; i++) out[i] /= g * g;
