@@ -3,12 +3,12 @@
 // migration dt/Tm*rho^dens_exp, division dt/Td (Td=null: off), wound bias = up the gradient of
 // blurred emptiness (radius blur), random-priority conflicts, reservoir band `edge` at borders.
 // Grid: Uint8Array(h*w) row-major, 1 = cell. Frame = { occ, t_hours, wound_frac } (same as npz keys).
-// Presets = sim/fits/whad_fits.json presets.draw_tool (Agent 1, 65c035a): median of WHAD part II fits at t0 = 10
+// Presets = sim/fits/whad_fits.json presets.draw_tool (Agent 1, aed3174): median of WHAD part II fits at cut-off 9.5 h
 // (manual + auto), division off. Draw tool only, never for scoring. Label = presets.draw_tool.label.
 export const PRESET_LABEL = 'simulation, preset parameters (WHAD part II fits)';
 export const PRESETS = {
-  CC: { Tm: 0.4992915536685413, Td: null, bias: 0.25 }, // n 7 (4 manual); Tm IQR 0.40-0.62, bias IQR 0.25-0.45
-  C61: { Tm: 0.47723316718734726, Td: null, bias: 0.35173446026944655 }, // n 7 (3 manual); Tm IQR 0.45-0.54, bias IQR 0.25-0.38
+  CC: { Tm: 0.4815544732805177, Td: null, bias: 0.25 }, // n 7 (4 manual); Tm IQR 0.39-0.63, bias IQR 0.25-0.57
+  C61: { Tm: 0.4805468482096445, Td: null, bias: 0.362584527178654 }, // n 7 (3 manual); Tm IQR 0.44-0.53, bias IQR 0.29-0.41
 };
 export const DT = 0.05; // hours per step, = cellsim.DT
 export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
