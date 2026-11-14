@@ -20,7 +20,7 @@ ap.add_argument("npz"); ap.add_argument("name")
 ap.add_argument("--agents", action="store_true")
 ap.add_argument("--stride", type=int, default=1)
 ap.add_argument("--fine", type=int, default=0)
-ap.add_argument("--sigma", type=float, default=1.5)
+ap.add_argument("--sigma", type=float, default=2.5)
 ap.add_argument("--outdir", default=os.path.join(os.path.dirname(__file__), "..", "web", "public", "sim"))
 a = ap.parse_args()
 
