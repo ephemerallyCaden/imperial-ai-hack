@@ -118,6 +118,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Cell-simulator parameters (P2, from calibration).
 - Role names; Figma owner (P3 assumed).
 - Boltz: not used; bounty not pursued.
+- Whether to adopt Migliaccio et al. 2023 (Cancers 15:5284; PMID 37958456): its lattice cell-agent rules (migrate vs proliferate with Pm = (1/Tm)/(1/Tm+1/Td), quiescence = contact inhibition), the Phi = Tm/Td closure-rate power law and its Table 2 parameters, for our cell-agent layer, a baseline and presets (see docs/papers/reading-notes.md). Asked in R9.
 - Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
 
 
