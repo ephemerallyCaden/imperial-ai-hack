@@ -79,8 +79,17 @@ def _vertex(cm, c0, cp):
     return 0.0 if d <= 0 else float(np.clip(0.5 * (cm - cp) / d, -0.5, 0.5))
 
 
+TIE_TOL = 0.02  # near-ties: cost within 2% of the minimum (flat surfaces, e.g. bias with 2 frames)
+
+
 def refine(cost, g):
-    i, j = np.unravel_index(cost.argmin(), cost.shape)
+    """Off-grid minimum. Near-ties are broken by the median tied Tm row, then the median tied bias in that row (not the
+    first grid index, which piled flat-bias fits onto the 0.25 floor); then a parabolic vertex per axis inside the cell."""
+    tied = cost <= cost.min() * (1 + TIE_TOL) + 1e-12
+    rows = np.nonzero(tied.any(1))[0]
+    i = int(rows[len(rows) // 2])
+    cols = np.nonzero(tied[i])[0]
+    j = int(cols[len(cols) // 2])
     di = _vertex(cost[i - 1, j], cost[i, j], cost[i + 1, j]) if 0 < i < len(g) - 1 else 0.0
     dj = _vertex(cost[i, j - 1], cost[i, j], cost[i, j + 1]) if 0 < j < len(BIAS) - 1 and cost.shape[1] > 1 else 0.0
     lt = np.log(g)
@@ -161,12 +170,15 @@ def load_cubes(rule):
     return {k: z[k] for k in z.files}
 
 
-def cmd_fits(rule):
+def cmd_fits(rule, reuse_cubes=False):
     S, rows = series_rows()
-    jobs = [(k, rule, S[k]["source"], S[k]["t"], *rows[k]) for k in sorted(S)]
-    with ProcessPoolExecutor(WORKERS) as ex:
-        cubes = dict(ex.map(cube, jobs))
-    np.savez_compressed(os.path.join(HERE, "fits", f"v2_cubes_{rule}.npz"), **cubes)
+    if reuse_cubes:
+        cubes = load_cubes(rule)
+    else:
+        jobs = [(k, rule, S[k]["source"], S[k]["t"], *rows[k]) for k in sorted(S)]
+        with ProcessPoolExecutor(WORKERS) as ex:
+            cubes = dict(ex.map(cube, jobs))
+        np.savez_compressed(os.path.join(HERE, "fits", f"v2_cubes_{rule}.npz"), **cubes)
     g = GRIDS[rule]
     fits = {}
     for k in sorted(S):
@@ -178,7 +190,7 @@ def cmd_fits(rule):
             if f:
                 f.update(t0=cut, start_frame=int(rows[k][0][0]))
             fits[k][f"{cut:g}"] = f
-    out = dict(params=dict(rule=rule, Tm_grid=g.tolist(), bias_grid=BIAS.tolist(), cutoffs=CUTS, seeds=SEEDS,
+    out = dict(params=dict(rule=rule, Tm_grid=g.tolist(), bias_grid=BIAS.tolist(), cutoffs=CUTS, seeds=SEEDS, tie_tol=TIE_TOL,
                            n_boot=N_MEM, time="series (hours since the series' first frame), rows wound_frac <= 0.70",
                            note="sim/v2.py; manual + auto positions in one file"), fits=fits, presets={})
     dt = {}  # draw-tool presets: part II medians at cut 9.5 h per condition (display only, never scored)
@@ -279,6 +291,6 @@ def cmd_gate(variants):
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a[0] == "fits":
-        cmd_fits(a[a.index("--rule") + 1] if "--rule" in a else "follow")
+        cmd_fits(a[a.index("--rule") + 1] if "--rule" in a else "follow", reuse_cubes="--reuse-cubes" in a)
     elif a[0] == "gate":
         cmd_gate(a[1:])
