@@ -18,7 +18,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Prize verification afterwards: public repo, last commit before 12:00. Contact: aisociety@imperial.ac.uk. Source: `docs/event-rules.md`.
 
 ## 3. Team and roles [D]
-- 3 people. P1 data + segmentation + baselines + scoring. P2 cell simulator + NCA + calibration. P3 viewer + Figma + README + 2-minute video.
+- 3 people. P1 data + segmentation + baselines + scoring. P2 cell simulator + NCA + calibration. P3 viewer + agent layer (9b, R20) + Figma + README + 2-minute video.
 - Role names P1/P2/P3 are final (R12); assign people by the team.
 
 ## 4. Product spec
@@ -110,7 +110,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - State out loud: few conditions/wounds make coverage CIs wide; Jin data are 1D profiles.
 
 ## 8. Video and submission
-- [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
+- [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound, with the agent's decisions in Assay mode and the Ops view as proof (9b). [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
 
 ## 9. Stack and repo [D]
@@ -123,7 +123,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - [D, R21, R23] Back end: a Python script runs the agent and records each run to `agent/runs/<run_id>.jsonl` (code in a new `agent/` folder, owner P3); the UI plays the runs back. At an approval point playback pauses and the click picks which recorded branch plays; both branches are recorded, approve first, for the video run(s) only; other replay runs use the simulated human who always approves. A FastAPI server is added only if a live run is wanted. The public repo and the video need no keys (R10 rule).
 - [D, R22] Agent loop: hand-written, not the SDK Tool Runner, so each step is logged, decisions are set by code, the Critic and human approval sit inside the loop, and `call_model()` stays a plain messages call that works with any provider.
 - [D, R21] Every model call goes through one `call_model()` wrapper, so the provider can be swapped in one file. Credentials, account IDs and profile names stay in local config (`.env`, git-ignored, or local cloud config), never in the repo. If the account changes before submission, the video runs are re-recorded on the new one.
-- **Who decides what** [D, R24]: code runs the fixed steps in order (QC, forecast, flags, simulation) for every new frame. Code then works out which decisions are allowed (below). The LLM lead agent takes the open choices among them: whether to investigate, which allowed decision to propose, when to ask a human, and how to explain the result. Policy code checks every proposal before it is shown. Helpers and the existing code they call:
+- **Who decides what** [D, R24]: code runs the fixed steps in order (QC, forecast, flags and schedule, simulation) for every new frame. Code then works out which decisions are allowed (below). The LLM lead agent takes the open choices among them: whether to investigate, which allowed decision to propose, when to ask a human, and how to explain the result. Policy code checks every proposal before it is shown. Helpers and the existing code they call:
   - **Intake** [optional]: runs only on uploads that come with protocol text. Protocol text to settings (cell line, seeding density, mitomycin, frame interval, pixel scale). Code checks units and maps them to a preset. Model: the 9c fine-tune if it passes, else Claude.
   - **QC and forecast:** `data/upload.py` (`check_frame`, `run`): frame checks, the 5.5 refusal rules, segmentation and the calibrated edge-speed forecast with its 90% band (the shipped forecaster, R18).
   - **Flags and schedule:** thresholds from `eval/flags.py`; stop-early calls from `eval/scheduler.py` (R19). Stall ships. Out-of-band is shown as an observation only. Measure-again is not shipped (R16).
@@ -195,7 +195,7 @@ Open from R20 (agent layer):
 Still to confirm: overnight work and the demo/video rule with organisers (P3 emails aisociety@imperial.ac.uk); 5.5 defaults are proposals until the team accepts them.
 
 ## 15c. Known risks [DER]
-- Time: 3 people, large scope; cut order if late = LLM roles, secondary datasets, Zaritsky, upload live processing (keep sample fallback), then draw-tool polish. Never cut the held-out scorecard.
+- Time: 3 people, large scope; cut order if late = agent extras (notifications, Investigator, adversarial set, live run; see the agent-layer risk below), secondary datasets, Zaritsky, upload live processing (keep sample fallback), then draw-tool polish. Never cut the held-out scorecard.
 - NCA may not pass the gate: statistical forecaster ships (5.3).
 - Small evaluation sets (19 annotated positions): wide coverage CI, weak conformal; report honestly.
 - WHAD cannot calibrate division (mitomycin); division comes from priors and Jin.
