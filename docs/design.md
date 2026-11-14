@@ -23,12 +23,12 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 4. Product spec
 ### 4.1 Forecaster outputs per wound [DER from section 1]
-- Forecast closure curve with a calibrated 90% band; time to 50% and 90% closure with intervals; P(closes by T); stall probability; "uncertain, measure again" flag (wide/disagreeing ensemble); out-of-band flag (observed leaves its band).
+- Forecast closure curve with a calibrated 90% band; time to 50% and 90% closure with intervals; P(closes by T); stall probability and stall flag; out-of-band shown as an observation only (observed leaves its band); no measure-again flag (not shipped, R16); next step from `schedule_advice` (R19).
 - Input: wound size/mask series up to a cutoff t0 (frames or CSV of relative wound area) + condition label.
 - Scorecard page: model vs baselines on held-out wounds; failures shown.
 ### 4.2 Draw tool [D]
 - User draws a freehand empty region on a confluent monolayer; simulation heals it; **no sliders**; controls = **wound shape + cell line/condition preset** only.
-- [D] Presets shipped: **MCF10A control (CC) and CYR61 shRNA (C61)**, calibrated from WHAD with division OFF (mitomycin-treated assays). Everything else (other WHAD conditions, a Jin PC-3 division-ON preset) is stretch.
+- [D] Presets shipped: **MCF10A control (CC) and CYR61 shRNA (C61)**, calibrated from WHAD with division OFF (mitomycin-treated assays). The draw tool runs the cell-agent engine (`sim/js/engine.js`) under the preset, labelled as a simulation; it never shows a band or coverage claim (`docs/p2-handoff.md`). Everything else (other WHAD conditions, a Jin PC-3 division-ON preset) is stretch.
 ### 4.3 Viewer [D]
 - **One continuous zoom** (no scene switch): zoomed in shows **simulated cells**; zoomed out shows density/wound outline and the forecast with its band. All levels derive from the same state; wound area is identical at every zoom; one time slider.
 - [D, R11] **Tissue rendering style:** organic irregular cells, **no outlines anywhere on the grid, no hexagons**, and smooth colour gradients between states instead of hard thresholds (leading edge = soft shaded band, new tissue = gradient with fading speckle, wound = smooth gradient darkest at the centre, dividing = pale cell with two small nuclei). State rules and non-colour cues are unchanged except the leading-edge cue (shaded band instead of an outline).
