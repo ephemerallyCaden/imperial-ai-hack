@@ -96,14 +96,14 @@ table{border-collapse:collapse;width:100%;font-size:12.5px}td{padding:4px 0}td+t
 
 function mount(mode){
   const q=new URLSearchParams(location.search),tone=PALS[q.get('tone')]?q.get('tone'):'medium';
-  let pal=PALS[tone],member=Math.max(1,Math.min(12,+q.get('member')||3)),pos=q.has('p')?+q.get('p'):120,playing=q.get('play')!=='0',speed=1;
+  let pal=PALS[tone],member=Math.max(1,Math.min(12,+q.get('member')||3)),pos=q.has('p')?+q.get('p'):120,playing=q.get('play')!=='0',speed=1,outline=q.get('outline')!=='0';
   const grid=mode==='grid',S=10;
   document.head.appendChild(Object.assign(document.createElement('style'),{textContent:CSS}));
   const title=grid?'M10 NCA discrete grid':'M11 NCA organic';
   document.title='Stitch | '+title;
   document.body.innerHTML=`<div id="app">
 <header><span class="word">Stitch</span><span class="sub">${grid?'Discrete hexagonal lattice: one site, one cell, one step':'Organic view: the same rules, drawn as moving, dividing cells'}</span><span class="sp"></span>
-<span class="chip">SIMULATED CELLS - not tracked cells</span>
+<span class="chip">SIMULATED CELLS - not tracked cells</span>${grid?`<button id="ol" aria-pressed="${outline}">Outlines ${outline?'on':'off'}</button>`:''}
 <span class="seg" role="group" aria-label="Tissue tone">${['light','medium','deep'].map(t=>`<button data-tone="${t}" aria-pressed="${t===tone}">${t}</button>`).join('')}</span></header>
 <div id="stage"><canvas id="cv"></canvas><div id="tag" class="mono"></div><div id="scale"><i></i>200 um (simulated)</div></div>
 <aside>
@@ -150,8 +150,8 @@ function mount(mode){
     const emptyN=(x,y)=>{let n=0;for(const[dx,dy]of nbrsOf(y)){const a=x+dx,b=y+dy;if(a>=0&&b>=0&&a<W&&b<H&&!occ[b*W+a])n++}return n>=2};
     ctx.clearRect(0,0,CW,CH);
     if(grid){
-      ctx.fillStyle=mix(pal.intact,'#000000',.55);ctx.fillRect(0,0,CW,CH);
-      const Rh=S/Math.sqrt(3)-.7,hexp=(x,y)=>{const cx=PXc(x,y)*S,cy=PYc(y)*S;ctx.beginPath();for(let a=0;a<6;a++){const t=Math.PI/6+a*Math.PI/3;ctx.lineTo(cx+Rh*Math.cos(t),cy+Rh*Math.sin(t))}ctx.closePath()};
+      ctx.fillStyle=outline?mix(pal.intact,'#000000',.55):pal.intact;ctx.fillRect(0,0,CW,CH);
+      const Rh=S/Math.sqrt(3)+(outline?-.7:.55),hexp=(x,y)=>{const cx=PXc(x,y)*S,cy=PYc(y)*S;ctx.beginPath();for(let a=0;a<6;a++){const t=Math.PI/6+a*Math.PI/3;ctx.lineTo(cx+Rh*Math.cos(t),cy+Rh*Math.sin(t))}ctx.closePath()};
       ctx.fillStyle=pal.wound;
       for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(!occ[y*W+x]){hexp(x,y);ctx.fill()}
       for(let i=0;i<sn.length;i+=7){
@@ -192,6 +192,7 @@ function mount(mode){
   document.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>{const u=new URL(location.href);u.searchParams.set('tone',b.dataset.tone);location.href=u});
   document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{speed=+b.dataset.s;document.querySelectorAll('[data-s]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
   document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{member=+b.dataset.m;cur=run(member,true);document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b));frame()});
+  if(grid)$('#ol').onclick=e=>{outline=!outline;e.target.setAttribute('aria-pressed',outline);e.target.textContent='Outlines '+(outline?'on':'off');frame()};
   $('#pp').onclick=()=>{playing=!playing;frame()};
   $('#bk').onclick=()=>{playing=false;pos=Math.max(0,Math.round(pos)-1);frame()};
   $('#fw').onclick=()=>{playing=false;pos=Math.min(OPT.steps,Math.round(pos)+1);frame()};
