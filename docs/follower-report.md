@@ -56,6 +56,9 @@ Both modes: all 56 WHAD positions (16 manual + 40 auto), 6 bias values, 3 seeds.
 (21 points); follow: 0.05-50 h (31 points, same log spacing). Fit on frames <= t0 (grid argmin, no refine);
 rmse_out = the same fit's error on the frames after t0 (the forecast error); full = best fit on all 19 h.
 Results: `sim/fits/follower_compare_{frozen,follow}.json`; table: `python3 sim/follower_refit.py --table`.
+Cut-offs are the old frame-index t0 = 4 and 10 (calibrate.py at 98dae8b). Agent 1 has since moved the official fits to
+1.9/3.8/5.7/9.5 h series time with P1's wound_frac <= 0.70 filter (aed3174). So these numbers compare frozen vs follow
+like for like, but are not the official scorecard numbers.
 
 Median (mean) rmse_out of wound_frac:
 
