@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Stitch | M6 Night plate</title>
+<meta name="viewport" content="width=1440">
+<style>
+:root{
+  --ground:#0E1224; --ground2:#151A30; --panel:#0B0E1B; --hair:#3A4160; --ctl:#8B93AE;
+  --t1:#E8EAF2; --t2:#AEB4C8; --t3:#7C84A0; --amber:#E0A458; --blue:#56B4E9; --violet:#B8A9E8;
+  --cond:"Avenir Next Condensed","Helvetica Neue Condensed","Arial Narrow",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --serif:Charter,"Iowan Old Style",Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;background:var(--ground);color:var(--t1);font-family:var(--serif);font-size:13px;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--ctl);border-radius:0;cursor:pointer;min-height:26px;padding:0 12px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.cond{font-family:var(--cond);font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.mono{font-family:var(--mono)}
+.amber{color:var(--amber);font-family:var(--mono)}
+
+#app{display:grid;grid-template-columns:1120px 320px;grid-template-rows:52px 44px 1fr;width:1440px;height:900px}
+header{grid-column:1/3;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid var(--hair);background:var(--panel)}
+.word{font-family:var(--cond);font-weight:600;font-size:22px;letter-spacing:.2em;text-transform:uppercase}
+.sub{font-style:italic;color:var(--t2);font-size:13px;padding-left:16px;border-left:1px solid var(--hair)}
+.sp{flex:1}
+.tone{display:flex;align-items:center;gap:10px}
+.tone .k{font-size:12px;color:var(--t2)}
+.seg{display:inline-flex}
+.seg a,.seg button{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 12px;border:1px solid var(--ctl);margin-left:-1px;color:var(--t1);text-decoration:none;font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;background:none}
+.seg a:first-child,.seg button:first-child{margin-left:0}
+.seg [aria-pressed=true],.seg [aria-current=true]{background:var(--t1);color:var(--panel);border-color:var(--t1)}
+.seg i{width:10px;height:10px;display:inline-block;border:1px solid var(--t1)}
+.seg [aria-current=true] i{border-color:var(--panel)}
+.hint{font-family:var(--mono);font-size:11.5px;color:var(--t2)}
+.hint b{font-weight:400;border:1px solid var(--ctl);padding:1px 5px;color:var(--t1)}
+.help{width:28px;padding:0;border-radius:50%;font-family:var(--mono)}
+
+#tools{grid-column:1/2;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--hair);background:var(--ground)}
+#tools button{font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12.5px;height:28px}
+#tools .on{background:var(--t1);color:var(--panel);border-color:var(--t1)}
+#tools .go{background:var(--blue);color:var(--panel);border-color:var(--blue)}
+#tools .pl{color:var(--t2);font-size:12.5px}
+
+#stage{position:relative;grid-column:1/2;background:var(--ground);overflow:hidden}
+#stage .grid{position:absolute;inset:0;background:
+  radial-gradient(ellipse at 46% 46%,rgba(21,26,48,.0) 0%,rgba(7,9,18,.55) 100%),
+  linear-gradient(var(--hair) 1px,transparent 1px) 0 0/40px 40px,
+  linear-gradient(90deg,var(--hair) 1px,transparent 1px) 0 0/40px 40px;opacity:1;
+  -webkit-mask-image:radial-gradient(ellipse at 46% 46%,#000 10%,rgba(0,0,0,.28) 85%);mask-image:radial-gradient(ellipse at 46% 46%,#000 10%,rgba(0,0,0,.28) 85%)}
+#stage .vig{position:absolute;inset:0;background:radial-gradient(ellipse at 46% 46%,rgba(14,18,36,0) 55%,rgba(7,9,18,.6) 100%)}
+#dish{position:absolute;left:285px;top:75px;width:470px;height:470px;border-radius:50%;display:block}
+#ov{position:absolute;inset:0;pointer-events:none}
+#ov text{font-family:var(--cond)}
+.chip{position:absolute;left:20px;top:16px;border:1px solid var(--t1);padding:5px 10px;background:var(--panel);font-size:12.5px;display:flex;gap:6px;align-items:baseline}
+.chip em{font-style:normal;font-family:var(--cond);letter-spacing:.04em;font-weight:600;color:var(--t1)}
+.ttl{position:absolute;left:0;width:1040px;top:14px;text-align:center;font-size:13px;color:var(--t1)}
+.ttl span{color:var(--t2)}
+.call{position:absolute;width:196px}
+.call .row{display:flex;align-items:center;gap:8px;height:22px;border-bottom:1px solid var(--t1)}
+.call .n{width:18px;height:18px;border:1px solid var(--t1);border-radius:50%;font-family:var(--mono);font-size:11px;color:var(--amber);display:flex;align-items:center;justify-content:center;flex:none}
+.call .t{font-size:13px;color:var(--t1)}
+.call p{font-size:12.5px;line-height:1.35;color:var(--t2);margin-top:5px;font-style:italic}
+.call .amber{font-size:11.5px;display:block;margin-top:3px}
+.ladder{position:absolute;left:984px;width:100px;display:flex;justify-content:flex-end}
+.ladder button{border:0;min-height:24px;height:24px;padding:0 6px;display:flex;gap:8px;align-items:baseline;color:var(--t2);font-size:12px}
+.ladder button .amber{font-size:11.5px}
+.ladder button[aria-pressed=true]{color:var(--t1)}
+.ladder button[aria-pressed=true] .amber{color:var(--amber);font-weight:700}
+#scale{position:absolute;left:20px;top:586px;width:214px;height:58px;border:1px solid var(--hair);background:var(--panel);display:flex}
+#scale>div{padding:8px 10px;flex:1}
+#scale>div+div{border-left:1px solid var(--hair)}
+#scale small{display:block;font-size:11px;color:var(--t2)}
+#scale .bar{display:block;margin-top:6px;height:6px;border:1px solid var(--t1);border-top:0;width:60px}
+#scale .z{font-size:22px;color:var(--amber);font-family:var(--mono);line-height:1.15}
+#mini{position:absolute;left:868px;top:546px;width:170px;height:112px;border:1px solid var(--hair);background:var(--panel);padding:0}
+#mini canvas,#mini svg{position:absolute;left:1px;top:1px}
+#mini .c{position:absolute;left:6px;right:6px;bottom:3px;display:flex;justify-content:space-between;font-size:11px;color:var(--t2)}
+#plate{position:absolute;left:285px;width:470px;top:580px;text-align:center}
+#plate .k{font-size:13px;color:var(--t1);display:block;margin-bottom:3px}
+#plate .k b{color:var(--amber);font-family:var(--mono);font-weight:400}
+#plate p{font-size:13px;line-height:1.4;color:var(--t1)}
+#plate .s{font-size:11.5px;color:var(--t2);margin-top:3px;font-style:italic}
+
+#dock{position:absolute;left:0;right:0;bottom:0;height:140px;background:var(--panel);border-top:1px solid var(--hair);display:grid;grid-template-columns:236px 1fr 196px}
+#transport{padding:12px 16px;display:flex;flex-direction:column;gap:10px;border-right:1px solid var(--hair)}
+#transport .r{display:flex;gap:6px;align-items:center}
+#transport .r>button{width:34px;padding:0;height:30px;display:flex;align-items:center;justify-content:center}
+#transport .play{background:var(--t1);color:var(--panel);border-color:var(--t1);width:44px !important}
+#transport .ro{font-family:var(--mono);font-size:12.5px;color:var(--t2)}
+#transport .ro b{color:var(--amber);font-weight:600}
+#transport .seg button{font-family:var(--mono);font-size:12px;padding:0 8px;min-height:26px;height:26px;text-transform:none;letter-spacing:0;font-weight:400}
+#transport .lab{font-size:12px;color:var(--t2)}
+#key{padding:12px 14px;font-size:12px;border-left:1px solid var(--hair);display:flex;flex-direction:column;gap:5px}
+#key .fig{font-size:12px;line-height:1.35;color:var(--t1);margin-bottom:2px}
+#key .fig b{font-family:var(--cond);letter-spacing:.1em;font-weight:600}
+#key .r{display:flex;gap:8px;align-items:center;color:var(--t1)}
+
+aside{grid-column:2/3;grid-row:2/4;background:var(--panel);border-left:1px solid var(--hair);position:relative;overflow:hidden}
+aside .phead{display:flex;justify-content:space-between;align-items:center;height:44px;padding:0 16px;border-bottom:1px solid var(--hair)}
+aside .phead .cond{font-size:12px;color:var(--t2)}
+aside .phead button{font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;display:flex;gap:6px;align-items:center;height:26px}
+aside section{padding:10px 16px 10px;border-bottom:1px solid var(--hair)}
+aside h2{font-family:var(--cond);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:13px;margin-bottom:8px;display:flex;gap:10px;align-items:baseline;color:var(--t1)}
+aside h2 em{font-family:var(--serif);font-weight:400;font-style:italic;letter-spacing:0;text-transform:none;font-size:12.5px;color:var(--t2)}
+.leg{display:grid;grid-template-columns:30px 1fr;column-gap:10px;padding:4px 0;border-bottom:1px solid #20263F}
+.leg:last-child{border-bottom:0}
+.leg b{font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12.5px;display:block}
+.leg p{font-size:12px;line-height:1.28;color:var(--t2)}
+.leg p i{color:var(--t1)}
+.leg .sw{grid-row:1/3;align-self:center;width:30px;height:30px;border:1px solid #7C84A0;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ovn{font-size:12px;line-height:1.35;color:var(--t2);margin-top:6px}
+.ovn u{color:var(--violet);text-decoration-thickness:1px}
+.big{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.big strong{font-family:var(--mono);font-weight:500;font-size:28px;color:var(--amber);letter-spacing:-.02em}
+.big span{font-size:12.5px;color:var(--t2);line-height:1.3}
+.tm{display:grid;grid-template-columns:1fr 78px 32px;gap:8px;align-items:center;height:26px}
+.tm .l{font-size:12px;white-space:nowrap;color:var(--t2)}
+.tm .v{font-family:var(--mono);font-size:12.5px;color:var(--amber);text-align:right}
+.tm .v.sm{color:var(--amber)}
+.segs{display:flex;gap:2px}
+.segs i{flex:1;height:10px;background:#2A3150;display:block}
+.segs i.f{background:var(--t1)}
+.segs i.p{background:var(--violet)}
+.tm .flag{color:var(--t1)}
+.tm .flag.vi{color:var(--violet)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-family:var(--cond);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:11.5px;color:var(--t2);text-align:right;padding:4px 0;border-top:1px solid var(--t1);border-bottom:1px solid var(--t1)}
+th:first-child,td:first-child{text-align:left}
+td{padding:4px 0;text-align:right;font-family:var(--mono);font-size:12px;color:var(--t1)}
+td:first-child{font-family:var(--serif);font-size:12.5px}
+tbody tr:last-child td{border-bottom:1px solid var(--t1)}
+tr.best td{color:var(--amber)} tr.best td:first-child{color:var(--t1);font-weight:700}
+.tnote{font-size:11.5px;line-height:1.35;color:var(--t2);margin-top:6px}
+.tnote b{color:var(--t1)}
+.br{position:absolute;width:12px;height:12px;border:0 solid var(--t1);pointer-events:none}
+</style></head>
+<body>
+<div id="app">
+  <header>
+    <span class="word">Stitch</span><span class="sub">Wound-closure forecaster - research prototype</span>
+    <span class="sp"></span>
+    <div class="tone"><span class="k cond" style="font-size:11.5px;color:var(--t2)">Tissue tone</span>
+      <div class="seg" role="group" aria-label="Tissue tone (display setting)">
+        <a href="?tone=light" data-t="light"><i style="background:#E9D3C0"></i>Light</a><a href="?tone=medium" data-t="medium"><i style="background:#CBA783"></i>Medium</a><a href="?tone=deep" data-t="deep"><i style="background:#946B52"></i>Deep</a>
+      </div></div>
+    <span class="hint"><b>Space</b> play &nbsp;<b>&larr;</b><b>&rarr;</b> step &nbsp;<b>+</b><b>-</b> zoom</span>
+    <button class="help" aria-label="Help and shortcuts" title="Help: Space play, arrows step, +/- zoom">?</button>
+  </header>
+
+  <div id="tools">
+    <button class="on" aria-pressed="true">Draw wound</button>
+    <button class="go">Heal</button>
+    <button>Clear wound</button>
+    <span style="flex:1"></span>
+    <span class="pl">Preset</span>
+    <div class="seg" role="group" aria-label="Preset"><button aria-pressed="true">MCF10A control (CC)</button><button aria-pressed="false">CYR61 shRNA (C61)</button></div>
+  </div>
+
+  <div id="stage">
+    <div class="grid"></div><div class="vig"></div>
+    <canvas id="dish" width="470" height="470"></canvas>
+    <svg id="ov" width="1120" height="664" viewBox="0 0 1120 664"></svg>
+    <div class="ttl cond">// Scratch assay, simulated <span>&nbsp;-&nbsp; t = 14 h</span></div>
+    <div class="chip" role="status"><em>SIMULATED CELLS</em> - not tracked cells</div>
+    <div id="callouts"></div>
+    <div id="ladder"></div>
+    <div id="scale"><div><small>Scale</small><span class="mono" style="font-size:12.5px;color:var(--amber)">100 &micro;m</span><span class="bar"></span></div><div><small>Zoom</small><span class="z">20x</span></div></div>
+    <div id="mini"><canvas id="mc" width="166" height="92"></canvas><svg id="msvg" width="166" height="92"></svg><div class="c"><span>Overview</span><span>box = view</span></div></div>
+    <div id="plate"><span class="k cond">Plate <b>1</b></span>
+      <p>Simulated scratch wound, t = 14 h, 20x. Dotted contours bound the central 80% of ensemble closure; n = 24 members.</p>
+      <div class="s">Source: simulated cell agents, MCF10A-CC preset; not tracked cells. Values illustrative.</div></div>
+
+    <div id="dock">
+      <div id="transport">
+        <div class="r">
+          <button aria-label="Step back" title="Step back (Left)"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="2" width="2" height="10" fill="currentColor"/><path d="M12 2L5.5 7L12 12Z" fill="currentColor"/></svg></button>
+          <button class="play" aria-label="Play or pause" title="Play / pause (Space)"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 1.5L12 7L3 12.5Z" fill="currentColor"/></svg></button>
+          <button aria-label="Step forward" title="Step forward (Right)"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="10" y="2" width="2" height="10" fill="currentColor"/><path d="M2 2L8.5 7L2 12Z" fill="currentColor"/></svg></button>
+        </div>
+        <div class="ro">t = <b>14.0 h</b> of 20 h</div>
+        <div class="r" style="gap:8px"><span class="lab">Speed</span><div class="seg" role="group" aria-label="Speed"><button aria-pressed="false">0.5x</button><button aria-pressed="true">1x</button><button aria-pressed="false">2x</button><button aria-pressed="false">4x</button></div></div>
+      </div>
+      <div id="chartwrap"></div>
+      <div id="key">
+        <div class="fig"><b>Fig. 2</b> Forecast of wound area from t0; n = 24 ensemble members.</div>
+        <div class="r"><svg width="30" height="10"><path d="M0 5H30" stroke="#fff" stroke-width="2"/></svg>Observed</div>
+        <div class="r"><svg width="30" height="10"><path d="M0 5H30" stroke="#56B4E9" stroke-width="2" stroke-dasharray="6 3"/></svg>Predicted median</div>
+        <div class="r"><svg width="30" height="10"><rect y="0" width="30" height="10" fill="#56B4E9" fill-opacity=".18"/><rect y="2.5" width="30" height="5" fill="#56B4E9" fill-opacity=".30"/></svg>50% and 90% bands</div>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="phead"><span class="cond">Panel</span><button aria-label="Collapse panel" title="Collapse panel">Collapse <svg width="9" height="10" viewBox="0 0 9 10"><path d="M2 1L7 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
+    <section><h2>Key to tissue states<em>rules, as computed</em></h2><div id="leglist"></div>
+      <div class="ovn"><svg width="24" height="8" style="vertical-align:middle;margin-right:5px"><path d="M0 4H24" stroke="#8EA0C8" stroke-width="1.5" stroke-dasharray="1.5 3.5"/></svg>Dotted contour = ensemble spread. <u>Violet hatch</u> + text badge = stall flag.</div></section>
+    <section><h2>Forecast <em>origin t0 = 6 h</em></h2>
+      <div class="big"><strong>17.5 h</strong><span>to 90% closure<br>(90% interval 15.0 to 21.0)</span></div>
+      <div class="tm"><span class="l">P(close by 24 h)</span><div class="segs" id="b1"></div><span class="v">0.93</span></div>
+      <div class="tm"><span class="l flag vi">Stall unlikely (P = 0.08)</span><div class="segs" id="b2"></div><span class="v">0.08</span></div>
+      <div class="tm"><span class="l flag">Ensemble spread: moderate</span><div class="segs" id="b3"></div><span class="v">5/9</span></div>
+      </section>
+    <section style="border-bottom:0"><h2>Table 1<em>forecast scorecard</em></h2>
+      <table><thead><tr><th>Model</th><th>CRPS</th><th>90% cov.</th><th>n</th></tr></thead><tbody>
+        <tr class="best"><td>NCA ensemble</td><td>2.1</td><td>0.89</td><td>24</td></tr>
+        <tr><td>Gompertz</td><td>3.4</td><td>0.71</td><td>24</td></tr>
+        <tr><td>Fisher-KPP</td><td>3.9</td><td>0.64</td><td>24</td></tr>
+        <tr><td>Persistence</td><td>6.8</td><td>0.38</td><td>24</td></tr></tbody></table>
+      <div class="tnote"><b>Illustrative values, not results.</b> CRPS in % of initial area (lower is better); coverage target 0.90; n = wounds.</div></section>
+  </aside>
+</div>
+
+<script src="../../shared/cellfield.js"></script>
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const q=new URLSearchParams(location.search), tone=['light','medium','deep'].includes(q.get('tone'))?q.get('tone'):'medium';
+document.querySelectorAll('.seg a').forEach(a=>{ if(a.dataset.t===tone) a.setAttribute('aria-current','true'); });
+const SEED=7, PROG=0.42, D=470, DPR=Math.min(2,window.devicePixelRatio||1);
+const WOUND={cx:0.5,cy:0.5,a:0.42,b:0.29,rot:-0.35};
+const cv=document.getElementById('dish');
+const res=CellField.render(cv,{tone,seed:SEED,progress:PROG,r:7,wound:WOUND,dpr:DPR});
+const P=res.palette, st=res.stats;
+const s=document.getElementById('ov');
+function el(n,a,p,t){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);(p||s).appendChild(e);if(t!=null)e.textContent=t;return e;}
+// stage coordinates
+const DX=285,DY=75,R=D/2,CX=DX+R,CY=DY+R, W='#E8EAF2';
+
+// target positions computed from the render: analytic from wound geometry (boundary rule copied from cellfield) + a colour scan for the dividing cell
+const g0=res.geometry, Wf=res.W, RmT=(g0.A+g0.B)/2;
+const bnd=(th,p)=>{const base=1+0.16*Math.sin(3*th+Wf.p1)+0.10*Math.sin(5*th+Wf.p2)+0.06*Math.sin(2*th+Wf.p3);const close=Math.min(1,p*(0.92+0.14*Math.sin(2*th+Wf.p4)));return Math.max(0,base*(1-close));};
+const pt=(th,d)=>{const u=Math.cos(th)*g0.A*d,v=Math.sin(th)*g0.B*d;return [g0.cx+u*g0.ca-v*g0.sa,g0.cy+u*g0.sa+v*g0.ca];};
+// scan an offscreen medium-tone render (same seed and geometry, so cell positions are tone-independent)
+const oc=document.createElement('canvas'); oc.style.cssText='position:absolute;width:'+D+'px;height:'+D+'px;visibility:hidden'; document.body.appendChild(oc);
+const ores=CellField.render(oc,{tone:'medium',seed:SEED,progress:PROG,r:7,wound:WOUND,dpr:DPR,overlays:false});
+const img=oc.getContext('2d').getImageData(0,0,oc.width,oc.height).data; const OW=oc.width, OH=oc.height;
+
+function hex2(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function scan(col,dir,rmax,minFrac,tol){ const c=hex2(col),B=18,bins=new Map();
+  for(let y=0;y<OH;y++)for(let x=0;x<OW;x++){ const i=(y*OW+x)*4; if(Math.abs(img[i]-c[0])>tol||Math.abs(img[i+1]-c[1])>tol||Math.abs(img[i+2]-c[2])>tol)continue;
+    const px=x/DPR,py=y/DPR; if(Math.hypot(px-R,py-R)>rmax)continue; const k=Math.floor(px/B)+','+Math.floor(py/B); const b=bins.get(k)||{n:0,sx:0,sy:0}; b.n++;b.sx+=px;b.sy+=py;bins.set(k,b);}
+  let mx=0;bins.forEach(b=>mx=Math.max(mx,b.n)); let best=null,bs=-1e9;
+  bins.forEach(b=>{ if(b.n<mx*minFrac)return; const x=b.sx/b.n,y=b.sy/b.n,sc=(x-R)*dir[0]+(y-R)*dir[1]; if(sc>bs){bs=sc;best=[x,y];} });
+  return best; }
+document.body.removeChild(oc); const thE=-0.95, thW=0.35, thF=3.0;
+const T={ dividing:scan(CellField.PAL.medium.dividing,[-1,-0.3],R-16,.5,5),
+  fresh:pt(thF,(bnd(thF,PROG)+bnd(thF,PROG-0.14))/2),
+  intact:[R+0.84*R*Math.cos(2.2),R+0.84*R*Math.sin(2.2)],
+  edge:pt(thE,bnd(thE,PROG)+7/RmT),
+  wound:pt(thW,bnd(thW,PROG)*0.45) };
+const Z=[R*0.6,R*0.6]; if(!T.dividing) T.dividing=Z;
+const items=[
+ {k:'dividing',n:1,side:'L',t:'Dividing cell',d:'divided this step; two small dark nuclei in a pale cell',a:'n = '+st.dividing},
+ {k:'fresh',n:3,side:'L',t:'New tissue',d:'re-occupied within 10 steps; fine speckle, fading with age',a:'n = '+st.fresh},
+ {k:'intact',n:5,side:'L',t:'Intact tissue',d:'no empty neighbour; flat tone, soft cell mosaic',a:'n ≈ '+Math.round(st.intact*Math.PI/4)},
+ {k:'edge',n:2,side:'R',t:'Leading edge',d:'moved last step; darker shaded band along the wound',a:'n = '+st.edge},
+ {k:'wound',n:4,side:'R',t:'Wound',d:'empty site; smooth, darkest toward the centre',a:'n = '+st.wound+' sites'}
+];
+const LY={dividing:150,fresh:268,intact:392,edge:130,wound:300}; // row y (underline)
+const LX={L:24,R:806};
+const co=document.getElementById('callouts');
+items.forEach(it=>{
+  const tg=T[it.k]||Z; const ly=LY[it.k]; const tx=DX+tg[0], ty=DY+tg[1];
+  const x0=LX[it.side];
+  const d=document.createElement('div'); d.className='call'; d.style.left=x0+'px'; d.style.top=(ly-22)+'px';
+  d.innerHTML=`<div class="row"><span class="n">${it.n}</span><span class="t cond">${it.t}</span></div><p>${it.d}</p><span class="amber">${it.a}</span>`;
+  co.appendChild(d);
+  const ax = it.side==='L' ? x0+196 : x0;           // end of underline nearest the specimen
+  const ex = it.side==='L' ? ax+22 : ax-22;
+  // leader: underline end -> elbow -> target; dark under-stroke keeps it legible on pale tissue
+  const path=`M${ax} ${ly} L${ex} ${ly} L${tx} ${ty}`;
+  el('path',{d:`M${ex} ${ly} L${tx} ${ty}`,stroke:'#0E1224','stroke-opacity':.8,'stroke-width':3,fill:'none'});
+  el('path',{d:path,stroke:W,'stroke-width':1,fill:'none'});
+  el('circle',{cx:tx,cy:ty,r:5.5,fill:'#0E1224','fill-opacity':.55,stroke:W,'stroke-width':1.25});
+  el('circle',{cx:tx,cy:ty,r:1.6,fill:W});
+});
+// dish rim, graduated ring, reflection
+el('circle',{cx:CX,cy:CY,r:R+1,fill:'none',stroke:W,'stroke-width':1.5});
+el('circle',{cx:CX,cy:CY,r:R+9,fill:'none',stroke:W,'stroke-width':.6,'stroke-opacity':.7});
+for(let k=0;k<72;k++){ const a=k/72*Math.PI*2, L=k%6===0?8:4, r1=R+9, r2=R+9+L; el('line',{x1:CX+r1*Math.cos(a),y1:CY+r1*Math.sin(a),x2:CX+r2*Math.cos(a),y2:CY+r2*Math.sin(a),stroke:W,'stroke-opacity':k%6===0?.9:.5,'stroke-width':.75}); }
+el('ellipse',{cx:CX,cy:CY+R+22,rx:R*.95,ry:13,fill:'none',stroke:W,'stroke-opacity':.28,'stroke-width':.8});
+el('ellipse',{cx:CX,cy:CY+R+22,rx:R*.78,ry:9,fill:'none',stroke:W,'stroke-opacity':.16,'stroke-width':.8});
+// corner brackets + registration crosshairs
+const BX0=CX-262,BX1=CX+262,BY0=40,BY1=572,bl=22;
+[[BX0,BY0,1,1],[BX1,BY0,-1,1],[BX0,BY1,1,-1],[BX1,BY1,-1,-1]].forEach(([x,y,sx,sy])=>{ el('path',{d:`M${x} ${y+sy*bl}V${y}H${x+sx*bl}`,fill:'none',stroke:W,'stroke-width':1.5}); });
+[[CX,BY0-0],[CX,BY1],[BX0,CY],[BX1,CY]].forEach(([x,y],i)=>{ const h=i<2; el('path',{d:h?`M${x-7} ${y}H${x+7}`:`M${x} ${y-7}V${y+7}`,stroke:W,'stroke-width':1}); });
+// magnification ruler (log scale) with dotted line and marker
+const stops=[['Cells',80],['Colony',40],['Wound',20],['Field',5]], RX=1098;
+const yy=m=>110+(Math.log(80)-Math.log(m))/(Math.log(80)-Math.log(5))*340;
+el('path',{d:`M${RX} 100V470`,stroke:W,'stroke-width':1.25,'stroke-dasharray':'1 4','stroke-linecap':'round'});
+for(let k=0;k<=36;k++){ const y=100+k*10; if(y>470)break; el('line',{x1:RX,x2:RX+(k%4===0?5:3),y1:y,y2:y,stroke:W,'stroke-opacity':.5,'stroke-width':.75}); }
+const ld=document.getElementById('ladder');
+stops.forEach(([n,m])=>{ const y=yy(m); el('line',{x1:RX-9,x2:RX+7,y1:y,y2:y,stroke:W,'stroke-width':1.25});
+  const b=document.createElement('button'); b.className='cond'; b.style.cssText=`position:absolute;left:984px;top:${y-12}px;width:100px;justify-content:flex-end`; b.setAttribute('aria-pressed',n==='Wound'); b.innerHTML=`${n}<span class="amber">${m}x</span>`;
+  b.className='cond'; b.style.fontSize='12px'; b.style.letterSpacing='.12em'; b.style.border='0'; b.style.display='flex'; b.style.gap='8px'; b.style.alignItems='baseline'; b.style.color= n==='Wound'?'#E8EAF2':'#AEB4C8'; b.style.height='24px'; b.style.minHeight='24px';
+  b.querySelector('span').style.letterSpacing='0'; if(n==='Wound') b.querySelector('span').style.fontWeight='700'; ld.appendChild(b); });
+const wy=yy(20); el('path',{d:`M${RX-14} ${wy-6}L${RX-14} ${wy+6}L${RX-6} ${wy}Z`,fill:W}); // marker
+el('text',{x:RX+8,y:92,'font-size':11,fill:'#AEB4C8','letter-spacing':'.12em'},'');
+// telemetry bars
+function segs(id,n,f,cls){ const e=document.getElementById(id); for(let i=0;i<n;i++){ const x=document.createElement('i'); if(i<f)x.className=cls||'f'; e.appendChild(x);} }
+segs('b1',20,19,'f'); segs('b2',20,2,'p'); segs('b3',9,5,'f');
+
+
+// legend swatches
+const list=document.getElementById('leglist');
+CellField.RULES.forEach(Rl=>{ const d=document.createElement('div'); d.className='leg'; d.innerHTML=`<span class="sw">${CellField.swatch(Rl.key,tone,26)}</span><b>${Rl.name}</b><p>${Rl.rule}. <i>Cue: ${Rl.cue}.</i></p>`; list.appendChild(d); });
+
+// minimap
+const mc=document.getElementById('mc'), ms=document.getElementById('msvg');
+const mres=CellField.render(mc,{tone,seed:SEED,progress:PROG,r:3.4,wound:{cx:0.5,cy:0.5,a:0.30,b:0.21,rot:-0.35},overlays:false});
+const g=mres.geometry, deg=Math.atan2(g.sa,g.ca)*180/Math.PI;
+el('ellipse',{cx:g.cx,cy:g.cy,rx:g.A*0.95,ry:g.B*0.95,transform:`rotate(${deg} ${g.cx} ${g.cy})`,fill:'none',stroke:'#0E1224','stroke-width':1.2,'stroke-dasharray':'3 2'},ms);
+el('rect',{x:30.5,y:14.5,width:105,height:58,fill:'none',stroke:'#0E1224','stroke-width':4},ms);
+el('rect',{x:30.5,y:14.5,width:105,height:58,fill:'none',stroke:W,'stroke-width':1.5},ms);
+
+// forecast ribbon
+const wrap=document.getElementById('chartwrap'), Wd=wrap.clientWidth, H=wrap.clientHeight;
+const L=52,Rm=18,T0m=8,B=54,pw=Wd-L-Rm,ph=H-T0m-B,YMAX=105,XMAX=20,T0=6,TC=14;
+const X=t=>L+t/XMAX*pw, Y=a=>T0m+(1-a/YMAX)*ph;
+const pts=[[0,100],[2,97.5],[4,90],[6,79],[8,67],[10,55],[12,43],[14,31],[16,19],[17.5,10],[19,5.5],[21,3],[24,1.5],[30,0.3]];
+const n=pts.length,xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),dx=[],m=[],tg=new Array(n);
+for(let i=0;i<n-1;i++){dx[i]=xs[i+1]-xs[i];m[i]=(ys[i+1]-ys[i])/dx[i];}
+tg[0]=m[0];tg[n-1]=m[n-2];for(let i=1;i<n-1;i++)tg[i]=m[i-1]*m[i]<=0?0:(m[i-1]+m[i])/2;
+for(let i=0;i<n-1;i++){if(m[i]===0){tg[i]=tg[i+1]=0;continue;}const a=tg[i]/m[i],b=tg[i+1]/m[i],h=a*a+b*b;if(h>9){const k=3/Math.sqrt(h);tg[i]=k*a*m[i];tg[i+1]=k*b*m[i];}}
+function med(t){if(t<=0)return ys[0];if(t>=xs[n-1])return ys[n-1];let i=0;while(t>xs[i+1])i++;const h=dx[i],u=(t-xs[i])/h,u2=u*u,u3=u2*u;return(2*u3-3*u2+1)*ys[i]+(u3-2*u2+u)*h*tg[i]+(-2*u3+3*u2)*ys[i+1]+(u3-u2)*h*tg[i+1];}
+const warp=(t,c)=>t<=T0?med(t):med(T0+(t-T0)*c);
+const C90=[11.5/9,11.5/15],C50=[1+(11.5/9-1)*0.45,1-(1-11.5/15)*0.45];
+const ts=[];for(let t=T0;t<=XMAX+1e-6;t+=0.25)ts.push(t);
+const band=(cl,cu)=>{const up=ts.map(t=>X(t).toFixed(1)+','+Y(Math.max(0,warp(t,cu))).toFixed(1));const lo=ts.slice().reverse().map(t=>X(t).toFixed(1)+','+Y(Math.max(0,warp(t,cl))).toFixed(1));return'M'+up.join('L')+'L'+lo.join('L')+'Z';};
+const line=(f,a,b,step)=>{const o=[];for(let t=a;t<=b+1e-6;t+=step)o.push(X(t).toFixed(1)+','+Y(f(t)).toFixed(1));return'M'+o.join('L');};
+const svg=document.createElementNS(NS,'svg');svg.setAttribute('width',Wd);svg.setAttribute('height',H);
+svg.setAttribute('role','img');svg.setAttribute('aria-label','Forecast ribbon: wound area percent of initial versus time in hours. Observed to 6 h; predicted median reaches 10 percent at 17.5 h.');
+const sa=(n2,a,t)=>el(n2,a,svg,t); const F='var(--cond)';
+sa('defs',{}).innerHTML=`<pattern id="hat" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#0B0E1B"/><line x1="0" y1="0" x2="0" y2="5" stroke="#56B4E9" stroke-opacity=".8" stroke-width="1.5"/></pattern><clipPath id="pc"><rect x="${L}" y="${T0m}" width="${pw}" height="${ph}"/></clipPath>`;
+[0,50,100].forEach(v=>{sa('line',{x1:L,x2:L+pw,y1:Y(v),y2:Y(v),stroke:v===0?'#7C84A0':'#3A4160','stroke-width':v===0?1:.75});sa('text',{x:L-6,y:Y(v)+3.5,'text-anchor':'end','font-size':11,fill:'#AEB4C8','font-family':'var(--mono)'},v);});
+sa('text',{transform:`translate(12 ${T0m+ph/2}) rotate(-90)`,'text-anchor':'middle','font-size':11,fill:'#E8EAF2','font-family':'var(--serif)'},'Area (% of initial)');
+const gp=sa('g',{'clip-path':'url(#pc)'});
+const g2=(n2,a)=>el(n2,a,gp);
+g2('line',{x1:L,x2:L+pw,y1:Y(10),y2:Y(10),stroke:'#7C84A0','stroke-width':.75,'stroke-dasharray':'1 3'});
+g2('path',{d:band(C90[0],C90[1]),fill:'#56B4E9','fill-opacity':.18});
+g2('path',{d:band(C50[0],C50[1]),fill:'#56B4E9','fill-opacity':.30});
+[0.82,0.9,0.96,1.04,1.1,1.17,1.24,0.78].forEach((c,i)=>g2('path',{d:line(t=>warp(t,c+(i%2?0.015:-0.015)),T0,XMAX,.25),fill:'none',stroke:'#8EA0C8','stroke-opacity':.35,'stroke-width':.8}));
+g2('path',{d:line(med,T0,XMAX,.25),fill:'none',stroke:'#56B4E9','stroke-width':2,'stroke-dasharray':'6 3.5'});
+g2('path',{d:line(med,0,T0,.25),fill:'none',stroke:'#fff','stroke-width':2});
+const ty=T0m+ph+6,th=9;
+sa('line',{x1:X(T0),x2:X(T0),y1:T0m,y2:ty+th+2,stroke:'#E8EAF2','stroke-width':1.25});
+sa('text',{x:X(T0)+5,y:T0m+10,'font-size':11,fill:'#E8EAF2','font-family':'var(--serif)','font-weight':700},'t0 = forecast origin');
+sa('text',{x:L+pw-3,y:Y(10)-4,'text-anchor':'end','font-size':10.5,fill:'#AEB4C8','font-family':'var(--serif)'},'90% closure');
+sa('rect',{x:X(0),y:ty,width:X(T0)-X(0),height:th,fill:'#E8EAF2'});
+sa('rect',{x:X(T0),y:ty,width:X(XMAX)-X(T0),height:th,fill:'url(#hat)',stroke:'#56B4E9','stroke-width':1});
+sa('line',{x1:X(TC),x2:X(TC),y1:T0m,y2:ty+th+2,stroke:'#E8EAF2','stroke-width':1});
+sa('circle',{cx:X(TC),cy:Y(med(TC)),r:3.5,fill:'#0B0E1B',stroke:'#fff','stroke-width':1.5});
+sa('rect',{x:X(TC)-4.5,y:ty-4,width:9,height:th+8,fill:'#0B0E1B',stroke:'#E8EAF2','stroke-width':1.5});
+sa('text',{x:X(TC)+6,y:T0m+10,'font-size':11,fill:'#E0A458','font-family':'var(--mono)'},'t = 14 h');
+[0,5,10,15,20].forEach(v=>{sa('line',{x1:X(v),x2:X(v),y1:ty+th+1,y2:ty+th+4,stroke:'#AEB4C8'});sa('text',{x:X(v),y:ty+th+15,'text-anchor':v===0?'start':v===20?'end':'middle','font-size':11,fill:'#AEB4C8','font-family':'var(--mono)'},v);});
+sa('text',{x:L+pw/2,y:H-3,'text-anchor':'middle','font-size':11,fill:'#E8EAF2','font-family':'var(--serif)'},'Time since wounding (h)   [solid = history, hatched = forecast]');
+wrap.appendChild(svg);
+window.__targets=T;
+})();
+</script>
+</body></html>

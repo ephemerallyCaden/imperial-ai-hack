@@ -53,9 +53,10 @@ header{position:absolute;left:0;top:0;width:1440px;height:40px;border-bottom:1px
 #ladder .nm small{display:block;font:11.5px var(--mono);color:var(--sec);font-weight:400}
 /* legend key */
 #legend{left:8px;bottom:44px;width:372px;padding:8px 10px 8px}
-.kick{font-variant:small-caps;letter-spacing:.8px;font-size:12.5px;color:var(--sec);font-weight:600}
+.kick{font-variant:small-caps;letter-spacing:.6px;font-size:12.5px;color:var(--sec);font-weight:600}
 #legend .row{display:flex;gap:10px;margin-top:6px;align-items:flex-start}
-#legend canvas{flex:none;width:26px;height:26px;border:1px solid var(--hair);background:#fff;margin-top:1px}
+#legend .sw{flex:none;width:26px;height:26px;margin-top:1px;display:block}
+#legend .sw svg{display:block}
 #legend .t{font-size:11.5px;line-height:1.3;color:var(--sec)}
 #legend .t b{color:var(--ink);font-size:12.5px;font-weight:600}
 #legend .t i{font-style:normal;color:var(--ink)}
@@ -235,17 +236,7 @@ tr.best td{font-weight:700}
   var rows = document.getElementById('rows');
   CellField.RULES.forEach(function(r){
     var d = document.createElement('div'); d.className='row';
-    var c = document.createElement('canvas'); c.width=52; c.height=52; c.setAttribute('aria-hidden','true');
-    var x = c.getContext('2d'); x.scale(2,2);
-    var cx=13, cy=13, R=10.5, ang=[0,1,2,3,4,5].map(function(k){return Math.PI/6+k*Math.PI/3;});
-    x.beginPath(); ang.forEach(function(a,k){var px=cx+R*Math.cos(a),py=cy+R*Math.sin(a);k?x.lineTo(px,py):x.moveTo(px,py);}); x.closePath();
-    x.fillStyle=P[r.key]; x.fill();
-    if(r.key!=='wound'){ x.lineWidth=.6; x.strokeStyle=P.line+'88'; x.stroke(); }
-    if(r.key==='edge'){ x.strokeStyle=P.line; x.lineWidth=2; x.beginPath();
-      [[0,1],[5,0]].forEach(function(p){var a=ang[p[0]],b=ang[p[1]]; x.moveTo(cx+R*Math.cos(a),cy+R*Math.sin(a)); x.lineTo(cx+R*Math.cos(b),cy+R*Math.sin(b));});
-      x.stroke(); }
-    if(r.key==='dividing'){ x.fillStyle=P.line; x.beginPath(); x.arc(cx,cy,2.6,0,6.283); x.fill(); }
-    if(r.key==='fresh'){ x.fillStyle=P.line+'99'; for(var k=0;k<6;k++){var a=k*1.05+.3,rr=k%2?3.5:6.2; x.beginPath(); x.arc(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr,.8,0,6.283); x.fill();} }
+    var c = document.createElement('span'); c.className='sw'; c.innerHTML = CellField.swatch(r.key, tone, 26);
     d.appendChild(c);
     var t = document.createElement('div'); t.className='t';
     t.innerHTML = '<b>'+r.name+'</b> <i>('+r.cue+')</i><br>'+r.rule;
