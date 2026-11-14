@@ -1,8 +1,8 @@
-"""PROTOTYPE: sim_ensemble forecasts with Params(follow=True), written to a scratch dir (never sim/forecasts/).
+"""PROTOTYPE: sim_ensemble forecasts with Params(rule="follow"), written to a scratch dir (never sim/forecasts/).
 
   python3 sim/follower_forecast.py <scratch_dir>
 Runs calibrate.run_all() (manual fits + presets) and forecast.main() unchanged, with local overrides reaching the
-workers via fork: Params(follow=True), TM_GRID geomspace(0.05, 50, 31), and every output path under <scratch_dir>.
+workers via fork: Params(rule="follow"), TM_GRID geomspace(0.05, 50, 31), and every output path under <scratch_dir>.
 """
 import functools, multiprocessing as mp, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +17,7 @@ os.nice(max(0, 19 - os.nice(0)))  # lowest priority; workers inherit it via fork
 import concurrent.futures as cf  # cap workers (default 4): calibrate imports the pool lazily, forecast at import
 cf.ProcessPoolExecutor = fc.ProcessPoolExecutor = functools.partial(cf.ProcessPoolExecutor,
                                                                     max_workers=int(os.environ.get("FOLLOWER_WORKERS", 4)))
-cal.Params = fc.Params = functools.partial(Params, follow=True)
+cal.Params = fc.Params = functools.partial(Params, rule="follow")
 cal.TM_GRID = np.geomspace(0.05, 50.0, 31)
 frozen = [cal.OUT, fc.AUTO_FITS] + [os.path.join(fc.OUT_DIR, f) for f in os.listdir(fc.OUT_DIR)]
 stamp = {f: os.path.getmtime(f) for f in frozen if os.path.exists(f)}
