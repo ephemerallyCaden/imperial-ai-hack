@@ -2,7 +2,7 @@
 
 > [One sentence: what it does and who it is for]
 
-Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submit by 10:00 Sun. See HACKATHON.md for tracks and judging.
+Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submit by 12:00 Sun (aim for 11:30). See HACKATHON.md for tracks and judging.
 
 ## Stack
 <!-- Fill in at kickoff -->
