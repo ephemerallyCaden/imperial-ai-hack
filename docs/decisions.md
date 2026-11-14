@@ -70,6 +70,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - OPEN for P2/P3: use the real-data NCA in the upload/agent path, or keep edge speed (marginally better early, no torch).
 
 ### Glass-dish 3D look (2026-11-14, P3)
-- DECIDED palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F9D6FB near-white orchid, dividing FFFFFF drawn as a taller spike (height, not colour, separates it from new tissue). Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/89/100, so states read without colour).
+- DECIDED palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F9D6FB near-white orchid, dividing FFFFFF with a dark centre dot (the dot, not colour, separates it from new tissue; height stays = density). Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/89/100, so states read without colour).
 - DECIDED selection look: cells outside a box selection drop to dark matte greyscale, but each state keeps its own grey step so the rest of the wound still reads as context. Alternatives (rims, dim, flat, dots, lift) kept behind `?ghost=` and compared in `design/prototypes/glass-dish/ghost-variations.html`.
 - DECIDED wordmark: M6 night plate style (condensed caps "STITCH" + italic serif subtitle).

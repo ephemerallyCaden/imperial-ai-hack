@@ -7,14 +7,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
 // colour-blind-safe teal/vermillion: min ΔE ~26 under protan/deutan/tritan sim (Machado 2009), and states step
-// ~20-30 apart in lightness (L 5/31/65/89/100); dividing is told from new tissue by height (tall spike) so they still read in greyscale
+// ~20-30 apart in lightness (L 5/31/65/89/100); dividing is told from new tissue by a dark centre dot (M8 cue) so they still read in greyscale
 const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFFFFF, wound: 0x0B1116 };
 // look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
 const Q = new URLSearchParams(location.search);
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
-document.querySelectorAll('.legend .st i').forEach((el, i) => { el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
+document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
 if (Q.has('bare')) document.body.classList.add('bare');
-const HEIGHT = { intact: 1.0, dividing: 1.4, edge: 0.6, wound: 0.08 };   // relative density
+const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
@@ -119,7 +119,9 @@ const ghostRims = new THREE.InstancedMesh(rimGeo, new THREE.MeshBasicMaterial({ 
 const dotGeo = new THREE.CircleGeometry(0.5 * S * 0.38, 6); dotGeo.rotateX(-Math.PI / 2);
 const dots = new THREE.InstancedMesh(dotGeo, new THREE.MeshBasicMaterial(), COUNT);
 const dull = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial(), COUNT);   // matte, no specular sheen: greyscale context
-scene.add(cols, ghosts, ghostRims, dots, dull);
+const capGeo = new THREE.CircleGeometry(0.5 * S * 0.42, 12); capGeo.rotateX(-Math.PI / 2);
+const caps = new THREE.InstancedMesh(capGeo, new THREE.MeshBasicMaterial({ color: 0x0B1116 }), COUNT);   // dividing-cell centre dot
+scene.add(cols, ghosts, ghostRims, dots, dull, caps);
 const hNow = new Float32Array(COUNT).fill(0.5), m4 = new THREE.Matrix4(), m4r = new THREE.Matrix4(), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const pos = k => { const i = k % NX, j = (k / NX) | 0; return [X0 + cxOf(i, j) * S, Z0 + cyOf(j) * S]; };
 const states = new Array(COUNT).fill('intact');
@@ -151,9 +153,10 @@ function updateColumns(f, dt) {
     ghostRims.setMatrixAt(k, showRim ? m4r.makeTranslation(x, h + 0.003, z) : ZERO);
     dots.setMatrixAt(k, showDot ? m4r.makeTranslation(x, h, z) : ZERO);
     dull.setMatrixAt(k, showDull ? m4 : ZERO);
+    caps.setMatrixAt(k, st === 'dividing' && (showCol || showDull) ? m4r.makeTranslation(x, h + (lifted ? LIFT : 0) + 0.004, z) : ZERO);
     cols.setColorAt(k, col);
   }
-  cols.instanceMatrix.needsUpdate = ghosts.instanceMatrix.needsUpdate = ghostRims.instanceMatrix.needsUpdate = dots.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
+  cols.instanceMatrix.needsUpdate = ghosts.instanceMatrix.needsUpdate = ghostRims.instanceMatrix.needsUpdate = dots.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = caps.instanceMatrix.needsUpdate = true;
   cols.instanceColor.needsUpdate = true; if (dots.instanceColor) dots.instanceColor.needsUpdate = true; if (dull.instanceColor) dull.instanceColor.needsUpdate = true;
 }
 
