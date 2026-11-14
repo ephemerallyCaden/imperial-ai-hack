@@ -52,6 +52,20 @@ Upload works end to end in Python; the web "try a sample" flow uses precomputed 
 **Reproducible?**
 Yes: `data/fetch.py` downloads the public data, `data/build_*.py` builds the curves, `eval/forecast_baselines.py` and `eval/score_forecasts.py` produce every number, `eval/results_table.py` writes the tables.
 
+## Model questions (from Caden, full answers in `docs/p2-results.md`)
+
+**Why simulate cells at all if a curve fit wins?**
+The simulator turns any wound shape into a mechanistic forecast, trains the NCA, and powers the draw tool. On area alone simple curves are strong; with more history (9.5 h) the simulator matches or beats them.
+
+**Do control (CC) and CYR61 knockdown (C61) heal differently?**
+Not clearly. C61 looks slower in normalised area, but mostly because its wounds start larger; absolute closure (1.01 vs 1.19% of field per hour) and fitted migration times (0.48 vs 0.50 h) overlap. The big effect is time (part I barely closes), not condition.
+
+**Is cell division modelled?**
+Off for WHAD: the 19 h assay is treated as migration-dominated (Migliaccio's Phi check). We have not verified it on WHAD separately, so we don't claim it.
+
+**What does the fitted migration time Tm mean?**
+It ranks wounds (part II 0.14-0.65 h vs part I 0.4-5 h) but depends on the imaged field size under our rules, so it is not a measured migration time.
+
 ## Path to the lab (20)
 
 **Who uses this and what changes for them?**
