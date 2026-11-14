@@ -52,6 +52,20 @@ Upload works end to end in Python; the web "try a sample" flow uses precomputed 
 **Reproducible?**
 Yes: `data/fetch.py` downloads the public data, `data/build_*.py` builds the curves, `eval/forecast_baselines.py` and `eval/score_forecasts.py` produce every number, `eval/results_table.py` writes the tables.
 
+## Model questions (from Caden, full answers in `docs/p2-results.md`)
+
+**Why simulate cells at all if a curve fit wins?**
+The simulator turns any wound shape into a mechanistic forecast, trains the NCA, and powers the draw tool. On area alone simple curves are strong; with more history (9.5 h) the simulator matches or beats them.
+
+**Do control (CC) and CYR61 knockdown (C61) heal differently?**
+Not clearly. C61 looks slower in normalised area, but mostly because its wounds start larger; absolute closure (1.01 vs 1.19% of field per hour) and fitted migration times (0.48 vs 0.50 h) overlap. The big effect is time (part I barely closes), not condition.
+
+**Is cell division modelled?**
+Off for WHAD: the 19 h assay is treated as migration-dominated (Migliaccio's Phi check). We have not verified it on WHAD separately, so we don't claim it.
+
+**What does the fitted migration time Tm mean?**
+It ranks wounds (part II 0.14-0.65 h vs part I 0.4-5 h) but depends on the imaged field size under our rules, so it is not a measured migration time.
+
 ## Path to the lab (20)
 
 **Who uses this and what changes for them?**
@@ -59,6 +73,9 @@ An assay scientist running scratch assays. Today tools (TScratch, ImageJ plugins
 
 **What would you need to deploy it?**
 Calibration data from their own microscope and cell line: our results show bands do not transfer across cell types. A few dozen wells per condition is enough to calibrate (we used 28 wounds).
+
+**Could a lab actually stop plates early?** (simulation on recorded WHAD data, not a lab trial)
+"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 89% of those calls are right, against 73% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 5 of 46 calls were wrong: wounds that did close."
 
 **Clinical use?**
 Not claimed. Clinics use a similar early rule for chronic wounds (about 50% area reduction at 4 weeks); large EHR studies predict non-healing with AUC ~0.85-0.90. We have no clinical data, so that is a future direction only.
@@ -87,3 +104,5 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 | Stall flag | AUC 0.78-0.90 |
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
+| NCA at 3.8 h | 0.0495 vs 0.0385 (29% worse), ties by 9.5 h; emulator for the draw tool |
+| Stop early | 82% called at 1.9 h, 89% right vs 73% always-no; only "won't close" calls |
