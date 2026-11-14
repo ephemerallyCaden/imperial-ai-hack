@@ -62,13 +62,16 @@ def calibration(S):
 
 def error_vs_history(S):
     g = S[(S.dataset == "whad") & (S.split == "loo_all")]
-    names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "typical-wound curve"}
+    names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "typical-wound curve",
+             "nca_ensemble": "NCA ensemble (calibrated)"}
+    SL = SLOTS + ["#008300"]
     fig, ax = plt.subplots(figsize=(7, 4))
     ends = []
-    for i, m in enumerate(["edge_speed", "linear", "logistic", "gompertz", "lvcf"]):
+    for i, m in enumerate([m for m in ["edge_speed", "linear", "logistic", "gompertz", "lvcf", "nca_ensemble"] if (g.model == m).any()]):
         d = g[g.model == m].sort_values("cutoff_h")
-        ax.plot(d.cutoff_h, d.qscore, color=SLOTS[i], marker="o", mec=SURF, mew=1.5, label=names[m])
-        ends.append((d.qscore.iloc[-1], names[m], SLOTS[i], d.cutoff_h.iloc[-1]))
+        ax.plot(d.cutoff_h, d.qscore, color=SL[i], marker="o", mec=SURF, mew=1.5, label=names[m],
+                ls=(0, (5, 2)) if m == "nca_ensemble" else "-")
+        ends.append((d.qscore.iloc[-1], names[m], SL[i], d.cutoff_h.iloc[-1]))
     ends.sort()
     ys = [e[0] for e in ends]; gap = 0.0042
     for k in range(1, len(ys)):  # push labels apart, upwards, keeping order
@@ -77,7 +80,7 @@ def error_vs_history(S):
     for (y, n, c, x), ly in zip(ends, ys):
         ax.annotate(n, (x, y), xytext=(x + 0.35, ly + shift), textcoords="data", va="center", fontsize=9, color=INK2,
                     arrowprops=dict(arrowstyle="-", color=GRID, lw=0.8, shrinkA=0, shrinkB=3))
-    ax.set_xlim(0, 13.5); ax.set_ylim(0, None)
+    ax.set_xlim(0, 14.5); ax.set_ylim(0, None)
     ax.set_xlabel("history seen before forecasting (hours, of a 19 h series)")
     ax.set_ylabel("quantile score (CRPS approx.), lower is better")
     ax.set_title("More history, better forecasts; simple edge-speed is the one to beat", loc="left", fontsize=11.5, fontweight="bold")
@@ -97,8 +100,8 @@ def frac_below(path):
 
 
 def reliability():
-    sets = [("whad/loo_all/edge_speed_4h.json", "WHAD held-out wounds"),
-            ("whad/CC_to_C61/edge_speed_4h.json", "WHAD held-out condition"),
+    sets = [("whad/loo_all/edge_speed_3.8h.json", "WHAD held-out wounds"),
+            ("whad/CC_to_C61/edge_speed_3.8h.json", "WHAD held-out condition"),
             ("whimbc/Monolayer_to_Sphere/edge_speed_6h.json", "WHiM-BC ordinary to stem-cell")]
     fig, ax = plt.subplots(figsize=(4.8, 4.6))
     ax.plot([0, 1], [0, 1], color=MUTED, lw=1, ls=(0, (4, 3)))
@@ -111,12 +114,12 @@ def reliability():
     ax.set_xticks([0.05, 0.5, 0.95]); ax.set_xticklabels(["5%", "50%", "95%"])
     ax.set_xlabel("forecast quantile"); ax.set_ylabel("share of observations below it")
     ax.set_title("Quantile reliability", loc="left", fontsize=11.5, fontweight="bold")
-    fig.text(0.13, -0.02, "Edge-speed + conformal; WHAD at 4 h, WHiM-BC at 6 h of history.", fontsize=8.5, color=MUTED)
+    fig.text(0.13, -0.02, "Edge-speed + conformal; WHAD at 3.8 h, WHiM-BC at 6 h of history.", fontsize=8.5, color=MUTED)
     fig.savefig(f"{OUT}/reliability.png"); plt.close(fig)
 
 
 def worst_wounds():
-    path = f"{FC}/whad/loo_all/edge_speed_4h.json"
+    path = f"{FC}/whad/loo_all/edge_speed_3.8h.json"
     doc = json.load(open(path)); cut = doc["cutoff_hours"]
     import score_forecasts as sf
     scored = [(sf.score_series(f, cut, doc["p_close_by_T_hours"]) or {}).get("qscore", np.nan) for f in doc["forecasts"]]
