@@ -107,3 +107,9 @@ Rough timeline: hour 0 to 1, load the embryo data and run the simple baselines. 
 **Split of work (3 people):** viewer (deck.gl zoom, layers, labels); data, cell simulation, coarse-graining and the automaton (Python); forecast panel, Figma design, accessibility and the 2-minute video. Figma is also a separate prize open to every track (show how you used it).
 
 **New checks:** frame rate and pixel size in the MDCK sets; whether cells can be tracked from the movies; what is inside the large zip files; check deck.gl performance with a few thousand cells; confirm what prep the organisers allow.
+
+## Anchor paper for the simulated cell layer: Jin et al. 2016 (PMID 26646767, doi 10.1016/j.jtbi.2015.10.040)
+- What it says (abstract, via Europe PMC; not full text): scratch-assay closure speed depends strongly on how crowded the cells are at the start. Fitting the standard Fisher-Kolmogorov model gives cell diffusivity D and proliferation rate lambda that change with starting density, so the model's assumption of constants is wrong. The Porous-Fisher model (cell flux rises with local density) gives estimates that vary less, so it describes the experiments better.
+- What we take from it for the cell simulator: make cell movement density-dependent (more crowding, more spreading), not a fixed random walk. Fit D and lambda separately per starting density and report how much they drift; that drift is itself a result to show.
+- Test it gives us: hold out one starting density, calibrate on the others, and check that the cell simulation and the automaton both predict the held-out profile and closure time. Compare Fisher-Kolmogorov vs Porous-Fisher vs our cell model vs the automaton.
+- Caveats: the Elsevier supplement licence is unclear (cite the paper, do not re-host the .xls files); the data are 1D density profiles, so this anchors the density-level behaviour, not the shape of individual cells.
