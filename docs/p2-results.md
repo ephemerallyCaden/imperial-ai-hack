@@ -69,10 +69,28 @@ closes wounds as a front, as real monolayers do, and its fitted Tm does not depe
 sim_follow did NOT pass it. It beats v1 sim_ensemble on qscore in 6 of 12 groups (needed >= 7); coverage is in 0.85-0.95 in 9 of 12 groups for both;
 headline loo_all 3.8 h is 0.0459 (v2) vs 0.0492 (v1) vs edge_speed 0.0385; and CC_to_C61 is worse in all four groups (worst 5.7 h: 0.0380 vs 0.0320).
 The scorecard reports both v1 (sim_ensemble) and v2 (sim_follow) rows. Neither beats edge_speed at 1.9-5.7 h.
-**WHiM-BC external check (Agent 4, d795b97 on feature/p2-v2-whimbc, `docs/p2-v2-whimbc.md`; sim/v2.py reused unchanged, all settings frozen as
-chosen on WHAD):** every P2 model passes 2 of 6 groups (loo at 6 and 9 h). The WHAD "shrink helps" finding does **not** replicate: compared with
-sim_follow, sim_follow_shrink is lower in 2 cells, about equal in 1 and higher in 3, all inside the CIs. Monolayer_to_Sphere fails for every model,
-and the statistical baselines are under-covered there too. So shrinkage stays a WHAD-only observation, not a result.
+**WHiM-BC external check** (Agent 4; feature/p2-v2-whimbc d795b97, `docs/p2-v2-whimbc.md` (full table with CIs),
+`eval/results/scorecard_whimbc_v2_external.csv`; sim/v2.py reused unchanged, settings frozen from a611525, no WHiM-BC tuning). qscore, lower is better;
+gate = qscore <= 1.10x the best statistical baseline AND coverage 0.85-0.95.
+
+| split | cut | best baseline | sim_ensemble | sim_follow | sim_frozen_shrink | sim_follow_shrink | gate |
+|---|---|---|---|---|---|---|---|
+| loo | 3 h | lvcf 0.0921 | 0.1204 | 0.1222 | 0.1193 | 0.1169 | all FAIL |
+| loo | 6 h | lvcf 0.0816 | 0.0769 | 0.0810 | 0.0742 | 0.0861 | all PASS (cov 0.91) |
+| loo | 9 h | linear 0.0801 | 0.0856 | 0.0819 | 0.0842 | 0.0784 | all PASS (cov 0.90) |
+| Monolayer_to_Sphere | 3 h | lvcf 0.3122 (cov 0.15) | 0.3856 | 0.3929 | 0.4091 | 0.3937 | all FAIL |
+| Monolayer_to_Sphere | 6 h | gompertz 0.1308 (cov 0.58) | 0.1627 | 0.1542 | 0.1718 | 0.1661 | all FAIL |
+| Monolayer_to_Sphere | 9 h | gompertz 0.0798 (cov 0.88) | 0.1512 | 0.1232 | 0.1639 | 0.1257 | all FAIL |
+
+Verdict:
+- Every model passes 2 of 6.
+- **Shrinkage is not confirmed externally:** compared with sim_follow, sim_follow_shrink is lower in 2 cells, about equal in 1 and higher in 3, all inside the wound-bootstrap CIs, and this includes 3 h.
+- sim_follow vs sim_ensemble: follow is lower in 3 of 6 cells (best: Monolayer_to_Sphere 9 h, 0.81x), within the CIs.
+- Raw ensembles are under-dispersed (raw coverage 0.00-0.42); coverage comes from P1's conformal.
+- Monolayer_to_Sphere defeats every model, the baselines included.
+
+Caveats: the WHiM-BC pixel scale is unknown, so starts are synthetic bands on the WHAD 32 x 44 lattice and absolute Tm is not comparable with WHAD; the free-rule rows transfer less cleanly.
+
 **Which NCA is the demo forecaster (user decision, Sun 00:20):** NCA v2 (trained on follower-rule simulations, Agent 2, `nca/v2/`), for
 consistency with the follower-rule cells shown in the draw tool and playback. This is a stated choice, not the best score: **nca_realft** (P1, #71: the
 v1 NCA fine-tuned on real WHAD frames, 4 wound-level folds) scores best on the gate (passes 9 of 12 groups). The scorecard keeps both rows.
@@ -124,7 +142,7 @@ from 0.90. Bias stays unidentified under the follow rule: before the tie-break, 
 The empirical-Bayes shrink variants (a pool-only mixture prior at the same cut, with sigma = 0.01 fixed a priori) are the only P2 models that beat
 edge_speed at 1.9 h: sim_follow_shrink at loo_manual (0.0403 vs 0.0412) and CC_to_C61 (0.0657 vs 0.0794), and sim_frozen_shrink at CC_to_C61
 (0.0744). Both shrink variants pass 5 of 12 groups.
-They were chosen after looking at WHAD errors; on the WHiM-BC external check the shrink gain did not replicate (above).
+They were chosen after looking at WHAD errors, and the shrink gain is not confirmed externally (WHiM-BC, above).
 
 ### Judge question on v2
 - **Is this how skin heals?** No. It models one ingredient: an epithelial sheet migrating into a scratch in a dish (MCF10A, WHAD), with division off
