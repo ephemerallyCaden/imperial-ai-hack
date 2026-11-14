@@ -66,30 +66,41 @@ function ncaSmoothTile(pb, f, x0, y0, s) {
   g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(x0, y0 + pb.H * s - 16, 150, 16);
   g.fillStyle = C.sec; g.font = font(10); g.fillText('display interpolation', x0 + 4, y0 + pb.H * s - 4);
 }
-function panel(sim, nca, x0, y0, W, H, tMax = 19) { // data vs sim vs NCA wound fraction, same start and fit
-  const o = nca.meta.observed, b = nca.meta.band, ymax = Math.max(...o.wound_frac) * 1.08, pad = 48;
+// chart: data (fit inputs hollow, held-out filled) + model curves (+ optional uncalibrated band)
+// spec = { observed:{t_hours, wound_frac}, cutoff, t_start, curves:[{t, v, color, label}], band?:{t_hours,q05,q95,label} }
+function chart(spec, x0, y0, W, H, tMax = 19) {
+  const o = spec.observed, ymax = Math.max(...o.wound_frac) * 1.08, pad = 48;
   const X = (t) => x0 + pad + (t / tMax) * (W - pad - 16), Y = (v) => y0 + H - 32 - (v / ymax) * (H - 56);
   g.fillStyle = C.panel; g.fillRect(x0, y0, W, H);
   g.strokeStyle = C.hair; g.lineWidth = 1; g.font = font(12); g.fillStyle = C.ter;
   for (let t = 0; t <= tMax; t += 2) { g.beginPath(); g.moveTo(X(t), Y(0)); g.lineTo(X(t), Y(ymax)); g.stroke(); g.fillText(`${t}`, X(t) - 6, Y(0) + 16); }
   for (let v = 0; v <= ymax; v += 0.05) { g.beginPath(); g.moveTo(X(0), Y(v)); g.lineTo(X(tMax), Y(v)); g.stroke(); g.fillText(v.toFixed(2), x0 + 6, Y(v) + 4); }
   g.fillText('hours', X(tMax) - 40, Y(0) + 30); g.fillText('wound fraction of field', x0 + pad, y0 + 16);
-  const tc = nca.meta.t_start; g.setLineDash([4, 4]); g.strokeStyle = C.ter; g.beginPath(); g.moveTo(X(tc), Y(0)); g.lineTo(X(tc), Y(ymax)); g.stroke(); g.setLineDash([]);
-  g.fillText(`start ${tc} h (last frame <= ${nca.meta.cutoff_hours} h cut-off)`, X(tc) + 6, Y(ymax) + 14);
-  g.fillStyle = 'rgba(184,169,232,0.22)'; g.beginPath();
-  b.t_hours.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(b.q95[i])));
-  for (let i = b.t_hours.length - 1; i >= 0; i--) g.lineTo(X(b.t_hours[i]), Y(b.q05[i]));
-  g.fill();
-  const curve = (ts, vs, color, lw) => { g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); ts.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(vs[i]))); g.stroke(); };
-  curve(sim.t_hours, sim.wound_frac, C.blue, 2.5); curve(nca.t_hours, nca.wound_frac, C.violet, 2.5);
-  const cut = nca.meta.cutoff_hours, dot = (x, y, fit) => { g.beginPath(); g.arc(x, y, 3.8, 0, 2 * Math.PI); if (fit) { g.strokeStyle = C.ink; g.lineWidth = 1.6; g.fillStyle = C.panel; g.fill(); g.stroke(); } else { g.fillStyle = C.ink; g.fill(); } };
+  const tc = spec.t_start; g.setLineDash([4, 4]); g.strokeStyle = C.ter; g.beginPath(); g.moveTo(X(tc), Y(0)); g.lineTo(X(tc), Y(ymax)); g.stroke(); g.setLineDash([]);
+  g.fillText(`start ${tc} h (last frame <= ${spec.cutoff} h cut-off)`, X(tc) + 6, Y(ymax) + 14);
+  const b = spec.band;
+  if (b) {
+    g.fillStyle = 'rgba(184,169,232,0.22)'; g.beginPath();
+    b.t_hours.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(b.q95[i])));
+    for (let i = b.t_hours.length - 1; i >= 0; i--) g.lineTo(X(b.t_hours[i]), Y(b.q05[i]));
+    g.fill();
+  }
+  for (const c of spec.curves) { g.strokeStyle = c.color; g.lineWidth = 2.5; g.beginPath(); c.t.forEach((t, i) => g[i ? 'lineTo' : 'moveTo'](X(t), Y(c.v[i]))); g.stroke(); }
+  const cut = spec.cutoff, dot = (x, y, fit) => { g.beginPath(); g.arc(x, y, 3.8, 0, 2 * Math.PI); if (fit) { g.strokeStyle = C.ink; g.lineWidth = 1.6; g.fillStyle = C.panel; g.fill(); g.stroke(); } else { g.fillStyle = C.ink; g.fill(); } };
   o.t_hours.forEach((t, i) => dot(X(t), Y(o.wound_frac[i]), t <= cut + 1e-9));
+  const items = [['fit', `data used for fit (t <= ${cut} h)`], ['held', 'data held out (not seen by the model)'],
+    ...spec.curves.map((c) => [c.color, c.label]), ...(b ? [['rgba(184,169,232,0.5)', b.label]] : [])];
   const lx = X(tMax) - 345, ly = y0 + 26;
-  [['fit', `data used for fit (t <= ${cut} h)`], ['held', 'data held out (not seen by the model)'], [C.blue, 'cell-agent simulation'],
-   [C.violet, 'NCA emulator'], ['rgba(184,169,232,0.5)', 'NCA emulator ensemble spread (uncalibrated)']].forEach(([c, txt], i) => {
+  items.forEach(([c, txt], i) => {
     if (c === 'fit' || c === 'held') dot(lx + 7, ly + i * 18 + 4, c === 'fit'); else { g.fillStyle = c; g.fillRect(lx, ly + i * 18, 14, 8); }
     g.fillStyle = C.sec; g.fillText(txt, lx + 20, ly + 8 + i * 18);
   });
+}
+function panel(sim, nca, x0, y0, W, H) { // data vs sim vs NCA wound fraction, same start and fit
+  chart({ observed: nca.meta.observed, cutoff: nca.meta.cutoff_hours, t_start: nca.meta.t_start,
+    curves: [{ t: sim.t_hours, v: sim.wound_frac, color: C.blue, label: 'cell-agent simulation' },
+             { t: nca.t_hours, v: nca.wound_frac, color: C.violet, label: 'NCA emulator' }],
+    band: { ...nca.meta.band, label: 'NCA emulator ensemble spread (uncalibrated)' } }, x0, y0, W, H);
 }
 
 async function sheet() {
@@ -120,6 +131,46 @@ async function sheet() {
   });
   panel(sim, nca, 12, top + rows.length * (th + 30) + 10, cv.width - 24, 360);
 }
+async function compare() { // free (gate) rule vs follow (v2) rule, same wound; NCA v2 row when its file exists
+  const D = q.get('dirF'), ld = (n) => fetch(D + n).then((r) => r.json());
+  const [vid, sim, nca, vidF, simF, zoom] = await Promise.all([load('whad_partII_C61_P2.json'), load('whad_partII_C61_P2_sim38.json'),
+    load('whad_partII_C61_P2_nca.json'), ld('whad_partII_C61_P2_follow.json'), ld('whad_partII_C61_P2_sim38_follow.json'), ld('zoom_follow.json')]);
+  const ncaF = q.get('ncaF') ? await ld(q.get('ncaF')) : null;
+  const T = [0, 3, 6, 9, 12, 15, 19], s = 5, tw = vid.W * s, th = vid.H * s, gap = 12, lab = 250, top = 64;
+  const fit = (pb) => `Tm ${pb.meta.Tm.toFixed(2)} h, bias ${pb.meta.bias.toFixed(2)}`;
+  const rows = [
+    ['VIDEO RUN: FREE', 'gate rule, smoothed + outline', `frame-0 start\n${fit(vid)}`, (t, x, y) => smoothTile(vid, nearest(vid, t), x, y, s)],
+    ['VIDEO RUN: FOLLOW', 'v2 rule, smoothed + outline', `frame-0 start\n${fit(vidF)}`, (t, x, y) => smoothTile(vidF, nearest(vidF, t), x, y, s)],
+    ['DEEP ZOOM: FREE', 'raw agents, 14 x 18 sites', 'video run above', (t, x, y) => agentTile(vid, nearest(vid, t), x, y, tw / 18, [9, 13, 14, 18])],
+    ['DEEP ZOOM: FOLLOW', 'raw agents, 14 x 18 sites', 'video run above', (t, x, y) => agentTile(vidF, nearest(vidF, t), x, y, tw / 18, [9, 13, 14, 18])],
+    ['PANEL SIM: FREE', 'smoothed + outline', `3.8 h cut-off start\n${fit(sim)}`, (t, x, y) => smoothTile(sim, nearest(sim, t), x, y, s), sim.t_hours[0]],
+    ['PANEL SIM: FOLLOW', 'smoothed + outline', `3.8 h cut-off start\n${fit(simF)}`, (t, x, y) => smoothTile(simF, nearest(simF, t), x, y, s), simF.t_hours[0]],
+    ['ZOOM FIELD: FOLLOW', `synthetic ${zoom.H} x ${zoom.W} sites`, `CC follow preset\n${fit(zoom)}`, (t, x, y) => smoothTile(zoom, nearest(zoom, t), x, y, th / zoom.H)],
+    ['NCA v2 (FOLLOW)', ncaF ? 'emulator, display interp.' : 'pending Agent 2 weights', ncaF ? 'same start + fit as panel' : '', ncaF ? (t, x, y) => ncaSmoothTile(ncaF, nearest(ncaF, t), x, y, s) : null, ncaF ? ncaF.t_hours[0] : 0],
+  ];
+  cv.width = lab + T.length * (tw + gap); cv.height = top + rows.length * (th + 30) + 386;
+  g.fillStyle = C.paper; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = C.ink; g.font = font(18, 600); g.fillText('Stitch P2: free (gate) rule vs follow (v2) rule, exp1_partII_C61_P2, 32x44 sites, 20 um', 12, 28);
+  g.fillStyle = C.ter; g.font = font(12); g.fillText('simulated cells, not tracked cells; draft for the 03:00 rule decision; each rule uses its own fits', 12, 46);
+  rows.forEach(([a, b, c, draw, t0 = 0], r) => {
+    const y = top + r * (th + 30) + 18;
+    g.fillStyle = C.ink; g.font = font(13, 600); g.fillText(a, 12, y + 20);
+    g.fillStyle = C.sec; g.font = font(11); g.fillText(b, 12, y + 40); g.fillStyle = C.ter; c.split('\n').forEach((ln, j) => g.fillText(ln, 12, y + 56 + j * 15));
+    T.forEach((t, i) => {
+      const x = lab + i * (tw + gap);
+      g.fillStyle = C.ter; g.font = font(11); g.fillText(`t = ${t} h`, x, y - 4);
+      if (!draw || t < t0 - 1e-6) { g.strokeStyle = C.hair; g.strokeRect(x, y, tw, th); g.fillStyle = C.ter; g.fillText(draw ? 'before start' : 'pending', x + 8, y + 18); }
+      else draw(t, x, y);
+    });
+  });
+  const ORANGE = '#E69F00';
+  chart({ observed: sim.meta.observed, cutoff: nca.meta.cutoff_hours, t_start: nca.meta.t_start,
+    curves: [{ t: sim.t_hours, v: sim.wound_frac, color: C.blue, label: 'simulation, free rule (gate)' },
+             { t: simF.t_hours, v: simF.wound_frac, color: ORANGE, label: 'simulation, follow rule (v2)' },
+             { t: nca.t_hours, v: nca.wound_frac, color: C.violet, label: ncaF ? 'NCA v1 (free-rule emulator)' : 'NCA v1 (free-rule emulator)' },
+             ...(ncaF ? [{ t: ncaF.t_hours, v: ncaF.wound_frac, color: '#CC79A7', label: 'NCA v2 (follow-rule emulator)' }] : [])] },
+    12, top + rows.length * (th + 30) + 10, cv.width - 24, 360);
+}
 async function frame() { // one layer at one time, for final footage
   const pb = await load(q.get('file')), t = +q.get('t'), layer = q.get('layer'), s = +(q.get('scale') || 20);
   if (layer === 'panel') { const [sim, nca] = await Promise.all([q.get('sim'), q.get('nca')].map(load)); cv.width = 1280; cv.height = 720; panel(sim, nca, 0, 0, 1280, 720); return; }
@@ -129,6 +180,6 @@ async function frame() { // one layer at one time, for final footage
   else if (layer === 'nca') ncaTile(pb, f, 0, 0, s);
   else if (layer === 'nca_smooth') ncaSmoothTile(pb, f, 0, 0, s);
 }
-try { await (q.get('mode') === 'frame' ? frame() : sheet()); document.title = 'done'; }
+try { const m = q.get('mode'); await (m === 'frame' ? frame() : m === 'compare' ? compare() : sheet()); document.title = 'done'; }
 catch (e) { document.title = 'error'; g.fillStyle = '#f66'; g.font = font(16); g.fillText(String(e), 10, 30); console.error(e); }
 </script>
