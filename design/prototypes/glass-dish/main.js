@@ -64,7 +64,7 @@ const targetH = (f, k, st) => st === 'fresh' ? 0.7 + 0.3 * Math.min(1, (f.step -
 
 // ---------- graph space: axis frame, floor grid, rulers ----------
 const S = 0.5;                           // world units per lattice unit
-const X0 = -W * S / 2, Z0 = -D * S / 2, HMAX = 1.3;  // column height scale
+const X0 = -W * S / 2, Z0 = -D * S / 2, HMAX = 0.65;  // column height scale
 const frame = new THREE.Group(); scene.add(frame);
 const lineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.28 });
 const faint = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.08 });
