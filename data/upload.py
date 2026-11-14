@@ -28,6 +28,15 @@ WHAD_UM_PER_PX = 0.454
 HORIZON_H = 19.0
 
 
+def stall_threshold(cut):
+    """Stall threshold for the nearest WHAD cut-off (eval/results/flag_thresholds.json, from eval/flags.py)."""
+    p = os.path.join(HERE, "..", "eval", "results", "flag_thresholds.json")
+    if not os.path.exists(p):
+        return None
+    th = json.load(open(p))
+    return th[min(th, key=lambda k: abs(float(k) - cut))]["p_stall"]
+
+
 def check_frame(img, scale):
     reasons = []
     if img.std() < 1e-3:
@@ -101,8 +110,10 @@ def run(frames, interval, scale, out, name, exclude_wound=None):
     f["flags"] = []
     if abs(scale - WHAD_UM_PER_PX) > 0.05 * WHAD_UM_PER_PX:
         f["segmentation_quality"] = {"status": "flagged", "reasons": [f"scale {scale} um/px resampled; validated only at 0.454 um/px (WHAD)"]}
-    if f["t90"]["q95"] is None:
-        f["flags"].append({"type": "measure_again", "reason": "The 90% range for time to 90% closed is open-ended; another frame would narrow it."})
+    th = stall_threshold(cut)
+    if f["p_stall"] is not None and th is not None and f["p_stall"] >= th:
+        f["flags"].append({"type": "stall", "reason": f"{100 * f['p_stall']:.0f}% of plausible futures close less than 10% more "
+                           f"by {HORIZON_H:g} h (flag threshold {th:.2f}, tuned leave-one-wound-out on WHAD)."})
     doc["notes"] = (doc.get("notes", "") + f" | frames={len(masks)}, interval={interval} h, scale={scale} um/px, "
                     f"wound at first frame {100 * w[0]:.1f}% of field").strip(" |")
     json.dump(doc, open(f"{out}/{name}.json", "w"))

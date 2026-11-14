@@ -1,0 +1,13 @@
+cut_h,flag,signal,auc,n,positives,flagged,precision,recall
+1.9,stall,p_stall,0.7755681818181818,56,12,16,0.5,0.6666666666666666
+1.9,out_of_band,next 2 frames outside band,,56,21,3,0.3333333333333333,0.047619047619047616
+1.9,measure_again,"width_h (AUCs: width_h 0.65, fit_rmse 0.54, ambiguity 0.57)",0.6510204081632653,56,21,43,0.4418604651162791,0.9047619047619048
+3.8,stall,p_stall,0.853309481216458,56,13,14,0.5714285714285714,0.6153846153846154
+3.8,out_of_band,next 2 frames outside band,,56,9,2,0.0,0.0
+3.8,measure_again,"width_h (AUCs: width_h 0.55, fit_rmse 0.44, ambiguity 0.54)",0.5543735224586288,56,9,39,0.20512820512820512,0.8888888888888888
+5.7,stall,p_stall,0.9001831501831502,55,13,12,0.75,0.6923076923076923
+5.7,out_of_band,next 2 frames outside band,,55,9,2,0.0,0.0
+5.7,measure_again,"width_h (AUCs: width_h 0.63, fit_rmse 0.28, ambiguity 0.55)",0.6280193236714976,55,9,36,0.2222222222222222,0.8888888888888888
+9.5,stall,p_stall,0.8712406015037594,52,14,20,0.5,0.7142857142857143
+9.5,out_of_band,next 2 frames outside band,,52,7,2,0.0,0.0
+9.5,measure_again,"ambiguity (AUCs: width_h 0.50, fit_rmse 0.36, ambiguity 0.56)",0.5571428571428572,52,7,21,0.047619047619047616,0.14285714285714285
