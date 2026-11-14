@@ -8,7 +8,7 @@ Models (one file per model x fold x cut-off):
 Per held-out wound and cut-off t0 (frames t <= t0 observed; t0 in hours = frame index):
   params: fits[position][t0] from sim/calibrate.py (fitted on that wound's frames <= t0 only, so nothing leaks
           across folds); null fit (too few frames) -> the fold's training-set preset for the wound's condition.
-  start:  the observed mask at t0 -> lattice (sim/start_state.py, site_um 10) -> density grid (grain 4) + reservoir R.
+  start:  the observed mask at t0 -> lattice (sim/start_state.py, SITE_UM) -> density grid (GRAIN) + reservoir R.
   area:   area_norm(t) = observed area_norm(t0) * wound(t) / wound(t0), forecast hourly from t0+1 to 19 h.
 """
 import argparse, json, os, sys
@@ -17,12 +17,12 @@ from multiprocessing import Pool
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
-sys.path.insert(0, os.environ.get("SIM_DIR", os.path.join(ROOT, "sim"))); sys.path.insert(0, HERE)
-from cellsim import Params, simulate, reservoir_mask, coarse_grain
+sys.path.insert(0, os.path.join(ROOT, "sim")); sys.path.insert(0, HERE)
+from cellsim import Params, simulate, reservoir_mask, coarse_grain, SITE_UM, GRAIN
 from start_state import load_png_mask, mask_to_lattice
 from model import NCA, norm_params
 
-SITE_UM, GRAIN, T_END, LEVEL = 10.0, 4, 19.0, 0.9
+T_END, LEVEL = 19.0, 0.9
 FOLDS = {  # fold -> held-out predicate on (part, condition); names follow contracts/example_forecast.json
     "A_partI_to_partII": lambda p, c: p == "II",
     "A_partII_to_partI": lambda p, c: p == "I",
@@ -33,7 +33,7 @@ FOLDS = {  # fold -> held-out predicate on (part, condition); names follow contr
 def start(position, frame):
     occ = mask_to_lattice(*load_png_mask(position, int(frame)), SITE_UM)
     p = Params()
-    R = reservoir_mask(occ, p.edge, getattr(p, "res_dist", None)).astype(np.uint8)
+    R = reservoir_mask(occ, p.edge).astype(np.uint8)
     return occ, coarse_grain(occ, GRAIN), coarse_grain(R, GRAIN)
 
 

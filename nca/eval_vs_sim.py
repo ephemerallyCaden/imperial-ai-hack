@@ -8,7 +8,7 @@ python nca/eval_vs_sim.py --weights nca/weights.pt --n 24 --m 8"""
 import sys, os, argparse, json, numpy as np, torch
 from multiprocessing import Pool
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.environ.get("SIM_DIR", os.path.join(HERE, "..", "sim"))); sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "sim")); sys.path.insert(0, HERE)
 from cellsim import simulate, Params, reservoir_mask, coarse_grain
 from gen_data import start_state, sample_params, GRAIN
 from model import NCA, norm_params
@@ -20,7 +20,7 @@ def run(args):
     occ0 = start_state(rng); Tm, bias = sample_params(rng)
     p = Params(Tm=Tm, bias=bias)
     D = np.stack([simulate(occ0, p, hours, seed=10 ** 6 + 100 * i + s, grain=GRAIN)["density"] for s in range(m)])
-    R = coarse_grain(reservoir_mask(occ0, p.edge, getattr(p, "res_dist", None)).astype(np.uint8), GRAIN)
+    R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return D, R, (Tm, bias)
 
 
