@@ -33,8 +33,14 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - **One continuous zoom** (no scene switch): zoomed in shows **simulated cells**; zoomed out shows density/wound outline and the forecast with its band. All levels derive from the same state; wound area is identical at every zoom; one time slider.
 - [D, R11] **Tissue rendering style:** organic irregular cells, **no outlines anywhere on the grid, no hexagons**, and smooth colour gradients between states instead of hard thresholds (leading edge = soft shaded band, new tissue = gradient with fading speckle, wound = smooth gradient darkest at the centre, dividing = pale cell with two small nuclei). State rules and non-colour cues are unchanged except the leading-edge cue (shaded band instead of an outline).
 - Honesty labels [D from earlier + DER]: "simulated cells, not tracked cells"; observed vs predicted visually distinct; ensemble disagreement shown as separate trajectories; colour-blind-safe palette; keyboard zoom.
-- [D] Real WHAD frames appear **only in the validation segment of the video**; the viewer itself is fully simulated.
+- [D, revised R13] The zoomed-in viewer is fully simulated. Real WHAD frames appear in the video's validation segment and in the upload flow (4.4), where they are shown as observed (never as simulated cells).
 - [D, R11] **Tissue tone switcher ships** (light / medium / deep): a display setting that re-themes the tissue colours only (state rules and cues unchanged); it is not part of the draw tool's controls (shape + preset). This reverses the earlier 'range in mockups only' choice. Colours are illustrative, not clinically calibrated; say so in the UI help.
+
+### 4.4 Upload your own frames [D, R13; core-lite]
+- Input: 1 to 5 uploaded frames (PNG/JPG/TIFF) plus frame interval and pixel scale (from the assay intake in 9b, or typed). Scope stated in the UI: phase-contrast scratch assays like WHAD (MCF10A); other microscopes or cell types are unsupported and the tool says so.
+- Pipeline (deterministic, no LLM on pixels): classical texture segmenter gives the wound mask and area; the mask is the starting state of the cell-agent simulation and the NCA; the forecaster returns the closure curve with its 90% band, flags and the anomaly triage of 9b. More frames narrow the band (measured closure rate).
+- A segmentation quality check (mask area vs obvious failure, blank or out-of-focus frame) must refuse or flag rather than forecast from a bad mask.
+- Fallback if live processing is fragile: ship the same flow with precomputed sample frames ("try a sample") and keep the upload control. Must not delay the 19:00 forecaster gate.
 
 ## 5. Models
 ### 5.1 Source of truth [D]
@@ -91,7 +97,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - State out loud: few conditions/wounds make coverage CIs wide; Jin data are 1D profiles.
 
 ## 8. Video and submission
-- [D] Video order: **draw tool first**, then real validation. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
+- [D, revised R13] Video order: **draw tool first**, then the real run: upload 3 real frames, get a forecast with its band and any flag, then show validation on a held-out wound. [DER] 2 minutes, one real run on screen; label anything mocked or sped up; include the scorecard vs simple baselines and one failure case.
 - [DER] Devpost needs the video and a public repo link; add all team members to the Devpost project; present how Figma was used.
 
 ## 9. Stack and repo [D]
@@ -123,6 +129,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ## 14. Acceptance criteria [DER]
 1. Draw a wound in the viewer, watch it heal, zoom continuously from cells to wound.
 2. Forecast with calibrated band on a held-out real WHAD wound; scorecard vs baselines.
+2b. Upload 1 to 5 real frames and get a forecast with band from the same pipeline (or a precomputed sample if live processing fails).
 3. Gate result recorded (passable or not) with numbers.
 4. Public repo, 2-minute video, Devpost submitted before 12:00 Sun.
 
@@ -140,9 +147,9 @@ Resolved by the user on 14 Nov (R12):
 Still open: none.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
-- P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader.
+- P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader; own the upload pipeline (4.4): frames to mask to simulator start state, with bad-mask refusal.
 - P2 (model): implement the cell-agent simulation with density-dependent movement and optional division; reimplement Fisher-KPP / Porous-Fisher baselines; mass-conserving NCA prototype.
-- P3 (viewer/video): deck.gl continuous-zoom prototype from a fake agent cloud; Figma flows for the draw tool; README skeleton.
+- P3 (viewer/video): deck.gl continuous-zoom prototype from a fake agent cloud; Figma flows for the draw tool; README skeleton; upload screen and sample-frame fallback (4.4).
 
 ## 16. Decision log
 - R1 (14 Nov): headline = forecaster; user = assay scientist; 3 people; prizes AI for Science + Figma (+ AI on Campus mention, later dropped).
@@ -158,3 +165,4 @@ Still open: none.
 - R11 (14 Nov): tissue tone switcher ships (display setting); starting-point mockup not yet chosen: user will supply one more reference/mockup to build before choosing among M1 to M5.
 - R11b (14 Nov): tissue rendering = no outlines, no hexagons, gradient state blends; shared renderer rewritten (design/shared/cellfield.js v2); mockups M1 to M5 being updated; M6 night-plate in progress.
 - R12 (14 Nov): open list closed: name Stitch final; overnight work allowed; live demo optional; simulator parameters from training data; anomaly thresholds by testing; roles kept; Boltz not used; Jin supplement permission granted.
+- R13 (14 Nov): upload promoted to core-lite (4.4): 1 to 5 frames in, classical segmenter to start state, forecast with band out; no LLM on pixels; sample-frame fallback; video real run uses it. Reason: without user input the forecaster has no path to the lab.
