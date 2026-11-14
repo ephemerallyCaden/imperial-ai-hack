@@ -50,12 +50,14 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Ensemble spread + conformal calibration across wounds (leave-one-wound-out jackknife+ or split conformal across wounds; wound is the exchangeable unit). Report coverage with confidence interval, CRPS, reliability plot.
 
 ## 6. Data
-### 6.1 In core scope [D]
-- **WHAD annotated**: MCF10A experiment 1 (16 positions: CC control 7, C61 = CYR61 shRNA 6, N61 2, NC 1) + MCF7 (3 positions: LacZ 2, SEMA6D 1). Hourly, 20 usable frames (t00 to t19); wound masks from the authors.
-- **WHAD unannotated MCF10A**: wound area from our own segmenter.
-- **Jin 2016 profiles** (+ SDs): PC-3, 6 starting densities (10,000 to 20,000 cells/well), 3 replicates, 38 columns of 50 um, counts at 0/12/24/36/48 h; proliferation allowed. Cite the paper; do not re-host (supplement licence unclear).
-- Stretch only [D]: MDCK strip movies (Zenodo 4991621, CC0).
-- Not selected, therefore out of scope [DER]: fruit-fly embryo set (Zenodo 7660424); Cell Tracking Challenge data (restricted use).
+### 6.1 Data scope [D, R2 + R8]
+- **Main real-data benchmark: WHAD MCF10A** [D]. Annotated: MCF10A experiment 1 (16 positions: CC control 7, C61 = CYR61 shRNA 6, N61 2, NC 1) + MCF7 (3 positions: LacZ 2, SEMA6D 1). Hourly, 20 usable frames (t00 to t19); wound masks from the authors.
+- **WHAD unannotated MCF10A: auto-segmented by P1, scope = experiment 1 remainder + experiment 2 only** [D]. Exclude experiment 3 and MCF7.
+- **Jin 2016 profiles** (+ SDs) [D]: PC-3, 6 starting densities (10,000 to 20,000 cells/well), 3 replicates, 38 columns of 50 um, counts at 0/12/24/36/48 h; proliferation allowed. Cite the paper; do not re-host (supplement licence unclear).
+- **Zaritsky 2015** [D]: second test set for held-out treatment (growth factor HGF/SF and Met inhibitor PHA665752; DA3 and MDCK cells; 4 to 6 replicates per condition). Conditional: P1 verifies frame interval, image access and masks in the first hour; if unusable, drop it and record that here.
+- **In core scope as secondary data** [D, R8]: fruit-fly embryo set (Zenodo 7660424), WHiM-BC (Zenodo 8131123; also prior art to read), MDCK strip movies (Zenodo 4991621). [DER] Priority if time runs short: WHAD + Jin first, then Zaritsky and the embryo set, then WHiM-BC and MDCK.
+- Out: Cell Tracking Challenge data (restricted use).
+
 ### 6.2 Facts that bind the design [F]
 - WHAD: Zenodo 12806149 (CC BY 4.0; code repo MIT); MCF10A and MCF7; phase contrast, 0.454 um/pixel, 1920x1440, hourly for 48 or 72 h; **mitomycin C blocks proliferation**; genetic conditions, not drugs; masks cover only 19 of 104 positions.
 - Every 21-image position has an all-zero last image (t20): **drop it**.
@@ -66,11 +68,11 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ### 6.3 Storage [DER]
 - Extracted subset at `~/whad-data` (16+3 annotated positions, 1.2 GB) and `~/whad-data-staging` (8 unannotated MCF10A exp2 positions). Outside the repo; never commit data or PDFs. Disk is about 96% full. Checksum of `whad_camad.zip` verified.
 
-### 6.4 Newly reported sources (from colleagues, checked 14 Nov; NOT yet decided)
+### 6.4 Source notes for colleague-reported data (checked 14 Nov; scope decided in 6.1)
 - **Zaritsky et al. 2015** (GigaDB 10.5524/100118, GigaScience doi 10.1186/s13742-015-0049-6; paper CC BY, data under the CC0 waiver per the paper): 31 time-lapse wound-healing experiments, 2 cell lines, 6 conditions with 4 to 6 replicates each: DA3 mouse mammary cells (21: control 6, +HGF/SF 5, PHA665752 Met inhibitor 4, PHA + HGF/SF 6) and MDCK (10: control 5, +HGF/SF 5). Raw images at The Cell: an Image Library (groups 45451 DA3 and 44501 MDCK); processed monolayer contours, motion fields and scripts in GigaDB; github.com/gigascience/paper-zaritsky2015. Frame interval, image size, total size and whether proliferation was blocked: not verified. Treatment arms (growth factor, inhibitor) with replicates would make a stronger held-out-condition test than genetic knockdowns confounded by plate part. Colleague note says 19 have processed masks (not verified).
 - **WHiM-BC** (Zenodo 8131123, CC BY 4.0, 843 MB): MCF-7 monolayer (12 wells; frames at 0, 3, 6, 9, 12, 24, 27 h; 127 images) and MCF-7 spheres (12 wells; 0 to 15 h; 126 images); only about 7 time points per well. Linked paper and code: Garcia-Moreno et al. 2024 (Comput Biol Med, doi 10.1016/j.compbiomed.2024.108890), "Predicting Wound Healing Progress Framework" (PWPF), repo github.com/frangam/wound-healing (Python, no licence). This is direct prior art for deep-learning wound-progress forecasting; read and cite; do not claim first.
 - Zenodo 21779854 (HUVEC / SKOV-3 scratch frames, wound-gap polygons, CC BY 4.0; image zip 3.7 GB) and Zenodo 19738270 (diabetic-rat keratin-TMAO dressing study; scratch table with 24 h closure only) were already assessed: limited use.
-- Fruit-fly embryo set (Zenodo 7660424): the record lists 61 sequences (colleague note says 62); 1 frame/min, about 120 frames, 128x128 crops at about 9.2 um/pixel, wound outlines; colleagues call it the "main dataset" but it was not selected in R2 (see 15).
+- Fruit-fly embryo set (Zenodo 7660424): the record lists 61 sequences (colleague note says 62); 1 frame/min, about 120 frames, 128x128 crops at about 9.2 um/pixel, wound outlines; colleagues called it the main dataset; R8 decided WHAD is main and the embryo set is secondary.
 
 ## 7. Evaluation protocol [D]
 - Splits: hold out whole plate parts (part I vs part II) and a held-out condition (CYR61 shRNA vs control); no random wound split.
@@ -117,7 +119,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Role names; Figma owner (P3 assumed).
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence (Elsevier terms) and use of its files. Note: the BINNs repo (github.com/jlager/BINNs, Data/cell_density_profiles.npy, 100 KB) carries the Jin profiles as a numpy file; repo has no licence, so cite, do not re-host.
-- Which dataset is the 'main' one, whether to add Zaritsky 2015 and WHiM-BC, and the segmentation scope (see 6.4); asked in R8.
+
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
 - P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader.
@@ -132,3 +134,4 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - R5: evaluation = hold out plate parts + a condition; fallback = validate NCA vs statistical forecaster, push NCA if passable, else statistical + NCA emulator; stack = Python/PyTorch + TS viewer.
 - R6: no sliders in draw tool; readout = no inference, integrate movement and multiplication as model terms; passable = CRPS within 10% and coverage 85 to 95%; gate 19:00; overnight work elsewhere = yes.
 - R7 (14 Nov): both movement and multiplication terms confirmed; draw tool = MCF10A control + CYR61 shRNA presets only; real WHAD frames only in the video's validation segment; user supplied colleagues' extra data sources (6.4) instead of answering the segmentation-scope question.
+- R8 (14 Nov): main benchmark = WHAD MCF10A; Zaritsky 2015 = second test set with held-out treatment, conditional on a first-hour verification; embryo set, WHiM-BC and MDCK strip movies in core as secondary data; auto-segmentation scope = MCF10A exp1 remainder + exp2.
