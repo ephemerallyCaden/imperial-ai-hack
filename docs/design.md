@@ -19,7 +19,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 
 ## 3. Team and roles [D]
 - 3 people. P1 data + segmentation + baselines + scoring. P2 cell simulator + NCA + calibration. P3 viewer + Figma + README + 2-minute video.
-- Names: OPEN (assign in 15).
+- Role names P1/P2/P3 are final (R12); assign people by the team.
 
 ## 4. Product spec
 ### 4.1 Forecaster outputs per wound [DER from section 1]
@@ -62,6 +62,19 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - **Gate at 19:00 Sat [D]:** NCA is "passable" if on held-out wounds its CRPS is within 10% of the best statistical forecaster AND empirical 90% coverage is between 85% and 95%. Passable: ship NCA as the forecaster. Not passable: ship the statistical forecaster as the forecaster and keep the NCA as the draw-tool emulator (labelled "emulator").
 ### 5.4 Uncertainty [D]
 - Ensemble spread + conformal calibration across wounds (leave-one-wound-out jackknife+ or split conformal across wounds; wound is the exchangeable unit). Report coverage with confidence interval, CRPS, reliability plot.
+
+### 5.5 Contracts and defaults [D, R14; proposed by team lead, change freely]
+- **Pipeline (resolves emulator vs forecaster):** frames up to t0 -> segmenter -> mask + fitted wound parameters (migration time Tm, bias) -> cell-agent sim from that start state -> NCA (trained on sim output, parameters as channels) gives the ensemble. Statistical baselines fit the area curve directly. The 19:00 gate compares the NCA ensemble with the best baseline (5.3).
+- **Target:** A(t) = wound pixels / ROI pixels from masks; closure = 1 - A(t)/A(first frame). t50/t90 = first time closure crosses 50%/90% (reopening ignored after first crossing); not reached by the last usable frame = censored, report P(not closed). t0 = first 10/20/30/50% of usable frames; horizon = last usable frame (t00 to t19 for WHAD, hours).
+- **Units and grid:** time in hours since first frame; lengths in um; one lattice site = one cell (~20 um, P2 confirms from WHAD nuclei); NCA density grid = coarse-grained agent counts; area-preserving resampling between mask, lattice and density grid.
+- **Forecast JSON (P1 writes `contracts/forecast.schema.json`; P2 emits, P3 reads):** wound_id, model, t_hours[], area_q05[], area_q50[], area_q95[], t50 and t90 {median, q05, q95, censored_prob}, p_close_by_T, p_stall, flags[] {type, reason}, segmentation_quality, version.
+- **Splits (unit = position; all frames of a position stay in one fold; thresholds and tuning frozen on training folds only):** fold A = train part I, test part II, and the reverse; fold B = train CC, test C61 (confounded with plate part, so report both folds and say so). Report per fold, never pooled only.
+- **Uncertainty recipe:** 50 members; spread from bootstrap over the parameter fit plus stochastic agent/NCA noise; conformal at wound level (leave-one-wound-out jackknife+ because wounds are few) on a normalised max-over-horizon area residual; report n and Wilson CI beside coverage.
+- **Draw tool:** a simulation under a preset, not a forecast; label it "simulation, preset parameters", no band or coverage claim for a drawn wound. Preset values come from the CC and C61 fits (division OFF).
+- **Viewer:** at most ~20k agents in a Web Worker; deep zoom draws the agents (they are the cells); zoomed out is the coarse-grained density of the same agents, so area matches at every zoom. NCA weights ship as JSON with a small JS inference loop for the band; fall back to precomputed ensembles if too slow.
+- **Upload refusal rules (4.4):** refuse or flag if mask < 1% or > 70% of the ROI, if more than 3 components exceed 5% of the ROI, if the frame is blank or out of focus (texture p90 below a floor set on WHAD), or if scale or interval is missing. Accept PNG/JPG/TIFF; scale default 0.454 um/px only if the user confirms WHAD.
+- **Repo:** `data/` + `eval/` + `contracts/` (P1), `sim/` + `nca/` (P2), `web/` + `docs/` video script (P3); branches `feature/<area>-<name>`; merge to main when it builds (CLAUDE.md); NCA is tiny so CPU or free Colab GPU is enough; no data or PDFs in the repo.
+- **Video:** owner P3; script draft by 20:00 Sat; record 09:00 to 11:00 Sun; submit by 11:30. Real run = upload 3 frames, forecast with band and flags, then held-out validation, then the scorecard with one failure case.
 
 ## 6. Data
 ### 6.1 Data scope [D, R2 + R8]
@@ -144,7 +157,17 @@ Resolved by the user on 14 Nov (R12):
 - Boltz: not used; bounty not pursued.
 - Jin supplement licence: the team has permission to use it. Still cite Jin 2016; the BINNs repo numpy copy has no licence, so do not re-host it.
 
-Still open: none.
+Still to confirm: overnight work and the demo/video rule with organisers (P3 emails aisociety@imperial.ac.uk); 5.5 defaults are proposals until the team accepts them.
+
+## 15c. Known risks [DER]
+- Time: 3 people, large scope; cut order if late = LLM roles, secondary datasets, Zaritsky, upload live processing (keep sample fallback), then draw-tool polish. Never cut the held-out scorecard.
+- NCA may not pass the gate: statistical forecaster ships (5.3).
+- Small evaluation sets (19 annotated positions): wide coverage CI, weak conformal; report honestly.
+- WHAD cannot calibrate division (mitomycin); division comes from priors and Jin.
+- Segmentation error (IoU ~0.74, part II 0.62) propagates to start states and labels.
+- Cell agents are a model: always label "simulated cells, not tracked cells".
+- No live demo: the video's real run must work first time; keep a recorded backup.
+- Coordination: unmerged `feature/data-baselines` also edits HACKATHON.md; mockup choice and Figma authentication pending.
 
 ## 15b. Colleague workspace tasks (requested by user; assigned by role)
 - P1 (data/eval): verify Zaritsky 2015 file sizes, frame interval and masks (GigaDB + Cell Image Library); read WHiM-BC paper and PWPF repo (Garcia-Moreno 2024) for baselines/metrics; confirm the 61 vs 62 embryo count; wrap the Jin profiles from the BINNs numpy file with a documented loader; own the upload pipeline (4.4): frames to mask to simulator start state, with bad-mask refusal.
@@ -166,3 +189,4 @@ Still open: none.
 - R11b (14 Nov): tissue rendering = no outlines, no hexagons, gradient state blends; shared renderer rewritten (design/shared/cellfield.js v2); mockups M1 to M5 being updated; M6 night-plate in progress.
 - R12 (14 Nov): open list closed: name Stitch final; overnight work allowed; live demo optional; simulator parameters from training data; anomaly thresholds by testing; roles kept; Boltz not used; Jin supplement permission granted.
 - R13 (14 Nov): upload promoted to core-lite (4.4): 1 to 5 frames in, classical segmenter to start state, forecast with band out; no LLM on pixels; sample-frame fallback; video real run uses it. Reason: without user input the forecaster has no path to the lab.
+- R14 (14 Nov): risks and implementation contracts added (5.5, 15c): pipeline, target definition, splits, uncertainty recipe, JSON forecast contract, upload refusal rules, repo ownership, video plan. Proposed defaults.
