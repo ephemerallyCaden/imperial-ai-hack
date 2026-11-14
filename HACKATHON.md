@@ -1,4 +1,30 @@
-# Hackathon Playbook (24 hours, 4 people)
+# Imperial AI Hack Playbook (24 hours, 3 people)
+
+**Runs:** 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2026. Submission deadline: [TBC]. Venue: [TBC]. Team name: [TBC].
+
+## Tracks
+
+Pick ONE main track and at most ONE sub-bounty (organisers recommend one of each for a solid product).
+
+Main tracks:
+1. Autonomous Agents (Adaption fine-tuning optional)
+2. Voice, Vision & Generative Media
+3. AI for Science
+4. AI Poker Bots
+5. Reply Challenge: AI on Campus
+
+Cross-cutting (enter regardless of main track):
+- **Best Designed AI Product**: as well designed as it is smart. Designed in Figma (not Figma Make). **Leaning towards this.**
+- **Best use of Adaption**: fine-tune a model with Adaption; ranked on Adaption's leaderboard by win rate vs the base model.
+
+Chosen main track: [TBC, leaning towards the least-applied track]
+Chosen sub-bounty: [TBC]
+
+Track details, judging criteria, sponsor APIs and rules: [TBC, fill in when received]
+
+## Design (Figma)
+Because we are targeting Best Designed AI Product: design the 3 demo screens in Figma in hour 0:30-2:00 (one person), then build to the Figma. Keep the file link here: [Figma link]. Reserve time at 16:00-18:00 for design polish, not just feature work.
+
 
 ## Timeline
 
@@ -6,7 +32,7 @@
 |------|----------|-----|
 | 0:00-0:30 | Idea finalized. Run `/spec` to write SPEC.md | All together |
 | 0:30-1:00 | Choose stack, scaffold project, fill in CLAUDE.md | One person |
-| 1:00-2:00 | Build 3 demo screens with hardcoded data | Frontend person |
+| 1:00-2:00 | Build 3 demo screens with hardcoded data | Design + frontend person |
 | 1:00-2:00 | Set up backend skeleton + sponsor API integration | Backend person |
 | 2:00-8:00 | Parallel feature work on branches | Everyone on own branch |
 | 8:00-9:00 | First merge. Run `/integrator` or merge manually | One person |
@@ -39,16 +65,13 @@ git push
 
 ### Each person runs their own Claude session
 ```bash
-# Person A (frontend)
+# Person A (design + frontend)
 claude
 
-# Person B (backend)
+# Person B (backend + sponsor/model API integration)
 claude
 
-# Person C (sponsor API integration)
-claude
-
-# Person D (polish/deployment)
+# Person C (integration, deployment, demo)
 claude
 ```
 

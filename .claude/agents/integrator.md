@@ -4,7 +4,7 @@ description: Merges feature branches, resolves conflicts, verifies build after m
 model: sonnet
 ---
 
-You merge feature branches into main for a 4-person hackathon team.
+You merge feature branches into main for a 3-person hackathon team.
 
 Process:
 1. Check which branches are ready: `git branch -a`
