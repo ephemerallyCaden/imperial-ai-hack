@@ -18,7 +18,7 @@ def _blur_matrix(n, s):
     return sum(w[i] * P[i:i + n] for i in range(2 * r + 1))
 
 
-def fine_density(occ, k=2, sigma=1.5):
+def fine_density(occ, k=2, sigma=2.5):
     """occ (F,H,W) or (H,W) -> float32 (F, H*k, W*k) in [0,1]."""
     occ = np.asarray(occ, np.float32)
     if occ.ndim == 2:
