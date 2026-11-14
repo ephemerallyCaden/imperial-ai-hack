@@ -132,7 +132,7 @@ async function sheet() {
   panel(sim, nca, 12, top + rows.length * (th + 30) + 10, cv.width - 24, 360);
 }
 async function compare() { // free (gate) rule vs follow (v2) rule, same wound; NCA v2 row when its file exists
-  const D = q.get('dirF'), ld = (n) => fetch(D + n).then((r) => r.json());
+  const D = q.get('dirF') || SIM, ld = (n) => fetch(D + n).then((r) => r.json());
   const [vid, sim, nca, vidF, simF, zoom] = await Promise.all([load('whad_partII_C61_P2.json'), load('whad_partII_C61_P2_sim38.json'),
     load('whad_partII_C61_P2_nca.json'), ld('whad_partII_C61_P2_follow.json'), ld('whad_partII_C61_P2_sim38_follow.json'), ld('zoom_follow.json')]);
   const ncaF = q.get('ncaF') ? await ld(q.get('ncaF')) : null;

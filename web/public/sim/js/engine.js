@@ -19,6 +19,8 @@ export const PRESETS_FOLLOW = {
   CC: { Tm: 4.2867591533230405, Td: null, bias: 0.7541227302000011 }, // n 7 (4 manual); Tm IQR 4.06-7.34, bias IQR 0.64-0.90
   C61: { Tm: 4.707304000226463, Td: null, bias: 0.5330060647425588 }, // n 7 (3 manual); Tm IQR 4.42-5.04, bias IQR 0.43-0.66
 };
+// demo default (user decision, recorded on #68 as an open departure from the pre-declared criterion)
+export const DEFAULT_RULE = 'follow';
 export const presetsFor = (rule) => (rule === 'follow' ? PRESETS_FOLLOW : PRESETS);
 export const presetLabelFor = (rule) => (rule === 'follow' ? PRESET_LABEL_FOLLOW : PRESET_LABEL);
 export const presetCaptionFor = (rule) => (rule === 'follow' ? PRESET_CAPTION_FOLLOW : null);
@@ -55,17 +57,18 @@ export function reservoirMask(occ, h, w, edge = DEFAULTS.edge) {
 
 export class Engine {
   // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
-  // rule: 'free' (default, the gate rules; 'frozen' accepted as alias) or 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
+  // rule: 'follow' (DEFAULT since the v2 decision, #68) or 'free' (the pre-registered gate rules; 'frozen' = alias).
+  // 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
   // Moore-connected to the reservoir through occupied sites pulls the chain behind it, so its source stays occupied;
   // movers on islands leave a vacancy as before. Fixed at construction (preset switches keep it). params.follow = true
   // is accepted as an alias.
-  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = 'free' }) {
+  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = DEFAULT_RULE }) {
     this.w = w; this.h = h;
     this.occ = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
     this.rand = rng(seed);
     this.t_hours = 0;
-    this.follow = rule === 'follow' || !!(params && params.follow);
+    this.follow = (rule === 'follow' || !!(params && params.follow)) && !(params && params.follow === false);
     this.rule = this.follow ? 'follow' : 'free'; // = cellsim Params.rule names; picks the matching preset set
     this.setPreset(preset, params);
     // reservoir = border-band sites occupied at t0 (cellsim.reservoir_mask): a wound touching the edge stays open
