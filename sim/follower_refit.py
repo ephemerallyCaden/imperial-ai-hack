@@ -1,10 +1,10 @@
-"""PROTOTYPE: refit every WHAD wound (16 manual + auto) with the frozen rules vs Params(follow=True).
+"""PROTOTYPE: refit every WHAD wound (16 manual + auto) with the frozen rules vs Params(rule="follow").
 
   python3 sim/follower_refit.py frozen|follow     -> sim/fits/follower_compare_<mode>.json
   python3 sim/follower_refit.py --table           per-wound + per-group tables from both JSONs
 Reuses calibrate.error_cube (cost = wound_frac MSE, mean over seeds) and forecast.load_curves/start_state (auto
 wounds start from the synthetic band, fitted on QC-ok frames, as forecast.fit_auto). Overrides are local and reach
-the workers via fork: follow mode = Params(follow=True) + TM_GRID geomspace(0.05, 50, 31) (same log spacing as
+the workers via fork: follow mode = Params(rule="follow") + TM_GRID geomspace(0.05, 50, 31) (same log spacing as
 calibrate's 21-point grid). Per position and t0 in {4, 10} (frame index, as calibrate): grid fit on frames <= t0 ->
 rmse_in, and the same fit's error on frames > t0 -> rmse_out (the forecast error); rmse_full = best fit on all frames.
 """
@@ -21,7 +21,7 @@ path = lambda m: os.path.join(HERE, "fits", f"follower_compare_{m}.json")
 
 def setup(mode):
     if mode == "follow":
-        cal.Params = fc.Params = functools.partial(Params, follow=True)
+        cal.Params = fc.Params = functools.partial(Params, rule="follow")
         cal.TM_GRID = np.geomspace(0.05, 50.0, 31)
 
 
