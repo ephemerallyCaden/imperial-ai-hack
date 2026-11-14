@@ -8,13 +8,15 @@ sys.path.insert(0, os.path.join(root, "sim"))
 from start_state import load_png_mask, mask_to_lattice
 
 fit = json.load(open(os.path.join(root, "sim/fits/whad_fits.json")))["fits"][pos][cut]
-f0 = fit["start_frame"] + fit["t0"]
+rows = [r for r in csv.DictReader(open(os.path.join(root, "data/processed/whad_curves.csv"))) if r["position"] == pos]
+# start = last observed frame with t <= cut-off (cut-off keys are hours, e.g. "3.8"), as sim/forecast.py and nca/forecast_whad.py
+last = [r for r in rows if float(r["t_hours"]) <= float(fit["t0"]) + 1e-9][-1]
+f0, t_cut = int(last["frame"]), float(last["t_hours"])
 wound, um = load_png_mask(pos, f0)
 occ = mask_to_lattice(wound, um)
-rows = [r for r in csv.DictReader(open(os.path.join(root, "data/processed/whad_curves.csv"))) if r["position"] == pos]
-t_cut = next(float(r["t_hours"]) for r in rows if int(r["frame"]) == f0)
 obs = [[float(r["t_hours"]) - t_cut, float(r["wound_frac"])] for r in rows if int(r["frame"]) >= f0]
-json.dump(dict(position=pos, cutoff=int(cut), frame=f0, h=int(occ.shape[0]), w=int(occ.shape[1]), occ=occ.ravel().tolist(),
+obs_all = dict(t_hours=[float(r["t_hours"]) for r in rows], wound_frac=[float(r["wound_frac"]) for r in rows])
+json.dump(dict(position=pos, cutoff=float(cut), frame=f0, t_start=t_cut, observed_all=obs_all, fit_t0=fit['t0'], h=int(occ.shape[0]), w=int(occ.shape[1]), occ=occ.ravel().tolist(),
                Tm=fit["Tm"], bias=fit["bias"], params=fit.get("members"), observed=obs), open(out, "w"))
-print(pos, "cut", cut, "frame", f0, occ.shape, "lattice wf %.4f mask wf %.4f" % (1 - occ.mean(), wound.mean()),
+print(pos, "cut", cut, "frame", f0, "t %.1f h" % t_cut, "obs wf %.4f" % float(last["wound_frac"]), occ.shape, "lattice wf %.4f mask wf %.4f" % (1 - occ.mean(), wound.mean()),
       "Tm %.3f bias %.2f" % (fit["Tm"], fit["bias"]), len(obs), "observed points")

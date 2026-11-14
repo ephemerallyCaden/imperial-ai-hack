@@ -148,3 +148,19 @@ const { fine, outline } = viewFrame(pb, f);  // default view: fine.data (Uint8, 
 const occ = agentFrame(pb, f);               // deep zoom: Uint8Array(pb.H * pb.W), 1 = cell
 const rho = densityFrame(pb, f);             // coarse density (pb.density.h x w); mean(occ) == mean(rho) every frame
 ```
+
+### NCA playback: `web/public/sim/whad_partII_C61_P2_nca.json` (17 KB)
+
+This is the same wound as Agent 4's sim playback, rolled out with the NCA so the viewer can show NCA vs sim vs data on one wound.
+
+- **Format:** Agent 4's format, density only (no `agents`, so `viewFrame` does not apply). Render `densityFrame(pb, f)` directly as the NCA field: 16×22, one density cell = 2×2 sites.
+- **Start:** the observed mask at the last frame ≤ the 3.8 h cut-off (frame 3, t = 3.0 h, wound_frac 0.2124, matching the observed value), the same construction as the official forecasts.
+- **Frames:** 33, one per NCA half-hour substep, from 3.0 to 19.0 h. They come from a deterministic rollout with the wound's point fit (Tm 0.310, bias 0.443; Agent 1's `fits[pos]["3.8"]`, which uses frames ≤ 3.8 h only).
+- **`meta`:**
+  - `observed`: the full observed curve.
+  - `band`: the raw 50-member ensemble `q05`/`q50`/`q95`. It is **uncalibrated**; caption it as such.
+  - also the fit, the start, and the weights sha256.
+- **Decode check:** `1 - mean(densityFrame)` matches `wound_frac` to within 1.4e-4 (uint8 quantisation).
+- **Result:** the NCA's MAE against observed after the cut-off is 0.017. It closes faster than the data until about 11 h, then more slowly (0.013 vs 0.002 at 19 h).
+- **Not like-for-like with Agent 4's sim file:** that file starts at frame 0 with the t0 = 10 fit (Tm 0.50, bias 0.78).
+- **Regenerate:** `python3 sim/js/band_check.py <agent1 root> exp1_partII_C61_P2 3.8 case.json`, then `node sim/js/make_nca_playback.mjs web/public/sim/nca_weights.json case.json web/public/sim/whad_partII_C61_P2_nca.json`.
