@@ -41,6 +41,14 @@ simulator output.
 - `--auto` adds the auto-segmented wounds, using Agent 1's synthetic band start (no masks on this machine).
 - Upload path / other callers: `nca/api.py` `nca_forecast(occ, members, t_obs_hours, area_obs, hours_out)`.
 
+## Commands
+Setup: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` (torch pinned there).
+- `python nca/gen_data.py --n 3000 --out /tmp/nca_data.npz` simulator training data (~1-2 min, 8 processes)
+- `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt --steps 2000 --curr 80 --nval 150` (~35 min CPU)
+- `python nca/export.py nca/weights.pt nca/weights.json` weights for the JS port
+- `python nca/forecast_whad.py [--auto]` forecasts into `nca/forecasts/whad/`, then `python contracts/validate.py nca/forecasts/whad`
+- `python nca/quick_score.py nca/forecasts/whad sim/forecasts/whad` coverage / median-error sanity table
+
 ## Checks
 - `python nca/tests/test_mass.py`: exact mass conservation and bounds.
 - `python nca/eval_vs_sim.py`: #24 done-criterion. Compares NCA error vs simulator with the simulator's own member
