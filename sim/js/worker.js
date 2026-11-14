@@ -8,7 +8,8 @@
 //   init option smooth: { k, sigma } overrides SMOOTH_K/SMOOTH_SIGMA; smooth:false turns both off.
 // NCA band (#28), for UPLOADED / REAL wounds only (never for a drawn wound: design.md, draw tool = simulation, no band):
 //   { type:'nca-load', weights:<nca/weights.json object> } -> { type:'nca-ready' }
-//   { type:'band', Tm, bias, hours:24, members:20, seed, start } with fitted Tm/bias (required) and start either
+//   { type:'band', Tm, bias | params:[[Tm,bias],...], hours:24, members:20, seed, start } (fitted; params = fit members,
+//     member m uses params[m % n]) and start either
 //     { occ:Uint8Array(h*w) agent lattice (1 = cell), h, w }  -> coarse-grained by GRAIN, R from its t0 border reservoir
 //     { rho:Float32Array(h*w) coarse density, h, w, R? }     -> used as is (R defaults to 0)
 //   -> { type:'band', t_hours[0..hours], q05, q50, q95 } (wound_frac per hour from the start state), or { type:'band-error', error }
@@ -55,14 +56,15 @@ function lockField(m) {
 function band(m) {
   const st = m.start;
   if (!nca) return { type: 'band-error', error: 'send nca-load first' };
-  if (!st || m.Tm == null || m.bias == null) return { type: 'band-error', error: 'band needs start and fitted Tm, bias' };
+  const hasP = Array.isArray(m.params) && m.params.length > 0;
+  if (!st || (!hasP && (m.Tm == null || m.bias == null))) return { type: 'band-error', error: 'band needs start and fitted Tm, bias (or params)' };
   let rho, R, h, w;
   if (st.occ) {
     const cg = coarseGrain(st.occ, st.h, st.w, GRAIN);
     ({ rho, h, w } = cg);
     R = coarseGrain(reservoirMask(st.occ, st.h, st.w), st.h, st.w, GRAIN).rho;
   } else { rho = st.rho; h = st.h; w = st.w; R = st.R || null; }
-  const b = nca.band(rho, h, w, m.Tm, m.bias, m.hours || 24, { members: m.members || 20, seed: m.seed || 1, R });
+  const b = nca.band(rho, h, w, m.Tm, m.bias, m.hours || 24, { members: m.members || 20, seed: m.seed || 1, R, params: hasP ? m.params : null });
   return { type: 'band', t_hours: b.t_hours, q05: b.q05, q50: b.q50, q95: b.q95 };
 }
 function stop() { running = false; clearTimeout(timer); timer = null; }

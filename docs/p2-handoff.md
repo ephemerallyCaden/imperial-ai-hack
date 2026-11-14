@@ -81,7 +81,7 @@ The band does not depend on the draw engine and does not need `init`.
 
 1. Send `{type:'nca-load', weights}` once, with `weights` = the parsed `nca/weights.json`. The worker replies `{type:'nca-ready'}`.
 2. Send `{type:'band', Tm, bias, hours: 24, members: 20, seed, start}`.
-   - `Tm` and `bias` are the wound's fitted values and are required.
+   - `Tm` and `bias` are the wound's fitted values. Alternatively pass `params: [[Tm, bias], ...]`, the fit's bootstrap members from `whad_fits.json` → `fits[pos][cutoff].members`. Member *m* then uses `params[m % n]`, so the band carries the fit uncertainty too.
    - `start` is either `{occ, h, w}`: the agent lattice from the mask, `Uint8Array(h*w)` with 1 = cell. The worker coarse-grains it by `GRAIN = 2` and takes the reservoir from its starting border band.
    - Or `start` is `{rho, h, w, R?}`: a coarse density `Float32Array(h*w)` in 0..1, used as is. `R` is the reservoir fraction and defaults to 0.
 3. The reply is `{type:'band', t_hours[0..hours], q05[], q50[], q95[]}`.
