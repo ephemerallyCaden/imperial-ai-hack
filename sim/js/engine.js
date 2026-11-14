@@ -30,6 +30,16 @@ function rng(seed) {
   return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
 }
 
+// cellsim.reservoir_mask: border-band sites (width edge) occupied at t0. occ: Uint8Array(h*w), 1 = cell.
+export function reservoirMask(occ, h, w, edge = DEFAULTS.edge) {
+  const m = new Uint8Array(h * w);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if ((y < edge || y >= h - edge || x < edge || x >= w - edge) && occ[i]) m[i] = 1;
+  }
+  return m;
+}
+
 export class Engine {
   // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
   constructor({ w, h, wound, preset = 'CC', params = null, seed = 1 }) {
@@ -40,13 +50,9 @@ export class Engine {
     this.t_hours = 0;
     this.setPreset(preset, params);
     // reservoir = border-band sites occupied at t0 (cellsim.reservoir_mask): a wound touching the edge stays open
-    const e = this.p.edge;
+    this.resMask = reservoirMask(this.occ, h, w, this.p.edge);
     this.res = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      if ((y < e || y >= h - e || x < e || x >= w - e) && this.occ[i]) this.res.push(i);
-    }
-    this.resMask = new Uint8Array(w * h); for (const i of this.res) this.resMask[i] = 1;
+    for (let i = 0; i < w * h; i++) if (this.resMask[i]) this.res.push(i);
     this._refill();
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
