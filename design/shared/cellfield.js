@@ -1,5 +1,7 @@
-/* Stitch design mockups: shared simulated cell field + state-colour rules.
-   Not project code: visual stand-in only. Everything it draws is SIMULATED. */
+/* Stitch design mockups: shared simulated tissue field + state-colour rules (v2: organic, no outlines, gradients).
+   Not project code: visual stand-in only. Everything it draws is SIMULATED.
+   API unchanged from v1: CellField.render(canvas, opts) -> {stats, palette, geometry, W, areaFraction}; CellField.PAL; CellField.RULES.
+   New: CellField.swatch(key, tone, size) -> SVG string (soft round swatch with the non-colour cue); opts.dish for circular clip. */
 (function (global) {
   const PAL = {
     light:  { intact:'#E9D3C0', edge:'#C98F7C', dividing:'#F8EEDC', fresh:'#F3D9D2', wound:'#B0645C', line:'#9C7B66' },
@@ -7,86 +9,107 @@
     deep:   { intact:'#946B52', edge:'#6B4535', dividing:'#C9A184', fresh:'#B58370', wound:'#4F2B2B', line:'#3E2A20' }
   };
   const RULES = [
-    { key:'dividing', name:'Dividing',      rule:'divided this step',                               cue:'dark centre dot' },
-    { key:'edge',     name:'Leading edge',  rule:'at least 1 empty neighbour and moved last step',  cue:'outline on wound-facing sides' },
-    { key:'fresh',    name:'New tissue',    rule:'re-occupied within the last 10 steps, now behind the front', cue:'fine stipple' },
-    { key:'intact',   name:'Intact',        rule:'no empty neighbour (contact-inhibited, resting)', cue:'flat fill' },
-    { key:'wound',    name:'Wound',         rule:'empty site (no cell)',                            cue:'flat, no outline' }
+    { key:'dividing', name:'Dividing',      rule:'divided this step',                               cue:'two small dark nuclei in a pale cell' },
+    { key:'edge',     name:'Leading edge',  rule:'at least 1 empty neighbour and moved last step',  cue:'darker shaded band along the wound (no line)' },
+    { key:'fresh',    name:'New tissue',    rule:'re-occupied within the last 10 steps, now behind the front', cue:'fine speckle, fading with age' },
+    { key:'intact',   name:'Intact',        rule:'no empty neighbour (contact-inhibited, resting)', cue:'flat tone, soft cell mosaic' },
+    { key:'wound',    name:'Wound',         rule:'empty site (no cell)',                            cue:'smooth, darkest toward the centre' }
   ];
   function rng(seed){ let a=seed>>>0; return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-
-  // wound boundary radius at angle th for progress p in [0,1]; irregular, closes unevenly
+  const hex = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const sstep = (a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
   function boundary(th, p, W){
     const base = 1 + 0.16*Math.sin(3*th+W.p1) + 0.10*Math.sin(5*th+W.p2) + 0.06*Math.sin(2*th+W.p3);
     const close = Math.min(1, p*(0.92 + 0.14*Math.sin(2*th+W.p4)));
     return Math.max(0, base*(1-close));
   }
+  function hash2(x,y,s){ let h=(x*374761393 + y*668265263 + s*2147483647)|0; h=(h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967296; }
+  function vnoise(x,y,s){ const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi, u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+    const a=hash2(xi,yi,s), b=hash2(xi+1,yi,s), c=hash2(xi,yi+1,s), d=hash2(xi+1,yi+1,s); return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+
   function render(canvas, opt){
-    opt = Object.assign({ tone:'light', seed:7, progress:0.55, r:11, window:0.14, overlays:true, bg:null, wound:{cx:0.5,cy:0.5,a:0.30,b:0.20,rot:-0.35} }, opt||{});
-    const P = PAL[opt.tone] || PAL.light;
+    opt = Object.assign({ tone:'light', seed:7, progress:0.55, r:11, window:0.14, overlays:true, dish:null, wound:{cx:0.5,cy:0.5,a:0.30,b:0.20,rot:-0.35} }, opt||{});
+    const P = PAL[opt.tone] || PAL.light, C = { intact:hex(P.intact), edge:hex(P.edge), dividing:hex(P.dividing), fresh:hex(P.fresh), wound:hex(P.wound), line:hex(P.line) };
     const dpr = opt.dpr || 1, w = canvas.clientWidth||canvas.width/dpr, h = canvas.clientHeight||canvas.height/dpr;
-    canvas.width = w*dpr; canvas.height = h*dpr;
-    const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
-    const R = rng(opt.seed), S = opt.r*1.7321, rowH = opt.r*1.5;
+    canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
+    const ctx = canvas.getContext('2d'); ctx.setTransform(1,0,0,1,0,0);
+    const R = rng(opt.seed), cs = opt.r*1.95;                       // typical cell spacing in px
     const W = { p1:R()*6.28, p2:R()*6.28, p3:R()*6.28, p4:R()*6.28 };
-    const cols = Math.ceil(w/S)+2, rows = Math.ceil(h/rowH)+2;
     const cx = opt.wound.cx*w, cy = opt.wound.cy*h, ca = Math.cos(opt.wound.rot), sa = Math.sin(opt.wound.rot);
-    const A = opt.wound.a*Math.min(w,h*1.6), B = opt.wound.b*Math.min(w,h*1.6);
-    const cells = [], grid = new Map();
-    function insideAt(x,y,p){ const dx=x-cx, dy=y-cy; const u=(dx*ca+dy*sa), v=(-dx*sa+dy*ca);
-      const th=Math.atan2(v/B,u/A), d=Math.hypot(u/A,v/B); return d < boundary(th,p,W); }
+    const A = opt.wound.a*Math.min(w,h*1.6), B = opt.wound.b*Math.min(w,h*1.6), Rm = (A+B)/2;
     const pNow = opt.progress, pPrev = Math.max(0, pNow - opt.window);
-    for (let j=-1;j<rows;j++) for (let i=-1;i<cols;i++){
-      const x = i*S + (j&1? S/2:0) + (R()-0.5)*S*0.10, y = j*rowH + (R()-0.5)*S*0.10;
-      const c = { i, j, x, y, empty: insideAt(x,y,pNow), wasEmpty: insideAt(x,y,pPrev), rnd:R() };
-      cells.push(c); grid.set(i+','+j, c);
-    }
-    const nb = (c)=>{ const even=!(c.j&1); const d= even? [[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]] : [[-1,0],[1,0],[0,-1],[1,-1],[0,1],[1,1]];
-      return d.map(([di,dj])=>grid.get((c.i+di)+','+(c.j+dj))); };
-    // background = wound colour; occupied cells drawn on top
-    ctx.fillStyle = opt.bg || P.intact; ctx.fillRect(0,0,w,h);
-    const stats = { dividing:0, fresh:0, edge:0, intact:0, wound:0 };
-    cells.forEach(c=>{
-      if (c.empty) { stats.wound++; return; }
-      const ns = nb(c); const emptyN = ns.map(n=> n && n.empty);
-      const hasEmpty = emptyN.some(Boolean);
-      const fresh = c.wasEmpty;                  // re-occupied within the window
-      const edge = hasEmpty && c.rnd < 0.9;      // moved last step (most edge cells)
-      const dividing = (edge || fresh) && c.rnd > 0.935;
-      c.state = dividing ? 'dividing' : edge ? 'edge' : fresh ? 'fresh' : 'intact';
-      stats[c.state]++; c.emptyN = emptyN;
-    });
-    // draw cells
-    const ang = [0,1,2,3,4,5].map(k=> Math.PI/6 + k*Math.PI/3);
-    const rad = opt.r*1.03;
-    cells.forEach(c=>{
-      if (c.empty) { ctx.beginPath(); ang.forEach((a,k)=>{ const px=c.x+rad*Math.cos(a), py=c.y+rad*Math.sin(a); k?ctx.lineTo(px,py):ctx.moveTo(px,py); }); ctx.closePath(); ctx.fillStyle=P.wound; ctx.fill(); ctx.lineWidth=0.5; ctx.strokeStyle=P.wound; ctx.stroke(); return; }
-      ctx.beginPath(); ang.forEach((a,k)=>{ const px=c.x+rad*Math.cos(a), py=c.y+rad*Math.sin(a); k?ctx.lineTo(px,py):ctx.moveTo(px,py); }); ctx.closePath();
-      ctx.fillStyle = P[c.state]; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = P.line+'55'; ctx.stroke();
-    });
-    // secondary cues
-    cells.forEach(c=>{
-      if (c.empty) return;
-      if (c.state==='edge' || c.state==='dividing' && c.emptyN.some(Boolean)){
-        // outline on sides facing the wound: approximate by drawing arcs toward empty neighbours
-        const dirs = c.j&1 ? [[-1,0],[1,0],[0,-1],[1,-1],[0,1],[1,1]] : [[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]];
-        ctx.strokeStyle = P.line; ctx.lineWidth = 1.2; ctx.beginPath();
-        c.emptyN.forEach((e,k)=>{ if(!e) return; const n = grid.get((c.i+dirs[k][0])+','+(c.j+dirs[k][1])); if(!n) return;
-          const mx=(c.x+n.x)/2, my=(c.y+n.y)/2, dx=n.x-c.x, dy=n.y-c.y, L=Math.hypot(dx,dy)||1, px=-dy/L, py=dx/L, hl=rad*0.52;
-          ctx.moveTo(mx-px*hl,my-py*hl); ctx.lineTo(mx+px*hl,my+py*hl); });
-        ctx.stroke();
-      }
-      if (c.state==='dividing'){ ctx.fillStyle=P.line; ctx.beginPath(); ctx.arc(c.x,c.y,Math.max(1.4,rad*0.18),0,6.283); ctx.fill(); }
-      if (c.state==='fresh'){ ctx.fillStyle=P.line+'99'; for(let k=0;k<3;k++){ const a=c.rnd*6.28+k*2.09; ctx.beginPath(); ctx.arc(c.x+Math.cos(a)*rad*0.38,c.y+Math.sin(a)*rad*0.38,0.9,0,6.283); ctx.fill(); } }
-    });
-    // overlay: ensemble-uncertainty contours (10% and 90% occupancy spread) as dotted lines
-    if (opt.overlays){
+    // jittered seeds (cell centres), organic irregular mosaic
+    const gc = Math.ceil(w/cs)+3, gr = Math.ceil(h/cs)+3, seeds = new Float32Array(gc*gr*5);
+    for (let j=0;j<gr;j++) for (let i=0;i<gc;i++){ const k=(j*gc+i)*5;
+      seeds[k]=(i-1+0.5+(R()-0.5)*0.85)*cs; seeds[k+1]=(j-1+0.5+(R()-0.5)*0.85)*cs; seeds[k+2]=(R()-0.5); seeds[k+3]=R(); seeds[k+4]=R()*6.283; }
+    // wound geometry helpers
+    function field(x,y){ const dx=x-cx, dy=y-cy, u=dx*ca+dy*sa, v=-dx*sa+dy*ca, th=Math.atan2(v/B,u/A), d=Math.hypot(u/A,v/B);
+      const rb=boundary(th,pNow,W), rp=boundary(th,pPrev,W); return { s:(d-rb)*Rm, f: (rp>rb+1e-6) ? (d>=rb && d<rp ? 1-(d-rb)/(rp-rb) : 0) : 0, ang:th }; }
+    const W_ = Math.round(w*dpr), H_ = Math.round(h*dpr), img = ctx.createImageData(W_,H_), px = img.data;
+    const wr = cs*0.30, edgeW = cs*0.95, mix=(a,b,t)=>a+(b-a)*t;
+    // per-seed classification (for dividing cells + stats)
+    const stats={dividing:0,fresh:0,edge:0,intact:0,wound:0}; const dividingSeed = new Uint8Array(gc*gr);
+    for (let j=0;j<gr;j++) for (let i=0;i<gc;i++){ const k=(j*gc+i)*5, F=field(seeds[k],seeds[k+1]);
+      if (F.s<0){ stats.wound++; continue; } const nearFront = F.s<edgeW*1.1 || F.f>0.2;
+      if (nearFront && seeds[k+3]>0.93){ dividingSeed[j*gc+i]=1; stats.dividing++; }
+      else if (F.s<edgeW*0.9) stats.edge++; else if (F.f>0.18) stats.fresh++; else stats.intact++; }
+    for (let y=0;y<H_;y++){
+      const Y=y/dpr;
+      for (let x=0;x<W_;x++){
+        const X=x/dpr, gi=Math.floor(X/cs)+1, gj=Math.floor(Y/cs)+1;
+        let d1=1e9,d2=1e9,n1=-1,n2=-1;
+        for (let dj=-1;dj<=1;dj++){ const jj=gj+dj; if (jj<0||jj>=gr) continue;
+          for (let di=-1;di<=1;di++){ const ii=gi+di; if (ii<0||ii>=gc) continue; const k=(jj*gc+ii)*5, ex=seeds[k]-X, ey=seeds[k+1]-Y, d=ex*ex+ey*ey;
+            if (d<d1){ d2=d1;n2=n1;d1=d;n1=jj*gc+ii; } else if (d<d2){ d2=d;n2=jj*gc+ii; } } }
+        d1=Math.sqrt(d1); d2=Math.sqrt(d2); const k1=n1*5; const F=field(X,Y);
+        const ww = sstep(-wr, wr, -F.s);                           // wound weight, smooth edge (1 inside)
+        // tissue colour: intact tinted per cell, + large-scale mottling
+        const mott = vnoise(X/70,Y/70,3)-0.5, tint = 1 + seeds[k1+2]*0.05 + mott*0.04;
+        let r=C.intact[0]*tint, g=C.intact[1]*tint, b=C.intact[2]*tint;
+        // new tissue (gradient with age) and leading edge (soft band)
+        const fw = Math.min(1, F.f*F.f*(3-2*F.f))*0.9;              // 0..0.9
+        r=mix(r,C.fresh[0],fw); g=mix(g,C.fresh[1],fw); b=mix(b,C.fresh[2],fw);
+        const ew = F.s>=0 ? Math.exp(-Math.pow(F.s/edgeW,2))*0.92 : 0;
+        r=mix(r,C.edge[0],ew); g=mix(g,C.edge[1],ew); b=mix(b,C.edge[2],ew);
+        // soft cell mosaic (no outline): gentle valleys between cells, nucleus blob
+        const val = 1 - sstep(0, cs*0.75, d2-d1), nuc = Math.exp(-Math.pow(d1/(cs*0.22),2));
+        const shade = 1 - 0.030*val - 0.045*nuc; r*=shade; g*=shade*0.995; b*=shade*1.0;
+        // dividing cells: pale body with two nuclei
+        if (dividingSeed[n1]){ const body=1-sstep(cs*0.28,cs*0.62,d1), a=seeds[k1+4], ox=Math.cos(a)*cs*0.13, oy=Math.sin(a)*cs*0.13,
+          n_a=Math.exp(-(Math.pow(X-seeds[k1]-ox,2)+Math.pow(Y-seeds[k1+1]-oy,2))/(2*(cs*0.075)**2)), n_b=Math.exp(-(Math.pow(X-seeds[k1]+ox,2)+Math.pow(Y-seeds[k1+1]+oy,2))/(2*(cs*0.075)**2));
+          r=mix(r,C.dividing[0],body*0.95); g=mix(g,C.dividing[1],body*0.95); b=mix(b,C.dividing[2],body*0.95);
+          const dk=Math.min(1,n_a+n_b)*0.55; r=mix(r,C.line[0],dk); g=mix(g,C.line[1],dk); b=mix(b,C.line[2],dk); }
+        // fine speckle in new tissue (non-colour cue)
+        if (fw>0.12 && hash2(x,y,9)>0.972){ const sp=Math.min(1,fw*1.4)*0.22; r*=1-sp; g*=1-sp; b*=1-sp; }
+        // wound: smooth gradient, darker toward the centre, faint granulation texture
+        if (ww>0){ const depth=sstep(0,cs*3.2,-F.s), gr_=(vnoise(X/9,Y/9,5)-0.5)*0.07+(hash2(x,y,2)-0.5)*0.03;
+          const wc=[C.wound[0]*(1-0.22*depth)*(1+gr_), C.wound[1]*(1-0.22*depth)*(1+gr_), C.wound[2]*(1-0.20*depth)*(1+gr_)];
+          r=mix(r,wc[0],ww); g=mix(g,wc[1],ww); b=mix(b,wc[2],ww); }
+        let al=255; if (opt.dish){ const dx=X-opt.dish.cx*w, dy=Y-opt.dish.cy*h, rr=opt.dish.r*Math.min(w,h); al=255*(1-sstep(rr-1.2,rr+0.6,Math.hypot(dx,dy))); }
+        const o=(y*W_+x)*4; px[o]=r; px[o+1]=g; px[o+2]=b; px[o+3]=al;
+      } }
+    ctx.putImageData(img,0,0);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if (opt.overlays){                                               // ensemble-uncertainty contours (data overlay, not a grid outline)
       ctx.save(); ctx.setLineDash([1.5,3.5]); ctx.lineWidth=1.5; ctx.strokeStyle='#4A5A6A';
       [-0.10,0.10].forEach(dp=>{ ctx.beginPath(); for(let k=0;k<=180;k++){ const th=k/180*6.2832, r=boundary(th,Math.min(1,Math.max(0,pNow+dp)),W);
-          const u=Math.cos(th)*A*r, v=Math.sin(th)*B*r, x=cx+u*ca-v*sa, y=cy+u*sa+v*ca; k?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.stroke(); });
+        const u=Math.cos(th)*A*r, v=Math.sin(th)*B*r, x=cx+u*ca-v*sa, y=cy+u*sa+v*ca; k?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.stroke(); });
       ctx.restore();
     }
-    return { stats, palette:P, W, geometry:{cx,cy,A,B,ca,sa}, areaFraction: stats.wound/Math.max(1,cells.length) };
+    const tot = Math.max(1, stats.dividing+stats.fresh+stats.edge+stats.intact+stats.wound);
+    return { stats, palette:P, W, geometry:{cx,cy,A,B,ca,sa}, areaFraction: stats.wound/tot };
   }
-  global.CellField = { render, PAL, RULES };
+  // soft round legend swatch (SVG string) with the non-colour cue; no outlines
+  function swatch(key, tone, size){
+    size = size||28; const P = PAL[tone]||PAL.light, s=size, c=s/2, id='sw'+key+tone+s;
+    const dark = (hx,f)=>{ const v=hex(hx).map(x=>Math.round(x*f)); return `rgb(${v})`; };
+    let inner='';
+    if (key==='wound') inner = `<defs><radialGradient id="${id}"><stop offset="0" stop-color="${dark(P.wound,0.78)}"/><stop offset="1" stop-color="${P.wound}"/></radialGradient></defs><circle cx="${c}" cy="${c}" r="${c-1}" fill="url(#${id})"/>`;
+    else if (key==='edge') inner = `<defs><radialGradient id="${id}"><stop offset="0.35" stop-color="${P.intact}"/><stop offset="0.8" stop-color="${P.edge}"/><stop offset="1" stop-color="${dark(P.edge,0.92)}"/></radialGradient></defs><circle cx="${c}" cy="${c}" r="${c-1}" fill="url(#${id})"/>`;
+    else if (key==='fresh') inner = `<circle cx="${c}" cy="${c}" r="${c-1}" fill="${P.fresh}"/>` + [[.3,.35],[.62,.3],[.45,.55],[.7,.62],[.28,.68],[.55,.78]].map(p=>`<circle cx="${p[0]*s}" cy="${p[1]*s}" r="0.9" fill="${P.line}" opacity="0.45"/>`).join('');
+    else if (key==='dividing') inner = `<defs><radialGradient id="${id}"><stop offset="0.5" stop-color="${P.dividing}"/><stop offset="1" stop-color="${dark(P.dividing,0.94)}"/></radialGradient></defs><circle cx="${c}" cy="${c}" r="${c-1}" fill="url(#${id})"/><circle cx="${c-s*0.11}" cy="${c-s*0.05}" r="${s*0.07}" fill="${P.line}" opacity="0.8"/><circle cx="${c+s*0.11}" cy="${c+s*0.05}" r="${s*0.07}" fill="${P.line}" opacity="0.8"/>`;
+    else inner = `<circle cx="${c}" cy="${c}" r="${c-1}" fill="${P.intact}"/>`;
+    return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" aria-hidden="true">${inner}</svg>`;
+  }
+  global.CellField = { render, PAL, RULES, swatch };
 })(window);
