@@ -59,6 +59,11 @@ same Tm. Tried and rejected: a near-wound reservoir (`res_dist`, closes too fast
 the sim decelerates slightly near the end (RMSE about 0.06-0.10 of initial area over the full 19 h).
 
 ## Simulator-ensemble forecasts (`sim/forecast.py`, #26; 00:00 gate fallback)
+**Superseded for scoring (22:25 Sat):** the gate files are now `eval/forecasts/whad/{loo_all,loo_manual,CC_to_C61}/sim_ensemble{,_raw}_{cut}h.json`
+from `sim/forecast_gate.py`. They use P1's series (time since the series' first frame, wound_frac <= 0.70), cut-offs 1.9/3.8/5.7/9.5 h, P1's folds and
+P1's conformal (`eval/forecast_baselines.forecast_file`), and they start from the cut-off mask rescaled to its observed area, as the NCA. Fits are keyed "1.9" ... "9.5"
+(series time, commit aed3174). Run with a Python that has scipy (e.g. `/tmp/p2venv/bin/python sim/forecast_gate.py`, about 5 min). Results: `docs/p2-results.md`.
+The notes below describe the earlier `sim/forecasts/whad/` files (t0 2/4/6/10, folds loo / B_CC_to_C61), which have been removed.
 `python3 sim/forecast.py` (a few minutes, all cores) writes `sim/fits/whad_auto_fits.json` and
 `sim/forecasts/whad/sim_ensemble_{fold}_t{cutoff}.json`, one file per fold and cut-off, valid against `contracts/forecast.schema.json`.
 - Folds (R15): `loo` = every WHAD MCF10A position (16 manual + 44 auto); presets come from other physical wounds of the same condition, with both parts of the held-out wound excluded (asserted). `B_CC_to_C61` = every C61 position; presets come from CC wounds only.
