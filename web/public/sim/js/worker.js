@@ -72,7 +72,7 @@ function stop() { running = false; clearTimeout(timer); timer = null; }
 onmessage = (e) => {
   const m = e.data;
   if (m.type === 'init') { stop(); init = lockField(m); eng = new Engine(init); post(); return; }
-  if (m.type === 'nca-load') { nca = new NCA(m.weights, m.opts); postMessage({ type: 'nca-ready' }); return; }
+  if (m.type === 'nca-load') { nca = new NCA(m.weights, m.config || m.opts); postMessage({ type: 'nca-ready' }); return; }
   if (m.type === 'band') { postMessage(band(m)); return; }
   if (!eng) return; // ignore everything else until init
   if (m.type === 'reset') { stop(); eng = new Engine(init); post(); }
