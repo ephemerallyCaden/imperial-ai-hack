@@ -16,13 +16,16 @@ torch.manual_seed(0); torch.set_num_threads(4)
 d = np.load(a.data)
 import json
 cfg = {**V1_CONFIG, **(json.loads(a.config) if a.config else {})}
+if "cfg" in d:  # provenance: the data's sim rule and Tm range must match the model config
+    dc = json.loads(str(d["cfg"]))
+    assert dc["follow"] == cfg["follow"] and abs(dc["tm_max"] - cfg["tm_max"]) < 1e-9, (dc, cfg)
+    cfg["data"] = dc
 X = torch.tensor(d["density"]); RR = torch.tensor(d["R"])[:, None]
 P = torch.tensor([norm_params(*p, cfg["tm_min"], cfg["tm_max"]) for p in d["params"]], dtype=torch.float32)
 Xtr, Rtr, Ptr, Xva, Rva, Pva = X[a.nval:], RR[a.nval:], P[a.nval:], X[:a.nval], RR[:a.nval], P[:a.nval]
 F_ = X.shape[1] - 1
 net = build(cfg); opt = torch.optim.Adam(net.parameters(), 2e-3)
-if a.config:
-    json.dump(cfg, open(config_path(a.out), "w"), indent=1)
+json.dump(cfg, open(config_path(a.out), "w"), indent=1)  # always: weights without a config would be read as v1
 if a.init:
     net.load_state_dict(torch.load(a.init, map_location="cpu")); a.curr = 1  # L = F_ from the start
     for g in opt.param_groups: g["lr"] = a.lr

@@ -17,7 +17,7 @@ from start_state import load_png_mask, mask_to_lattice
 from model import TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX
 
 MASKS = os.path.join(HERE, "..", "data", "processed", "whad_masks")
-EARLY_T = 2  # frames <= the earliest cut-off t0 (sim/fits/whad_fits.json cutoffs[0])
+EARLY_T = 1.9  # series time (h since the series' first frame) <= P1's earliest cut-off (eval/forecast_baselines.py)
 _cache = {}
 
 
@@ -25,9 +25,11 @@ def whad_shapes():
     if not _cache:
         # same loader + resample as sim/calibrate.py (full-res PNG -> 32 x 44 lattice at SITE_UM = 20 um)
         import pandas as pd  # manual-mask positions (full-res PNGs via sim/start_state.py)
-        for pos in sorted(pd.read_csv(os.path.join(HERE, "..", "data", "processed", "whad_curves.csv")).position.unique()):
+        cur = pd.read_csv(os.path.join(HERE, "..", "data", "processed", "whad_curves.csv"))
+        for pos, g in sorted(cur.groupby("position")):
             fr = []
-            for k in range(EARLY_T + 1):
+            f0 = int(g.frame.min())  # series time = frame - first frame (hourly frames)
+            for k in [int(f) for f in g.frame if f - f0 <= EARLY_T]:
                 try:
                     fr.append(mask_to_lattice(*load_png_mask(pos, k), SITE_UM))
                 except (IndexError, ValueError, FileNotFoundError):
@@ -97,6 +99,8 @@ if __name__ == "__main__":
     ap.add_argument("--procs", type=int, default=8)
     a = ap.parse_args()
     D, R, P = generate(a.n, a.hours, a.seed0, a.procs, {**CFG, "tm_max": a.tm_max, "follow": a.follow})
-    np.savez_compressed(a.out, density=D, R=R, params=P)
+    import json
+    np.savez_compressed(a.out, density=D, R=R, params=P,
+                        cfg=np.array(json.dumps({"follow": a.follow, "tm_min": CFG["tm_min"], "tm_max": a.tm_max, "early_t": EARLY_T})))
     A = (1 - D.mean((2, 3))); A = A / A[:, :1]
     print("saved", a.out, D.shape, "area@19h q10/50/90:", np.round(np.quantile(A[:, -1], [.1, .5, .9]), 3))
