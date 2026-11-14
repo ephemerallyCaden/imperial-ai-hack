@@ -5,7 +5,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 ## 1. Goal
 - [D] Build **Stitch**, the headline product: an early wound-closure forecaster with calibrated uncertainty, stall / "measure again" flags and a scorecard against simple baselines. (Name "for now"; user may rename.)
 - [D] Named user in the video's first 15 s: an **assay scientist** deciding whether to stop, extend or repeat a scratch/wound-assay plate. Clinical use is a "later" slide only.
-- [D] Track: **AI for Science**. Extra prize: **Figma** (design). Reply "AI on Campus" dropped. No Boltz bounty (see 15).
+- [D] Track: **AI for Science**. Extra prizes: **Figma** (design) and **Best Use of Adaption** (9c). Event theme: agentic AI product (9b). Reply "AI on Campus" dropped. No Boltz bounty (see 15).
 - [D] Demo feature: **draw a wound on screen and watch it heal**, with a **continuous zoom** from individual (simulated) cells to the whole wound.
 - Non-goals [D/DER]: clinical claims, drug-effect prediction, claims that simulated cells are observed cells, a proliferation-vs-movement inference feature.
 
@@ -37,8 +37,8 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - [D, R11] **Tissue tone switcher ships** (light / medium / deep): a display setting that re-themes the tissue colours only (state rules and cues unchanged); it is not part of the draw tool's controls (shape + preset). This reverses the earlier 'range in mockups only' choice. Colours are illustrative, not clinically calibrated; say so in the UI help.
 
 ### 4.4 Upload your own frames [D, R13; core-lite]
-- Input: 1 to 5 uploaded frames (PNG/JPG/TIFF) plus frame interval and pixel scale (from the assay intake in 9b, or typed). Scope stated in the UI: phase-contrast scratch assays like WHAD (MCF10A); other microscopes or cell types are unsupported and the tool says so.
-- Pipeline (deterministic, no LLM on pixels): classical texture segmenter gives the wound mask and area; the mask is the starting state of the cell-agent simulation and the NCA; the forecaster returns the closure curve with its 90% band, flags and the anomaly triage of 9b. More frames narrow the band (measured closure rate).
+- Input: 1 to 5 uploaded frames (PNG/JPG/TIFF) plus frame interval and pixel scale (from the Intake sub-agent in 9b, or typed). Scope stated in the UI: phase-contrast scratch assays like WHAD (MCF10A); other microscopes or cell types are unsupported and the tool says so.
+- Pipeline (deterministic, no LLM on pixels): classical texture segmenter gives the wound mask and area; the mask is the starting state of the cell-agent simulation and the NCA; the forecaster returns the closure curve with its 90% band, flags and the agent summary of 9b. More frames narrow the band (measured closure rate).
 - A segmentation quality check (mask area vs obvious failure, blank or out-of-focus frame) must refuse or flag rather than forecast from a bad mask.
 - Fallback if live processing is fragile: ship the same flow with precomputed sample frames ("try a sample") and keep the upload control. Must not delay the 19:00 forecaster gate.
 
@@ -117,11 +117,33 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 - Python/PyTorch for data, segmentation, cell agents, NCA, baselines, evaluation; TypeScript web viewer (deck.gl/WebGL); cell simulation in a Web Worker; small NCA exported for the draw tool; static exported files for playback.
 - Public GitHub repo, MIT licence; no raw data, no PDFs committed; reimplement code from papers with no licence.
 
-## 9b. LLM roles [D, R10]
-- Principle: deterministic code does the science; the LLM never forecasts and never produces a number. LLM output ships as cached JSON (run offline with the Claude API on the demo inputs; no live API call and no keys in the repo).
-- **Assay intake**: pasted protocol text to a structured config (cell line, seeding density, mitomycin yes/no, scratch tool, imaging interval, plate part). Code maps the config to a preset and applies rules (mitomycin means division off; Phi = Tm/Td < about 1e-2 check) and checks consistency; the LLM extraction is shown next to the source text for review.
-- **Anomaly triage**: code detects suspicious wounds first (observed leaves its 90% band, stall probability above threshold, flat area over a stated window, blank or out-of-focus frames); the LLM then reads the flagged wound's curve summary, metadata and (optionally) frame overlays and writes a short triage note with candidate causes (for example plate-part batch effect, edge damage, debris) labelled as hypotheses. It never raises or clears a flag by itself. Thresholds are set by P2/P1 and recorded here once chosen (OPEN).
-- Not included: Reviewer 2 audit, report/caption writer, segmentation QC as a separate role, free-form chat.
+## 9b. Agent layer [D, R19; replaces the R10 LLM roles]
+- Principle (kept from R10): deterministic code does the science. The LLM plans, picks tools and explains; it never produces a number. Plain-code policy has the final say on actions; a human approves anything irreversible (e.g. stop a plate). Research use only.
+- Build owner: P3. Stack: Python FastAPI service + Claude API tool use (Tool Runner, `claude-opus-5-5`, effort set explicitly). Recorded runs ship as JSON for the demo and the public repo (no keys); live mode runs locally with a key.
+- **Lead agent** (orchestrator) chooses which sub-agent and skill to call for each situation. Sub-agents and the code they wrap:
+  - Intake: pasted protocol text to config (cell line, seeding density, mitomycin, interval, scale); the Adaption model (9c) or Claude; code checks units and maps to a preset.
+  - QC: `data/upload.py` `check_frame`, `data/segment.py` `segment`, `sim/upload.py` `refusal`.
+  - Forecaster: `eval/bands.py` (calibrated edge-speed forecaster, ships per R18), output in the 5.5 forecast JSON contract.
+  - Flags: `eval/flags.py` thresholds; stall ships; out-of-band is an observation only; measure-again is not shipped (R16).
+  - Investigator (should): when a wound misbehaves, reruns `sim/cellsim.py` / `nca/api.py` with alternative start states (e.g. lower starting density, Jin 2016) and ranks the hypotheses by fit to the observed curve; labelled hypotheses.
+  - Critic: every number in a message must trace to a tool output; anything untraced is removed.
+  - Reporter: plain-English summary and the decision card.
+- Decisions the agent may propose: continue; stall flagged, ask a human; bad data, ask a human; more frames will narrow the band (from the error-vs-fraction-observed curve, not from the unvalidated measure-again signal).
+- **Traceability and monitoring:** one trace per run, a span per agent step and tool call (inputs as fingerprints, outputs, model version, tokens, cost, time) in a JSON/SQLite run log; the UI reads the same log. Optional: SDK OpenTelemetry or Langfuse for debugging. Monitored: coverage vs the 90% target, flag rates, QC refusals, tool errors, human overrides, cost per run.
+- **Evaluation of the agent:** replay held-out wounds as a simulated lab and compare a fixed schedule, simple rules and the agent on plate-hours saved (stated as simulation), wrong stops, frames used, right sub-agent chosen, hypothesis accuracy on synthetic wounds with a known cause, share of numbers traced (target 100%), guardrail triggers and cost. Rerun on every change; per-version scoreboard.
+- **Security and guardrails:** file and protocol text is data, never instructions (operator instructions only via system messages); fixed tool allowlist; no network for tools; no secrets in model context; upload checks (type, size, dimensions) plus the 5.5 refusal rules; model and data fingerprints checked; append-only audit log; out-of-scope requests (molecule design, clinical questions) refused.
+- **Ethics and legality:** advisory, research use only, intended-purpose statement in the UI and README (clinical use would bring medical-device rules into scope, so it is out of scope); dataset licences and credits as in 6; simulated cells labelled; failures shown.
+- **UI:** one app, three modes. Draw (sandbox: draw a wound, NCA emulator, no agent). Assay (sample or uploaded wound: viewer, decision card, short agent timeline, approve/reject). Ops (full trace waterfall, monitoring tiles, agent scoreboard). The video shows Assay then flips to Ops for proof.
+- Add-on if time: notifications (FYI / heads-up / action needed) so scientists do not have to watch the plate; with no reply the agent does only reversible things.
+
+## 9c. Adaption fine-tune [D, R19; owner P2]
+1. Task: protocol paragraph to the intake JSON config (fields as in 9b Intake). Clear right answers, so win rate is measurable.
+2. Test set first: 20 to 30 real Methods paragraphs from our dataset papers (WHAD, Zaritsky, Jin, Migliaccio and similar), labelled by hand. Never trained on.
+3. Training data: Adaption Invent and Expand to 1,000+ rows (`instruction_dataset`), varied wording, missing fields, unit variants. Run `estimate=True` first to check credits and time.
+4. Train: AutoScientist, `training_method="instruction"`, a small base model (e.g. Qwen 3.5 0.8B or Gemma 3 4B), set `target_win_rate` and `max_iterations`.
+5. Evaluate on the real test set: per-field accuracy vs the base model and vs Claude; report the win rate. Ship it only if it beats the base on the real set.
+6. Evidence for the prize: leaderboard screenshot, dataset and run IDs, the eval table in the README.
+7. Wire-up: the Intake sub-agent calls the fine-tuned model (check whether Adaption can serve it; otherwise run it locally), with Claude as fallback.
 
 ## 10. Schedule [D / F]
 - Now: Sat afternoon. **Gate: 00:00 Sun** (section 5.3; moved in R15). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
@@ -144,6 +166,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 2. Forecast with calibrated band on a held-out real WHAD wound; scorecard vs baselines.
 2b. Upload 1 to 5 real frames and get a forecast with band from the same pipeline (or a precomputed sample if live processing fails).
 3. Gate result recorded (passable or not) with numbers.
+3b. Agent run on a held-out wound: lead agent calls the sub-agents, every number traced, decision card shown, run log in the Ops view, agent vs fixed-schedule scoreboard (9b).
 4. Public repo, 2-minute video, Devpost submitted before 12:00 Sun.
 
 ## 15. OPEN (not decided)
@@ -194,3 +217,4 @@ Still to confirm: overnight work and the demo/video rule with organisers (P3 ema
 - R16 (14 Nov, P1): flags evaluated leave-one-wound-out on WHAD (eval/flags.py, eval/results/flags.csv). Stall ships (AUC 0.79-0.89, precision 0.50-0.80, recall 0.62-0.77; threshold in eval/results/flag_thresholds.json). Out-of-band (2 frames outside band) does not predict an off-track forecast (fires 2-3 of 55): shown as an observation, not a prediction. Measure-again has no validated signal (AUC 0.46-0.73, inconsistent across cut-offs): not shipped; the NCA ensemble spread is tested against the same check.
 - R17 (14 Nov, P1): WHAD cut-offs aligned with the NCA files to 2, 4, 6, 10 h (same frames seen by every model); scorer accepts fold names loo / B_CC_to_C61 and looks up physical wounds. Dry-run gate 22:40: NCA ensemble FAILS (4 h: quantile score 0.082 vs edge speed 0.035; coverage 0.11, band width 0.06) because its band has no conformal step (5.4).
 - R18 (14 Nov, gate, P1 scored P2's files): WHAD cut-offs back to 1.9/3.8/5.7/9.5 h (P2's gate files use them; R17's 2/4/6/10 superseded). Gate compares against statistical baselines only. **NCA not passable at the headline cut-off** (loo_all 3.8 h: 0.0495 vs edge speed 0.0385, ratio 1.29, coverage 0.93); passes 4/12 (all splits at 9.5 h, CC_to_C61 5.7 h); simulator 3/12; NCA within 7% of the simulator. Per 5.3: calibrated edge-speed forecaster ships for forecasts; NCA ships as the draw-tool emulator, labelled 'emulator'. Raw NCA/sim coverage 0.14/0.21, calibrated 0.93. Tables: docs/results.md.
+- R19 (14 Nov, team agreed): agentic layer adopted (9b replaces the R10 LLM roles): lead agent + sub-agents wrapping existing code, recorded runs, run log and monitoring, agent replay evaluation, security and ethics rules, three UI modes (Draw, Assay, Ops). P3 builds it. Adaption intake fine-tune plan added (9c, P2). Notifications are an add-on.
