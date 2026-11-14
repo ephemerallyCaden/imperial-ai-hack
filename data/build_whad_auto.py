@@ -22,7 +22,11 @@ def main():
         exp, part, cond, p = d.replace("\\", "/").split("/")[-4:]
         part = part.replace("part_", "")
         frames = {}
-        for f in glob.glob(f"{d}/*_ch00.tif"):
+        files = glob.glob(f"{d}/*_ch00.tif")
+        # one folder (exp1/part_II/NC/P3) holds two imaging positions: keep the one with the most frames
+        ids = [re.search(r"pos\d+", f).group() for f in files]
+        keep = max(set(ids), key=ids.count)
+        for f in [f for f, i in zip(files, ids) if i == keep]:
             k = int(re.search(r"_t(\d+)_ch00\.tif$", f).group(1))
             img = load_gray(f)
             if k <= 19 and img.std() > 1:  # t20 is an all-zero dummy; skip blank frames
