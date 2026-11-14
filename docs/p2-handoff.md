@@ -5,13 +5,21 @@ This is the reference for wiring P2's browser code into the viewer. All files ar
 | File | What it is |
 |---|---|
 | `sim/js/engine.js` | Cell-agent engine (JS port of `sim/cellsim.py`, statistically matched over 20 seeds) |
-| `sim/js/nca.js` | NCA inference (matches torch `nca/model.py` to 2.4e-7) |
+| `sim/js/nca.js` | NCA inference (matches torch `nca/model.py` to 3.6e-7 with the clean weights) |
 | `sim/js/smooth.js` | Smoothed occupancy and wound outline (JS port of Agent 4's `sim/smooth_view.py`; exact match) |
 | `sim/js/worker.js` | Module Web Worker that wraps all of the above |
 | `sim/js/playback.js` | Decoder for `web/public/sim/<name>.json` |
-| `nca/weights.json` | NCA weights (P2's branch) |
+| `nca/weights.json` | NCA weights (Agent 2, clean data, 46f5c29, sha256 `6d0fc3deecd4…`) |
 
-**Serving:** the viewer is served from `web/`, so copy all `sim/js/*.js` files together into one folder under `web/`, for example `web/public/sim/js/`. Copy `nca/weights.json` into `web/` too. The files import each other by relative path. Use a module worker; `file://` will not work.
+**Serving:** these files are already copied under `web/`, which is where the viewer is served from:
+- `web/public/sim/js/` holds `engine.js`, `nca.js`, `smooth.js`, `worker.js` and `playback.js`.
+- `web/public/sim/nca_weights.json` is `nca/weights.json`.
+
+The files import each other by relative path. Use a module worker; `file://` will not work.
+
+`sim/js/` is the source of truth. After a change there, recopy with `cp sim/js/{engine,nca,smooth,worker,playback}.js web/public/sim/js/`.
+
+These have been tested in Node with a stubbed worker, but not yet in a real browser.
 
 ## 1. Draw tool (worker)
 
@@ -93,6 +101,14 @@ The band does not depend on the draw engine and does not need `init`.
    - On bad input the reply is `{type:'band-error', error}` instead: no weights loaded, or a missing `start`, `Tm` or `bias`.
 
 **Latency:** on 16×22, 20 members take about **1.5 s** and 50 members about 3.5 s. The worker is busy for that time, so show a loading state.
+
+> **This band is the raw NCA ensemble and is not calibrated. Do not label it a 90% interval.** On the real WHAD wounds (16 positions, start state = mask at the cut-off, 50 members over the fit's bootstrap members), only a small fraction of the observed points fell inside q05–q95:
+> - cut-off 4: 38 of 235 hourly points;
+> - cut-off 10: 9 of 139.
+>
+> The median tracks the observed curve well: q50 MAE is about 0.003–0.08 of the field at cut-off 4, and about 0.004–0.045 at cut-off 10, mostly around 0.01. Agent 2's official `nca_ensemble` forecasts use the same construction.
+>
+> For a forecast band with a coverage claim, use the calibrated forecast JSON (`contracts/forecast.schema.json`, from P1's scorer). If you show this live band, caption it "NCA ensemble spread (uncalibrated)". To reproduce: `python3 sim/js/band_check.py <agent1 root> <position> <cutoff> case.json`, then `node sim/js/band_check.mjs web/public/sim/nca_weights.json case.json 50`.
 
 ```js
 const weights = await (await fetch('./public/sim/nca_weights.json')).json();
