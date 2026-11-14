@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "skills": {
+    "gap-finder": {
+      "source": "jurgendn/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/research-discovery/gap-finder/SKILL.md",
+      "computedHash": "bcb26baa471f9e4b85c4836cd2620555e44e068115ab635e6ec0db54ab812284"
+    }
+  }
+}
