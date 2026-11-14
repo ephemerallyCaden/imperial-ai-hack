@@ -18,7 +18,7 @@ def run(args):
     i, m, hours, cfg = args
     rng = np.random.default_rng(10 ** 6 + i)  # disjoint from training seeds
     occ0 = start_state(rng); Tm, bias = sample_params(rng, cfg)
-    p = Params(Tm=Tm, bias=bias, follow=True) if cfg["follow"] else Params(Tm=Tm, bias=bias)
+    p = Params(Tm=Tm, bias=bias, rule="follow" if cfg["follow"] else "free")
     D = np.stack([simulate(occ0, p, hours, seed=10 ** 6 + 100 * i + s, grain=GRAIN)["density"] for s in range(m)])
     R = coarse_grain(reservoir_mask(occ0, p.edge).astype(np.uint8), GRAIN)
     return D, R, (Tm, bias)
