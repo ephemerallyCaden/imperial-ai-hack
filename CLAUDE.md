@@ -18,6 +18,10 @@ Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2
 - `[build command]` to build
 - `[test command]` to run tests
 - `[lint command]` to lint
+- P2 sim (sim/, docs/sim.md): `python sim/calibrate.py` (fits), `python sim/forecast.py` (sim_ensemble gate files), `python sim/upload.py` (masks -> forecast JSON)
+- P2 NCA (nca/, see docs/nca.md; needs torch from requirements.txt): `python nca/gen_data.py --out /tmp/nca_data.npz`, `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt`, `python nca/forecast_gate.py` (nca_* gate files)
+- Score all forecasts: `python eval/score_forecasts.py eval/forecasts --gate nca_ensemble` (compare against statistical baselines only; gate() counts P2 models as baselines too)
+- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`
 
 ## Architecture
 <!-- Fill in after initial scaffolding -->
