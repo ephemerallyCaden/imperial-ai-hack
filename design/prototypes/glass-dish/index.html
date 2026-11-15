@@ -40,8 +40,12 @@
   #chart .axis { stroke: rgba(232,236,239,.3); } #chart .lbl { fill: var(--dim); font-size: 9px; }
   .timeline { left: 50%; bottom: 24px; transform: translateX(-50%); width: min(720px, 56vw); display: flex; gap: 12px; align-items: center; padding: 8px 12px; }
   .timeline button { background: none; border: 1px solid var(--line); color: var(--ink); font: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .1em; }
-  .timeline input { flex: 1; accent-color: #e8ecef; } .timeline .t { width: 90px; text-align: right; color: var(--dim); }
+  .timeline input { flex: 1; accent-color: #e8ecef; } .timeline .t { width: 120px; white-space: nowrap; text-align: right; color: var(--dim); }
   .bare .hud { display: none; }
+  .photo { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 360px; padding: 12px; border: 1px solid var(--line); z-index: 5; }
+  .photo canvas { display: block; margin: 8px 0; max-width: 100%; } .photo p { margin: 6px 0; } .photo button:disabled { opacity: .35; cursor: not-allowed; }
+  .photo-on { display: none !important; } .photo-mode .photo-on { display: inherit !important; } .photo-mode .photo-off { display: none !important; }
+  .photo-mode .panel, .photo-mode .chartbox { display: none; }
   .help { left: 32px; bottom: 24px; color: var(--dim); max-width: 300px; font-size: 10px; padding: 4px 8px 4px 0; }
 </style>
 <script type="importmap">
@@ -68,7 +72,13 @@
   <div class="seg"><button data-view="overview">OVERVIEW</button><button data-view="close">CLOSE</button><button data-view="cells">CELLS</button></div>
   <div class="seg"><button id="btn-select">SELECT AREA</button><button id="btn-clear">CLEAR</button></div>
   <div class="seg"><button id="btn-heat">AGE HEATMAP</button></div>
-  <div class="chip">SAMPLE DATA · FLY EMBRYO WOUND</div>
+  <div class="seg photo-off"><button id="btn-photo">DRAW FROM PHOTO</button></div>
+  <div class="seg photo-on"><button id="btn-exit-photo">EXIT PHOTO</button></div>
+  <input type="file" id="photo-in" accept="image/*" hidden>
+  <div class="chip photo-on">SIMULATION, PRESET PARAMETERS</div>
+  <div class="chip photo-on">SHAPE FROM PHOTO · HEALING IS A CELL-CULTURE MODEL, NOT THIS WOUND</div>
+  <div class="chip photo-on">RESEARCH USE ONLY, NOT FOR DIAGNOSIS OR TREATMENT</div>
+  <div class="chip photo-off">SAMPLE DATA · FLY EMBRYO WOUND</div>
   <div class="chip">SIMULATED CELLS · NOT TRACKED CELLS</div>
 </div>
 
@@ -93,12 +103,22 @@
     <div style="display:flex;justify-content:space-between;width:200px;color:var(--dim);font-size:10px"><span>new</span><span>old</span></div></div>
 </div>
 
+<div class="hud photo" id="photo" style="display:none">
+  <div class="k" style="color:var(--accent)">Draw from photo · <span id="photo-kind"></span></div>
+  <canvas id="photo-cv"></canvas>
+  <p id="photo-msg"></p>
+  <div class="src" id="photo-stats"></div>
+  <div class="seg"><button id="photo-run">RUN SIMULATION ON THIS SHAPE</button><button id="photo-cancel">CANCEL</button></div>
+  <div class="src" style="margin-top:8px">Stays in this browser; nothing is uploaded. Shape only: the dish is not this wound's size, and no times are shown.</div>
+</div>
+
 <div class="hud chartbox">
   <div class="k"><span>Closure curve</span><span>90% band</span></div>
   <svg id="chart" viewBox="0 0 360 150"></svg>
 </div>
 
-<div class="hud help">Drag to orbit · scroll to zoom · SELECT AREA then drag on the floor. Simulated cells are matched to the wound's area curve. Flag thresholds are illustrative.</div>
+<div class="hud help photo-on">Drag to orbit · scroll to zoom. The wound shape was traced from your photo and rescaled to the dish; the simulation fills it in with preset cell-culture rules, counted in steps, not hours. Colours: skin tone sampled from the photo.</div>
+<div class="hud help photo-off">Drag to orbit · scroll to zoom · SELECT AREA then drag on the floor. Simulated cells are matched to the wound's area curve. Flag thresholds are illustrative.</div>
 <div class="hud timeline">
   <button id="play">PLAY</button>
   <input id="time" type="range" min="0" max="1" value="0">

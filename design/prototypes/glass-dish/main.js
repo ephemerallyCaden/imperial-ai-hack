@@ -8,6 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { loadPhoto, analyse, outline } from './photo.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
@@ -18,7 +19,8 @@ const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFF
 // look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
 const Q = new URLSearchParams(location.search);
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
-document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
+const paintLegend = () => document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
+paintLegend();
 if (Q.has('bare')) document.body.classList.add('bare');
 const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
@@ -49,17 +51,21 @@ for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
   nb.push(n.filter(([a, b]) => a >= 0 && b >= 0 && a < NX && b < NY).map(([a, b]) => idx(a, b)));
 }
 const COUNT = NX * NY, rnd = Float32Array.from({ length: COUNT }, Math.random);
-const frames = [];
-{
-  const occ = new Uint8Array(COUNT), born = new Int16Array(COUNT).fill(-999);
+// simulate(occ0): fill the gap from its edges, one frame per step (re-run for a shape from a photo)
+function defaultOcc() {
+  const occ = new Uint8Array(COUNT);
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
     const x = cxOf(i, j), y = cyOf(j), c = W / 2 + 4 * Math.sin(y / 9);
     occ[idx(i, j)] = Math.abs(x - c) >= 14 + 3 * Math.sin(y / 5 + 1) ? 1 : 0;
   }
-  const gap = () => occ.reduce((s, v) => s + (v ? 0 : 1), 0), g0 = gap();
+  return occ;
+}
+function simulate(occ0) {
+  const out = [], occ = occ0.slice(), born = new Int16Array(COUNT).fill(-999);
+  const gap = () => occ.reduce((s, v) => s + (v ? 0 : 1), 0), g0 = Math.max(1, gap());
   for (let s = 0; s < 600; s++) {
-    frames.push({ occ: occ.slice(), born: born.slice(), step: s, area: gap() / g0 });
-    if (frames.at(-1).area < 0.003) break;
+    out.push({ occ: occ.slice(), born: born.slice(), step: s, area: gap() / g0 });
+    if (out.at(-1).area < 0.003) break;
     const next = occ.slice();
     for (let k = 0; k < COUNT; k++) {
       if (occ[k]) continue; let n = 0; for (const m of nb[k]) n += occ[m];
@@ -67,7 +73,9 @@ const frames = [];
     }
     occ.set(next);
   }
+  return out;
 }
+let frames = simulate(defaultOcc());
 function stateOf(f, k) {
   if (!f.occ[k]) return 'wound';
   const age = f.step - f.born[k];
@@ -78,7 +86,7 @@ function stateOf(f, k) {
 }
 // cell age (sim steps since the cell filled in; original tissue counts as oldest). ?age=skin: intact cells fade
 // new tissue colour -> intact -> darker, quieter intact as they mature. ?heat (or the AGE HEATMAP button): age heatmap overlay
-const AGE_SPAN = Math.max(60, frames.length * 0.6), AGE_SKIN = Q.get('age') === 'skin';
+let AGE_SPAN = Math.max(60, frames.length * 0.6); const AGE_SKIN = Q.get('age') === 'skin';
 let HEAT = Q.has('heat');
 // ?ageramp= how healed cells change colour as they age (t: 0 = just filled in, 1 = mature). Original tissue is not healed,
 // so it keeps the plain intact colour except in 'pale', where it is the oldest and darkest (the first version).
@@ -98,8 +106,9 @@ const RAMPS = {
   sat: () => [hsl(PAL.intact, 0, 2.2, 1.05), hsl(PAL.intact, 0, 1.4, 1), C(PAL.intact)],
   hue: () => [hsl(PAL.intact, -0.12, 1.3, 1), hsl(PAL.intact, -0.05, 1.1, 1), C(PAL.intact)],
 };
-const STOPS = (RAMPS[AGE_RAMP] || RAMPS.pale)();
-const ORIG = AGE_RAMP === 'pale' || !RAMPS[AGE_RAMP] ? STOPS[2] : C(PAL.intact);
+let STOPS, ORIG;
+function rebuildRamp() { STOPS = (RAMPS[AGE_RAMP] || RAMPS.pale)(); ORIG = AGE_RAMP === 'pale' || !RAMPS[AGE_RAMP] ? STOPS[2] : C(PAL.intact); }
+rebuildRamp();
 const ageT = age => Math.min(1, Math.max(0, age / (AGE_SPAN + 25)));
 function ageSkin(c, age) {   // age < 0 never happens for healed cells; original tissue has age > 999
   if (age > 900) return c.copy(ORIG);
@@ -362,7 +371,11 @@ $('chart').innerHTML = `
 // ---------- timeline + loop ----------
 const slider = $('time'), playBtn = $('play'); slider.max = T_END; slider.step = 0.5;
 let t = 0, playing = true, dirty = true, frameNow = frames[0];
+let PHOTO = false;   // Draw from photo: steps only, no times / probabilities
+const tEnd = () => PHOTO ? frames.length - 1 : T_END;
 function setTime(tt) {
+  if (PHOTO) { t = tt; slider.value = tt; const i = Math.min(frames.length - 1, Math.round(tt)); frameNow = frames[i];
+    $('t-label').textContent = `step ${i} / ${frames.length - 1}`; dirty = true; return; }
   t = tt; slider.value = tt; $('t-label').textContent = `t = ${tt.toFixed(0)} min`;
   const a = areaAt(tt); let f = frames[0]; for (const fr of frames) { f = fr; if (fr.area <= a) break; } frameNow = f;
   $('r-area').textContent = `${(a * 100).toFixed(0)}% of start`; $('r-bar').style.width = `${Math.min(100, a * 100)}%`;
@@ -370,10 +383,57 @@ function setTime(tt) {
   $('now').setAttribute('x1', X(tt)); $('now').setAttribute('x2', X(tt)); dirty = true;
 }
 slider.addEventListener('input', () => { playing = false; playBtn.textContent = 'PLAY'; setTime(+slider.value); });
-playBtn.addEventListener('click', () => { if (t >= T_END) setTime(0); playing = !playing; playBtn.textContent = playing ? 'PAUSE' : 'PLAY'; });
+playBtn.addEventListener('click', () => { if (t >= tEnd()) setTime(0); playing = !playing; playBtn.textContent = playing ? 'PAUSE' : 'PLAY'; });
 playBtn.textContent = 'PAUSE'; setTime(0);
 if (Q.get('sel')) { const [x0, z0, x1, z1] = Q.get('sel').split(',').map(Number); sel = { x0, z0, x1, z1 }; drawSelBox(); $('selpanel').style.display = ''; }
 if (Q.has('bare')) { playing = false; setTime(+(Q.get('t') || 30)); const v = views[Q.get('view') || 'close']; camera.position.copy(v.p); controls.target.copy(v.t); }
+
+// ---------- Draw from photo (P3-29 #124): classify, outline, simulate the shape in the photo's skin tone ----------
+let photoRes = null;
+const MSG = {
+  microscopy: 'Looks like a microscopy image (little or no colour). For a forecast use the Assay upload; Draw from photo is for skin-wound photos.',
+  other: 'Not a skin photo: too little skin-coloured area to find a wound.',
+  skin: 'Skin found, but no clear wound region. Try a closer crop around the wound.',
+  wound: 'Wound outline found (white). The simulation heals this shape on a cell-culture model.',
+};
+const hex = rgb => (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+const mixRGB = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+async function openPhoto(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const img = await loadPhoto(file), res = analyse(img); photoRes = res;
+  const cv = $('photo-cv'), s = Math.min(320 / img.bmp.width, 220 / img.bmp.height); cv.width = img.bmp.width * s; cv.height = img.bmp.height * s;
+  const g = cv.getContext('2d'); g.drawImage(img.bmp, 0, 0, cv.width, cv.height);
+  if (res.kind === 'wound') { g.fillStyle = '#FFFFFF'; const k = cv.width / res.w; for (const [x, y] of outline(res.mask, res.w, res.h)) g.fillRect(x * k, y * k, Math.max(1.5, k), Math.max(1.5, k)); }
+  $('photo-kind').textContent = { microscopy: 'MICROSCOPY IMAGE', other: 'OTHER PHOTO', skin: 'SKIN, NO WOUND FOUND', wound: 'SKIN WOUND PHOTO' }[res.kind];
+  $('photo-msg').textContent = MSG[res.kind];
+  $('photo-stats').textContent = Object.entries(res.stats).map(([k, v]) => `${k} ${v}`).join(' · ');
+  $('photo-run').disabled = res.kind !== 'wound'; $('photo').style.display = '';
+}
+function occFromMask(mask, w, h) {   // fit the mask's bounding box into ~70% of the dish, keeping its aspect (shape only, not size)
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]) { const x = i % w, y = (i / w) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1, fit = 0.7 * Math.min(W / bw, D / bh), occ = new Uint8Array(COUNT).fill(1);
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const mx = Math.floor(x0 + bw / 2 + (cxOf(i, j) - W / 2) / fit), my = Math.floor(y0 + bh / 2 + (cyOf(j) - D / 2) / fit);
+    if (mx >= 0 && my >= 0 && mx < w && my < h && mask[my * w + mx]) occ[idx(i, j)] = 0;
+  }
+  return occ;
+}
+function runPhoto() {
+  const r = photoRes; if (!r || r.kind !== 'wound') return;
+  PAL.intact = hex(r.skinRGB); PAL.edge = 0xFF3E41; PAL.fresh = hex(mixRGB(r.skinRGB, [255, 255, 255], 0.65)); PAL.wound = hex(r.skinRGB.map(v => Math.round(v * 0.1)));
+  rebuildRamp(); paintLegend(); ageLegend();
+  frames = simulate(occFromMask(r.mask, r.w, r.h)); AGE_SPAN = Math.max(60, frames.length * 0.6); hNow.fill(0.5);
+  PHOTO = true; document.body.classList.add('photo-mode'); $('photo').style.display = 'none';
+  slider.max = frames.length - 1; slider.step = 1; setTime(0); playing = true; playBtn.textContent = 'PAUSE'; goTo('close');
+}
+$('btn-photo').addEventListener('click', () => $('photo-in').click());
+$('photo-in').addEventListener('change', e => openPhoto(e.target.files[0]));
+$('photo-run').addEventListener('click', runPhoto);
+$('photo-cancel').addEventListener('click', () => { $('photo').style.display = 'none'; $('photo-in').value = ''; });
+$('btn-exit-photo').addEventListener('click', () => location.reload());
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); openPhoto(e.dataTransfer.files[0]); });
 
 // ?fx=bloom,grain post-processing (soft glow on bright cells; film grain like the reference poster)
 const FX = (Q.get('fx') || '').split(','), composer = FX.some(Boolean) ? new EffectComposer(renderer) : null;
@@ -389,7 +449,7 @@ addEventListener('resize', resize); resize();
 const clock = new THREE.Clock(); let settle = 0;
 renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, clock.getDelta());
-  if (playing) { const nt = Math.min(T_END, t + dt * 5); setTime(nt); if (nt >= T_END) { playing = false; playBtn.textContent = 'PLAY'; } }
+  if (playing) { const nt = Math.min(tEnd(), t + dt * (PHOTO ? 30 : 5)); setTime(nt); if (nt >= tEnd()) { playing = false; playBtn.textContent = 'PLAY'; } }
   if (dirty) { settle = 1.2; dirty = false; }
   if (settle > 0) { settle -= dt; updateColumns(frameNow, dt); selStats(); }
   if (fly) { fly.t = Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
