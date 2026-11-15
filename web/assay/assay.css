@@ -30,10 +30,16 @@
 .as-legend3d span { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; width: 10px; height: 10px; outline: 1px solid var(--hair); }
 .sw-wound { background: var(--cell-wound); } .sw-intact { background: var(--cell-intact); } .sw-edge { background: var(--cell-edge); } .sw-fresh { background: var(--cell-new); }
-/* age heatmap legend (mockup age-leg): state entries dimmed under the overlay, 200 px gradient of the stops */
+/* age heatmap legend (mockup age-leg): state entries dimmed under the overlay, 200 px gradient of the stops. Fades and
+   unfolds with the heat front (tissue.js setHeat: 700 ms, ease-out cubic); [hidden] leaves the layout after the fade out */
+.as-legend3d { --heat-ease: cubic-bezier(.33, 1, .68, 1); }
+.as-legend3d .as-st { transition: opacity 700ms var(--heat-ease); }
 .as-legend3d.is-heat .as-st { opacity: .35; }
-.as-ageleg { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; }
-.as-ageleg[hidden] { display: none; }
+.as-ageleg { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; max-height: 120px; overflow: hidden;
+  transition: opacity 700ms var(--heat-ease), max-height 700ms var(--heat-ease), margin-top 700ms var(--heat-ease), display 700ms; transition-behavior: allow-discrete; }
+.as-ageleg[hidden] { display: none; opacity: 0; max-height: 0; margin-top: -6px; }   /* -6px cancels the legend's 6 px gap */
+@starting-style { .as-ageleg:not([hidden]) { opacity: 0; max-height: 0; margin-top: -6px; } }
+.as-agenote { width: 200px; font-size: var(--fs-small); }
 .as-agebar { display: block; width: 200px; height: 8px; margin: 2px 0 0; }
 .as-ageends { display: flex; justify-content: space-between; width: 200px; }
 .as-tip { position: absolute; z-index: 3; white-space: nowrap; }
@@ -146,11 +152,10 @@
 .as-zoom .as-ibtn { border: 0; background: none; width: 44px; height: 36px; }
 .as-zoomr { writing-mode: vertical-lr; direction: rtl; width: 32px; height: 160px; accent-color: var(--accent); cursor: pointer; margin: 0; }
 .as-scalebar { font-size: 12px; color: var(--ink); background: rgba(5,6,7,.72); padding: 4px 8px; border: 1px solid var(--hair); align-self: flex-start; }
-.as-legend3d, .as-legendheat { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); background: rgba(5,6,7,.72); padding: 10px 12px; border: 1px solid var(--hair); max-width: none; }
-.as-legend3d[hidden], .as-legendheat[hidden] { display: none; }
-.as-legend3d span, .as-legendheat span { display: flex; align-items: center; gap: 8px; }
+.as-legend3d { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink); background: rgba(5,6,7,.72); padding: 10px 12px; border: 1px solid var(--hair); max-width: none; }
+.as-legend3d[hidden] { display: none; }
+.as-legend3d span { display: flex; align-items: center; gap: 8px; }
 .sw { width: 14px; height: 14px; }
-.sw-stalled { background: #FF2D2D; } .sw-moving { background: var(--ink); }
 .as-tip { font-size: 12px; }
 .as-cover { gap: var(--s2); }
 .as-cover-icon svg { width: 64px; height: 64px; stroke: var(--flag, #E0A458); stroke-width: 1.5; }
