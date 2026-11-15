@@ -1,6 +1,6 @@
 """Launch one AutoScientist run on the raw-uploaded train.jsonl (issue #90, docs/adaption-handoff.md steps 3-4).
 
-  ADAPTION_API_KEY=... python -I data/adaption/launch.py [--model ID]   # launch on the uploaded dataset, writes run_ids.json
+  ADAPTION_API_KEY=... python -I data/adaption/launch.py --model ID        # launch on the uploaded dataset, writes run_ids.json
   python -I data/adaption/launch.py --models                        # list trainable base models
   python -I data/adaption/launch.py --cancel                        # cancel that run, keep its IDs as run_ids.cancelled-*.json
   python -I data/adaption/launch.py --status                        # poll the run in run_ids.json
@@ -35,20 +35,20 @@ for m in models:
     print("model", m.id, m.api_model_size, size_b(m), m.methods, "reasoning" if m.train_with_reasoning else "", flush=True)
 if "--models" in sys.argv:
     sys.exit(0)
-# smallest SFT model without reasoning traces (plain JSON replies, fast training and local eval); override with --model ID
-ok = [m for m in models if "sft" in m.methods and not m.train_with_reasoning] or models
-# prefer instruction-tuned bases (-it / Instruct): base "-pt" models have no chat template for local eval
-ok = [m for m in ok if m.id.lower().endswith("-it") or "instruct" in m.id.lower()] or ok
-MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else min(ok, key=size_b).id
+if "--model" not in sys.argv and "--status" not in sys.argv and "--cancel" not in sys.argv:
+    sys.exit("pass --model ID (auto-pick chose Mixtral-8x7B twice; pick explicitly from the list above)")
+MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else None
 print("chosen model", MODEL, flush=True)
 if "--cancel" in sys.argv:  # cancel the run in run_ids.json and move the file aside so a relaunch is possible
     ids = json.load(open(IDS))
     print("cancel", ids["run_id"], c.autoscientist.cancel(ids["run_id"]))
     os.replace(IDS, IDS.replace(".json", f".cancelled-{ids['run_id'][:8]}.json"))
     sys.exit(0)
-if "--status" in sys.argv:
-    ids = json.load(open(IDS))
-    r = c.autoscientist.get(ids["run_id"])
+if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.json
+    i = sys.argv.index("--status")
+    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 else json.load(open(IDS))["run_id"]
+    r = c.autoscientist.get(rid)
+    print(rid, r.model)
     print(r.status, "iterations", r.iterations_completed, "/", r.max_iterations, "best_win_rate", r.best_win_rate,
           "download", r.download_available, "error", r.error)
     sys.exit(0)

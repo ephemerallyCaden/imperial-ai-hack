@@ -5,7 +5,7 @@
   python -I data/adaption/predict.py claude --out preds_claude.jsonl          # needs Anthropic credentials
 
 Every backend gets the same single user message, build_prompt(paragraph) from prompt.py, with no system prompt and no
-examples. hf: the model's chat template (training used data_format "chat"), greedy decoding, max 300 new tokens.
+examples. hf: the model's chat template (training used data_format "chat"), greedy decoding, max 512 new tokens, thinking off where the template supports it.
 claude: claude-opus-5-5, zero-shot, same prompt (sampling params are not settable on this model; effort "low").
 Output rows: {"id", "completion"}.
 """
@@ -47,7 +47,7 @@ def hf_generate():
         enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True,
                                       enable_thinking=False).to(dev)  # extra kwarg is ignored by non-Qwen templates
         with torch.no_grad():
-            out = model.generate(**enc, max_new_tokens=300, do_sample=False,
+            out = model.generate(**enc, max_new_tokens=512, do_sample=False,
                                  pad_token_id=tok.pad_token_id or tok.eos_token_id)
         yield r["id"], tok.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
