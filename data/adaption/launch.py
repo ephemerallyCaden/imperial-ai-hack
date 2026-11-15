@@ -39,10 +39,12 @@ if "--model" not in sys.argv and "--status" not in sys.argv and "--cancel" not i
     sys.exit("pass --model ID (auto-pick chose Mixtral-8x7B twice; pick explicitly from the list above)")
 MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else None
 print("chosen model", MODEL, flush=True)
-if "--cancel" in sys.argv:  # cancel the run in run_ids.json and move the file aside so a relaunch is possible
-    ids = json.load(open(IDS))
-    print("cancel", ids["run_id"], c.autoscientist.cancel(ids["run_id"]))
-    os.replace(IDS, IDS.replace(".json", f".cancelled-{ids['run_id'][:8]}.json"))
+if "--cancel" in sys.argv:  # --cancel [RUN_ID]; default: the run in run_ids.json, which is then moved aside
+    i = sys.argv.index("--cancel")
+    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 else json.load(open(IDS))["run_id"]
+    print("cancel", rid, c.autoscientist.cancel(rid))
+    if os.path.exists(IDS) and json.load(open(IDS))["run_id"] == rid:
+        os.replace(IDS, IDS.replace(".json", f".cancelled-{rid[:8]}.json"))
     sys.exit(0)
 if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.json
     i = sys.argv.index("--status")
