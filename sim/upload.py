@@ -159,18 +159,19 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
              f"Rule: {RULE}. Parameters: {how}. Forecast starts from the last frame's mask, rescaled to its observed area.")
     out = {"sim_ensemble": build_doc("sim_ensemble", wound_id, condition, t_obs, a_obs, grid, np.array(trajs),
                                      seg_quality, flags, notes)}
-    nca = nca_band(occ_last, members, t_obs, a_obs, grid)
+    w_up, fold_up = nca_weights_for(exclude_wound or wound_id, is_whad=exclude_wound is not None)
+    nca = nca_band(occ_last, members, t_obs, a_obs, grid, w_up)
     if nca is not None:
-        import hashlib
-        sha = hashlib.sha256(open(NCA_WEIGHTS, "rb").read()).hexdigest()[:12]
+        which = (f"real-WHAD fold model {os.path.basename(w_up)} (fold {fold_up}, trained without this wound)" if fold_up is not None
+                 else f"v2 base weights {os.path.basename(w_up)}")
         out["nca_ensemble"] = build_doc("nca_ensemble", wound_id, condition, t_obs, a_obs, grid, nca, seg_quality, flags,
-                                        notes + f" NCA emulator band from the same members; weights sha256 {sha}.")
+                                        notes + f" NCA band from the same members: {which}, weights sha256 {sha12(w_up)}.")
     # 90% band = P1's leave-one-wound-out conformal, as data/upload.py and the gate; the raw ensemble stays as raw_band
     if len(masks) >= 2:
         S, jobs = pool_jobs(float(t_obs[-1]), exclude_wound)
         for model, tr in (("sim_ensemble", np.array(trajs)), ("nca_ensemble", nca)):
             if model in out:
-                preds = pool_preds_sim(jobs) if model == "sim_ensemble" else pool_preds_nca(jobs)
+                preds = pool_preds_sim(jobs) if model == "sim_ensemble" else pool_preds_nca(jobs, S)
                 calibrate_doc(out[model], conformal(t_obs, a_obs, grid, tr, S, preds, model), len(preds))
     else:
         for doc in out.values():
@@ -205,15 +206,18 @@ def pool_preds_sim(jobs):
     return {k: (ts + np.arange(tr.shape[1]), np.median(tr, 0)) for k, (ts, tr) in res.items()}
 
 
-def pool_preds_nca(jobs):
+def pool_preds_nca(jobs, S):
+    """Each pool series is rolled out with the NCA fold model that holds ITS wound out (as P1's nca_realft gate files), so the
+    conformal residuals stay out-of-sample; with no fold models, the v2 base weights for all."""
     sys.path.insert(0, NCA_DIR)
     from api import nca_forecast
     out = {}
     for _, k, source, t, a, frames, wf, cut, mem, _ in jobs:
+        w, _ = nca_weights_for(S[k]["wound"], is_whad=True)
         ic = v2.n_obs(t, cut) - 1
         hours = t[ic] + np.arange(1, int(v2.H_SIM - t[ic]) + 1)
         A = np.asarray(nca_forecast(v2.lattice(k, source, frames[ic], wf[ic]), mem, t[:ic + 1], a[:ic + 1], hours,
-                                    stochastic=True, seed=0, weights=NCA_WEIGHTS))
+                                    stochastic=True, seed=0, weights=w))
         out[k] = (np.concatenate([[t[ic]], hours]), np.concatenate([[a[ic]], np.median(A, 0)]))
     return out
 
@@ -250,14 +254,39 @@ def calibrate_doc(doc, cal, n_pool):
                   "WHAD series (the upload's own wound excluded); raw_band = uncalibrated ensemble spread")
 
 
-def nca_band(occ, members, t_obs, a_obs, grid):
+N_FOLDS = 4  # P1's nca/real_data.py: fold = crc32(wound) % 4
+
+
+def sha12(path):
+    import hashlib
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()[:12]
+
+
+def nca_weights_for(wound, is_whad):
+    """NCA weights for a series of physical wound `wound`: the real-WHAD fine-tuned fold model that holds the wound out
+    (nca/v2/weights_real_fold{k}.pt, k = crc32(wound) % 4, checked against nca/v2/real_folds.json when present), else the v2
+    base weights. Non-WHAD uploads are in no fold's training set, so any fold model is out-of-sample (same crc32 rule)."""
+    d = os.path.dirname(NCA_WEIGHTS)
+    k = zlib.crc32(wound.encode()) % N_FOLDS
+    w = os.path.join(d, f"weights_real_fold{k}.pt")
+    if not os.path.exists(w):
+        return NCA_WEIGHTS, None
+    fmap = os.path.join(d, "real_folds.json")
+    if is_whad and os.path.exists(fmap):
+        m = json.load(open(fmap))
+        test = set(m.get("folds", {}).get(str(k), [])) if "folds" in m else {x for x, f in m.items() if int(f) == k}
+        assert wound in test, f"fold {k} test set does not contain {wound} ({fmap})"
+    return w, k
+
+
+def nca_band(occ, members, t_obs, a_obs, grid, weights):
     """Agent 2's NCA (nca/api.py): occ = lattice at the LAST observed frame. Returns (members, len(grid)) areas, or None
     (with a message) if the NCA code or weights are not available here."""
     try:
         sys.path.insert(0, NCA_DIR)
         from api import nca_forecast
         return np.asarray(nca_forecast(occ, members, t_obs, a_obs, grid, stochastic=True, seed=0,
-                                       weights=NCA_WEIGHTS))
+                                       weights=weights))
     except Exception as e:  # missing module, torch or weights: emit the sim file only
         print(f"NCA band skipped ({type(e).__name__}: {e})")
         return None
