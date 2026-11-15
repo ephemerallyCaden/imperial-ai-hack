@@ -11,13 +11,6 @@ export function densityFrame(pb, f) {
   return out;
 }
 
-// inverse of densityFrame: density (0..1) -> base64 of round(density*255), for density-only files (make_nca_playback.mjs)
-export function densityB64(rho) {
-  let s = '';
-  for (let i = 0; i < rho.length; i++) s += String.fromCharCode(Math.round(Math.min(1, Math.max(0, rho[i])) * 255));
-  return btoa(s);
-}
-
 // agent frame f -> Uint8Array(H*W) row-major, 1 = cell (needs the file exported with --agents)
 export function agentFrame(pb, f) {
   const b = unb64(pb.agents.frames[f]), n = pb.H * pb.W, out = new Uint8Array(n);

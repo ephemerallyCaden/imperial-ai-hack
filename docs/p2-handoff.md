@@ -226,7 +226,8 @@ The Assay 3D view shows the NCA, not the cell-agent playback, for every picker i
 (no `agents`): each hex samples the coarse density bilinearly, and the wound mask and outline sit at the area-matched level
 of that density (the `smooth.js` rule), so the open area shown equals the frame's `wound_frac`. `setPlayback(pb)` swaps
 files without rebuilding the scene. The frame shown is still the one whose area best matches the P1 area at t (observed,
-then forecast median); if that area is more than 0.04 of the start away from every NCA frame, the caption says so.
+then forecast median). A short legend line (full note on hover) appears only when the field is another wound's or that
+area is more than 0.04 of the start away from every NCA frame.
 
 | Picker item | Field | Parameters |
 |---|---|---|

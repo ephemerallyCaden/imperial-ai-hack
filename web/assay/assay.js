@@ -213,6 +213,7 @@ export async function mount(el, ctx) {
     if (special && special !== v) { special.leave(); $(".as-timeline").hidden = false; }
     special = v;
     if (v) return v.enter(it);
+    if (tissue) loadPb(fieldFor(it).path).catch(() => {});   // fetch the field alongside the run log (useField reports errors)
     S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1; S.stall = false; S.stallKey = "";
     try {
       if (it.kind === "run") {

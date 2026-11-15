@@ -22,7 +22,7 @@ fits_doc = json.load(open(fits_path))
 assert fits_doc["params"]["rule"] == "follow", "v2 weights need the follow-rule fits"
 fit = fits_doc["fits"][wound][cut]
 fits_info = dict(file=FITS, sha256_12=hashlib.sha256(open(fits_path, "rb").read()).hexdigest()[:12], rule="follow")
-json.dump(dict(position=wound, cutoff=float(cut), fits=fits_info, frame=0, t_start=t, h=int(rho.shape[0]), w=int(rho.shape[1]),
+json.dump(dict(position=wound, cutoff=float(cut), fits=fits_info, frame=0, t_start=t, h=2 * int(rho.shape[0]), w=2 * int(rho.shape[1]),
                rho=[round(float(v), 6) for v in rho.ravel()], R=[round(float(v), 6) for v in R.ravel()],
                Tm=fit["Tm"], bias=fit["bias"], until_healed=True, start_source=f"{NPZ} series {wound} frame 0 (density, R)"),
           open(out, "w"))

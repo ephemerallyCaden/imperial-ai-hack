@@ -56,7 +56,7 @@ export function isStalled(means, { window = 12, eps = 1e-4 } = {}) {
 
 // deterministic rollout (no noise) from rho0 until healed (isHealed), stalled (isStalled on the hourly mean density) or
 // maxH simulated hours, one frame per substep (1/K h): { frames: [Float32Array(h*w)], t: [h since start], stopped }.
-// Same loop as make_nca_playback.mjs's fixed-length rollout; used for the Assay 3D playbacks (nca_follow_<wound>.json).
+// minRho = stallH = Infinity disables the early stops (fixed length). Used by make_nca_playback.mjs.
 export function rolloutUntilHealed(net, rho0, R, h, w, Tm, bias, { maxH = 200, minRho = 0.95, stallH = 12 } = {}) {
   const par = net.normParams(Tm, bias), hw = h * w;
   let rho = new Float32Array(hw), hid = new Float32Array(net.nh * hw);

@@ -5,13 +5,13 @@
 // Frames: deterministic rollout (stochastic=false) with the point fit (Tm, bias), one frame per NCA substep (1/K h),
 // from the cut-off start state to the last observed time. meta.band: raw ensemble quantiles (fit members x NCA noise),
 // NOT calibrated (see docs/p2-handoff.md); members = 0 writes no band.
-// Assay 3D cases (sim/js/assay_nca_case.py): the case gives a coarse start `rho` + `R` instead of the `occ` lattice and
+// Assay 3D cases (sim/js/assay_nca_case.py): the case gives a coarse start `rho` + `R` (h, w still the lattice size)
+// instead of the `occ` lattice, and
 // `until_healed`, so the rollout runs until healed / stalled / max_hours (nca.js rolloutUntilHealed) instead of to the
 // last observed time.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { NCA, coarseGrain, rolloutUntilHealed } from './nca.js';
-import { densityB64 } from './playback.js';
 import { reservoirMask, GRAIN } from './engine.js';
 
 const [wPath, cPath, out, mArg, cfgPath] = process.argv.slice(2);
@@ -21,34 +21,23 @@ const wRule = cfg && cfg.follow ? 'follow' : 'free';
 if (c.fits && wRule !== c.fits.rule) throw new Error(`weights rule ${wRule} != fits rule ${c.fits.rule}: pass the matching weights.config.json / fits file`);
 const members = +(mArg ?? 50);
 // coarse start: given (Assay case: rho + R on the coarse grid) or coarse-grained from the occ lattice
-const cg = c.rho ? { rho: Float32Array.from(c.rho), h: c.h, w: c.w } : coarseGrain(c.occ, c.h, c.w, GRAIN);
+const cg = c.rho ? { rho: Float32Array.from(c.rho), h: c.h / GRAIN, w: c.w / GRAIN } : coarseGrain(c.occ, c.h, c.w, GRAIN);
 const R = c.rho ? Float32Array.from(c.R) : coarseGrain(reservoirMask(c.occ, c.h, c.w), c.h, c.w, GRAIN).rho;
-const H = c.rho ? c.h * GRAIN : c.h, W = c.rho ? c.w * GRAIN : c.w, hw = cg.h * cg.w;
 
-// deterministic rollout, recording every substep
-let frames, t, stopped = null, hours;
-if (c.until_healed) {
-  const r = rolloutUntilHealed(net, cg.rho, R, cg.h, cg.w, c.Tm, c.bias, { maxH: c.max_hours ?? 200 });
-  frames = r.frames; t = r.t.map((x) => c.t_start + x); stopped = r.stopped; hours = Math.ceil(r.t.at(-1));
-} else {
-  hours = Math.round(c.observed_all.t_hours.at(-1) - c.t_start);
-  const par = net.normParams(c.Tm, c.bias);
-  let rho = new Float32Array(hw), hid = new Float32Array(net.nh * hw);
-  for (let i = 0; i < hw; i++) rho[i] = Math.max(cg.rho[i], R[i]);
-  frames = [Float32Array.from(rho)]; t = [c.t_start];
-  for (let s = 1; s <= hours * net.K; s++) {
-    [rho, hid] = net.step(rho, R, hid, par, cg.h, cg.w, null);
-    frames.push(Float32Array.from(rho)); t.push(c.t_start + s / net.K);
-  }
-}
+// deterministic rollout, recording every substep: until healed / stalled / max_hours, or (no early stop) to the last
+// observed time
+const r = rolloutUntilHealed(net, cg.rho, R, cg.h, cg.w, c.Tm, c.bias, c.until_healed ? { maxH: c.max_hours ?? 200 }
+  : { maxH: Math.round(c.observed_all.t_hours.at(-1) - c.t_start), minRho: Infinity, stallH: Infinity });
+const frames = r.frames, t = r.t.map((x) => c.t_start + x), stopped = c.until_healed ? r.stopped : null, hours = Math.ceil(r.t.at(-1));
 const mean = (a) => a.reduce((x, v) => x + v, 0) / a.length;
+const b64 = (f) => Buffer.from(Uint8Array.from(f, (v) => Math.round(Math.min(1, Math.max(0, v)) * 255))).toString('base64');
 const band = members > 0 ? net.band(cg.rho, cg.h, cg.w, c.Tm, c.bias, hours, { members, R, params: c.params }) : null;
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 const pb = {
-  name: out.split('/').pop().replace(/\.json$/, ''), H, W, grain: GRAIN,
+  name: out.split('/').pop().replace(/\.json$/, ''), H: c.h, W: c.w, grain: GRAIN,
   t_hours: t.map((x) => Math.round(x * 1000) / 1000),
   wound_frac: frames.map((f) => Math.round((1 - mean(f)) * 1e5) / 1e5),
-  density: { h: cg.h, w: cg.w, frames: frames.map(densityB64) },
+  density: { h: cg.h, w: cg.w, frames: frames.map(b64) },
   meta: {
     model: 'nca', version: cfg ? cfg.version : 'v1', rule: cfg && cfg.follow ? 'follow' : 'free', fits: c.fits,
     mode: 'deterministic rollout (no noise), point fit', position: c.position,
@@ -59,7 +48,7 @@ const pb = {
     ...(stopped ? { stopped, until: 'healed (every coarse cell >= 0.95), stalled (hourly mean density moved < 1e-4 over 12 h) or max_hours' } : {}),
     ...(band ? { band: { calibrated: false, note: 'raw NCA ensemble spread: fit bootstrap members x NCA noise; NOT a 90% interval',
             members, t_hours: band.t_hours.map((k) => c.t_start + k), q05: band.q05.map(r4), q50: band.q50.map(r4), q95: band.q95.map(r4) } } : {}),
-    ...(c.observed_all ? { observed: c.observed_all } : {}),
+    observed: c.observed_all,
   },
 };
 writeFileSync(out, JSON.stringify(pb));

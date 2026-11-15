@@ -4,18 +4,17 @@
 // Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
 // setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes; colour = simulated cell age, not a measurement.
 // The field is MODELLED, never tracked cells: a precomputed v2 NCA density playback (web/public/sim/nca_follow_*.json,
-// density only; setPlayback swaps it without rebuilding the scene) or a cell-agent playback (agents), and the frame shown
-// is the playback frame whose wound area best matches the area curve at time t. Live drawing (web/assay/live.js) feeds
+// density only; setPlayback swaps it without rebuilding the scene), and the frame shown is the playback frame whose
+// wound area best matches the area curve at time t. Live drawing (web/assay/live.js) feeds
 // the same columns from the live NCA instead (showLive) and paints through setBrush.
 // DISPLAY INTERPOLATION: the hexes are a display grid, DISPLAY_K per lattice site along x (10 µm hexes, about the M10
 // mockup's density), independent of the model grid. Each hex samples its source density field bilinearly at its centre
-// (NCA playback and live: the coarse NCA density; agent playback: the smoothed fine density, smooth.js). A hex is a
-// sample, not one cell.
+// (playback and live: the coarse NCA density). A hex is a sample, not one cell.
 // Performance: two InstancedMeshes (colour + matte grey); per frame only the height entry of each instance matrix is
 // written in place, colours only when the field changes, nothing is allocated in the frame loop.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { viewFrame, densityFrame } from "../public/sim/js/playback.js";
+import { densityFrame } from "../public/sim/js/playback.js";
 import { outline as areaOutline, displayOutline } from "../public/sim/js/smooth.js";
 import { edgeSpeed, stallSpeed } from "../edge/edge_speed.js";
 import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from "../vendor-design/look.js";
@@ -38,8 +37,7 @@ const HMAX = HMAX_MOCKUP * (S / DISPLAY_K) / 0.5;
 // age heatmap legend swatch: look.js HEAT_STOPS left = newest (bright) -> right = oldest, as in the mockup's legend
 export const HEAT_GRADIENT = `linear-gradient(90deg, ${HEAT_STOPS.slice().reverse().map(c => "#" + c.getHexString()).join(",")})`;
 
-export function createTissue(host, pb0, { onSelection, onHover } = {}) {
-  let pb = pb0;
+export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // ---------- display hex grid over the true W x H site field (pointy-top hexes, odd rows shifted half a hex) ----------
   const FW = pb.W, FH = pb.H, DX = 1 / DISPLAY_K, DZ = DX * HY;   // hex spacing in sites
   const NX = Math.round(FW / DX), NY = Math.floor(FH / DZ), COUNT = NX * NY;
@@ -93,25 +91,17 @@ export function createTissue(host, pb0, { onSelection, onHover } = {}) {
   }
 
   // ---------- per-frame data from the playback (cached): density per hex + wound mask at the outline level ----------
-  // agent playback: smoothed fine density + its area-matched outline (viewFrame). Density-only (NCA) playback: the coarse
-  // density sampled bilinearly, wound/outline at the area-matched level of that density (the same rule as smooth.js), so
-  // the open area shown equals the frame's wound_frac either way. area = wound_frac relative to the playback's frame 0.
+  // density-only (NCA) playback: the coarse density sampled bilinearly, wound/outline at the area-matched level of that
+  // density (smooth.js outline), so the open area shown equals the frame's wound_frac. area = wound_frac / frame 0's.
   let cache = new Map(), wf0 = 1, f0 = null;
   function frameData(f, ref) {
     if (cache.has(f)) return cache.get(f);
-    let dens, o;
-    if (pb.agents) {
-      const v = viewFrame(pb, f); o = v.outline;
-      dens = sample({ data: v.fine.data, w: v.fine.w, h: v.fine.h, perSite: v.fine.scale, norm: 255 }, new Float32Array(COUNT));
-    } else {
-      const rho = densityFrame(pb, f), { h, w } = pb.density, perSite = w / pb.W;
-      dens = sample({ data: rho, w, h, perSite }, new Float32Array(COUNT));
-      const ol = areaOutline({ data: rho, h, w, scale: perSite }, pb.wound_frac[f]);
-      o = { level: ol.level, display: displayOutline(ol, pb.outline?.display) };
-    }
+    const rho = densityFrame(pb, f), { h, w } = pb.density, perSite = w / pb.W;
+    const dens = sample({ data: rho, w, h, perSite }, new Float32Array(COUNT));
+    const o = areaOutline({ data: rho, h, w, scale: perSite }, pb.wound_frac[f]);
     const level = o.level == null ? -1 : o.level, wound = new Uint8Array(COUNT);
     for (let k = 0; k < COUNT; k++) wound[k] = dens[k] < level ? 1 : 0;
-    const d = { f, dens, wound, outline: o.display, t: pb.t_hours[f], wf: pb.wound_frac[f], area: pb.wound_frac[f] / wf0 };
+    const d = { f, dens, wound, outline: displayOutline(o, pb.outline?.display), t: pb.t_hours[f], area: pb.wound_frac[f] / wf0 };
     if (ref) classify(d, ref);
     cache.set(f, d); return d;
   }
@@ -183,7 +173,7 @@ export function createTissue(host, pb0, { onSelection, onHover } = {}) {
   // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. span 0.6 x frames.
   // live: born = the step its NCA density is first back at the wound level after its latest carve; step = field.step when
   // the caller passes one (e.g. NCA substeps), else the count of distinct NCA states received. span 60 steps.
-  let SPAN_PB = 60; const SPAN_LIVE = 60;
+  let SPAN_PB; const SPAN_LIVE = 60;   // SPAN_PB is set per playback in load()
   const bornPb = new Int32Array(COUNT).fill(-1), woundSeen = new Uint8Array(COUNT); let bornTo = -1;
   function bornUpTo(f) {
     for (let g = bornTo + 1; g <= f; g++) {
