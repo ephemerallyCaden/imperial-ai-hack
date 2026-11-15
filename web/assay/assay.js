@@ -1,11 +1,13 @@
 // Assay mode: pick a recorded agent run or a sample, replay it on a timeline, see the decision card, the forecast,
 // the images and the agent's reasons, over a 3D field of SIMULATED cells (never tracked cells).
 // Data: agent/runs (ctx.data.runIndex), web/data/samples, web/public/sim (P2 playback). Nothing is invented here.
-import { createTissue, STATE_LABEL, SITE_UM } from "./tissue.js";
+// tissue.js needs three.js (import map -> unpkg); it is loaded dynamically in mount() so Assay still works offline
 import { parseRun, mergeBranch, docAsChecks, isCalibrated, HORIZON_H } from "./runlog.js";
 import { areaAt, curveX } from "./curve.js";
 import { decisionCard, refusedPanel, tabs, forecastTab, imagesTab, whyTab, esc } from "./panel.js";
 import { createTimeline } from "./timeline.js";
+import { greyFromFile } from "../upload/segment.js";
+import { runUpload, BROWSER_LABEL } from "../upload/forecast.js";
 
 const PLAYBACK = "web/public/sim/whad_partII_C61_P2_follow.json";   // P2 cell-agent playback (follow rule), docs/p2-handoff.md
 const PLAYBACK_WOUND = "exp1_partII_C61_P2";
@@ -17,9 +19,13 @@ const SAMPLES = [
   { id: "bad_blurred", label: "Sample · blurred frame (refused)", frames: ["bad_blurred.png"], masks: ["bad_blurred_frame1_mask.png"] },
 ];
 const SAMPLE_DIR = "web/data/samples/";
+const CALIB = "web/data/browser_calib.json";   // WHAD calibration pool for the in-browser upload (web/upload/export_calib.py)
 
 export async function mount(el, ctx) {
   const ROOT = ctx.data.ROOT;
+  let T = null;
+  try { T = await import("./tissue.js"); } catch (e) { console.error("3D field unavailable:", e); }
+  const STATE_LABEL = T?.STATE_LABEL || {};
   const css = Object.assign(document.createElement("link"), { rel: "stylesheet", href: new URL("./assay.css", import.meta.url).href });
   document.head.appendChild(css);
   el.innerHTML = `<div class="assay">
@@ -79,18 +85,23 @@ export async function mount(el, ctx) {
   ];
   const sel = $("#as-wound");
   const grp = (name, list) => list.length ? `<optgroup label="${esc(name)}">${list.map(i => `<option value="${esc(i.id)}">${esc(i.label)}</option>`).join("")}</optgroup>` : "";
-  sel.innerHTML = grp("Recorded runs (held-out WHAD replays)", S.items.filter(i => i.kind === "run" && i.run.kind !== "frames"))
-    + grp("Recorded runs (upload)", S.items.filter(i => i.kind === "run" && i.run.kind === "frames"))
-    + grp("Samples (offline, no agent run)", S.items.filter(i => i.kind === "sample"));
-  if (!mains.length) sel.insertAdjacentHTML("afterbegin", `<option disabled>No recorded runs found in agent/runs</option>`);
+  const fillSelect = () => {
+    sel.innerHTML = grp("Your uploads (run in this browser, nothing sent)", S.items.filter(i => i.kind === "upload"))
+      + grp("Recorded runs (held-out WHAD replays)", S.items.filter(i => i.kind === "run" && i.run.kind !== "frames"))
+      + grp("Recorded runs (upload)", S.items.filter(i => i.kind === "run" && i.run.kind === "frames"))
+      + grp("Samples (offline, no agent run)", S.items.filter(i => i.kind === "sample"));
+    if (!mains.length) sel.insertAdjacentHTML("beforeend", `<option disabled>No recorded runs found in agent/runs</option>`);
+  };
+  fillSelect();
 
   // ---------- tissue ----------
   let tissue = null;
   try {
+    if (!T) throw new Error("three.js could not be loaded (offline?)");
     const pb = await ctx.data.json(PLAYBACK);
-    tissue = createTissue(stage, pb, { onSelection: showSel, onHover: showTip });
+    tissue = T.createTissue(stage, pb, { onSelection: showSel, onHover: showTip });
   } catch (e) {
-    console.error(e); stage.insertAdjacentHTML("afterbegin", `<div class="error">Could not load the cell playback (${esc(e.message)}).</div>`);
+    console.error(e); stage.insertAdjacentHTML("afterbegin", `<div class="error">3D field of simulated cells not shown: ${esc(e.message)}. The curve, panel, samples and uploads still work.</div>`);
   }
 
   // ---------- timeline ----------
@@ -110,6 +121,10 @@ export async function mount(el, ctx) {
           S.raw.branch = b; S.branch = parseRun(b); S.merged = mergeBranch(S.main, S.branch);
         }
         S.t = S.main.checks[0]?.cut_h ?? 0;
+      } else if (it.kind === "upload") {
+        const doc = it.doc;
+        S.raw = { doc }; S.main = docAsChecks(doc); S.main.refused = doc.refused ? doc : null;
+        S.t = doc.cutoff_hours ?? 0;
       } else {
         const doc = await ctx.data.json(SAMPLE_DIR + it.id + ".json");
         S.raw = { doc }; S.main = docAsChecks(doc); S.main.refused = doc.refused ? doc : null;
@@ -194,13 +209,55 @@ export async function mount(el, ctx) {
     else act(b.dataset.act);
   });
   el.addEventListener("input", e => { if (e.target.id === "as-reason") S.rejectNote = e.target.value; });
+  // ---------- in-browser upload (#39): same QC + segmentation + edge-speed forecast as data/upload.py, nothing sent ----------
+  let nUploads = 0;
   $("#as-file").addEventListener("change", e => {
-    const n = e.target.files.length; e.target.value = "";
-    notice(`<div class="st-kicker">Upload · ${n} file${n === 1 ? "" : "s"} chosen</div>
-      <p>Live uploads need the optional server (data/upload.py runs QC, the masks and the calibrated forecast). This static viewer cannot run it, so nothing was read or sent.</p>
-      <p>Samples work offline: they are real data/upload.py outputs for real frames.</p>
-      <div class="as-btns"><button class="st-btn st-btn--primary" data-act="sample">Try a sample</button><button class="st-btn" data-notice="close">Close</button></div>`);
+    const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); e.target.value = "";
+    if (!files.length) return;
+    const used = files.slice(0, 5);
+    notice(`<div class="st-kicker">Upload · ${files.length} image${files.length === 1 ? "" : "s"} · runs in this browser, nothing is sent</div>
+      <p>${esc(BROWSER_LABEL)}</p>
+      <ol class="as-list">${used.map((f, i) => `<li>${esc(f.name)} <span class="as-dim">(t = ${i} × interval)</span></li>`).join("")}</ol>
+      ${files.length > 5 ? `<p class="as-caption">Only the first 5 images (by file name) are used.</p>` : ""}
+      <form class="as-upform">
+        <label class="as-caption">Frame interval (hours between images)<input class="as-input" name="interval" type="number" step="any" min="0" required></label>
+        <label class="as-caption">Pixel scale (µm per pixel; WHAD is 0.454, the samples are 0.908)<input class="as-input" name="scale" type="number" step="any" min="0" required></label>
+        <p class="as-caption">Both are required, as in data/upload.py. Images are taken in file-name order.</p>
+        <div class="as-btns"><button class="st-btn st-btn--primary" type="submit">Run QC and forecast</button><button class="st-btn" type="button" data-notice="close">Cancel</button></div>
+      </form>`);
+    const form = $(".as-notice .as-upform");
+    form.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const interval = +form.interval.value, scale = +form.scale.value;
+      if (!(interval > 0) || !(scale > 0)) return;
+      form.querySelector('[type="submit"]').disabled = true;
+      form.insertAdjacentHTML("beforeend", `<p class="as-caption as-upbusy">Reading images and running QC…</p>`);
+      try {
+        const [calib, frames] = await Promise.all([ctx.data.json(CALIB), Promise.all(used.map(greyFromFile))]);
+        const res = runUpload(frames, interval, scale, calib);
+        if (res.doc.error) {
+          return notice(`<div class="st-kicker">Upload · no forecast</div><p>${esc(res.doc.error)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+        }
+        const id = `upload_${++nUploads}`, n = used.length;
+        const item = { kind: "upload", id, doc: res.doc, label: `Upload ${nUploads} · ${n} frame${n === 1 ? "" : "s"}${res.doc.refused ? " (refused)" : ""} · browser estimate`,
+          frames: used.map((f, i) => ({ src: URL.createObjectURL(f), mask: res.masks[i] ? maskURL(res.masks[i]) : null,
+            t: res.doc.forecasts?.[0]?.observed?.t_hours[i], area: res.doc.forecasts?.[0]?.observed?.area[i] })) };
+        S.items.unshift(item); fillSelect();
+        $(".as-notice").hidden = true;
+        await select(id);
+      } catch (err) {
+        console.error(err);
+        notice(`<div class="st-kicker">Upload · could not read the images</div><p>${esc(err.message)}</p><p class="as-caption">PNG or JPEG phase-contrast frames work; TIFF does not decode in browsers.</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+      }
+    });
   });
+  // wound mask (1 = wound) -> PNG data URL, white = wound, like data/upload.py's NAME_frameK_mask.png
+  function maskURL({ mask, mh, mw }) {
+    const cv = Object.assign(document.createElement("canvas"), { width: mw, height: mh }), g = cv.getContext("2d"), im = g.createImageData(mw, mh);
+    for (let i = 0; i < mask.length; i++) { const v = mask[i] ? 255 : 0; im.data.set([v, v, v, 255], i * 4); }
+    g.putImageData(im, 0, 0);
+    return cv.toDataURL("image/png");
+  }
   function notice(html) {
     const n = $(".as-notice"); n.innerHTML = html; n.hidden = false;
     n.querySelector('[data-notice="close"]')?.addEventListener("click", () => { n.hidden = true; });
@@ -211,6 +268,7 @@ export async function mount(el, ctx) {
   function images() {
     const it = S.item;
     if (!it) return null;
+    if (it.kind === "upload") return { frames: it.frames, note: "Masks made in this browser by the classical segmenter (port of data/segment.py); no LLM looks at pixels and nothing was sent." };
     if (it.kind === "sample") {
       const s = it.sample, fc = S.main.checks[0]?.fc;
       const frames = s.frames ? s.frames.map((f, i) => ({ src: ROOT + SAMPLE_DIR + f, mask: s.masks[i] && ROOT + SAMPLE_DIR + s.masks[i] }))
@@ -245,7 +303,7 @@ export async function mount(el, ctx) {
     if (uncFlag) qc += `<span class="st-chip st-chip--flag" title="${esc(uncFlag.reason)}">New condition · band widened, uncalibrated</span>`;
     $(".as-qc").innerHTML = qc;
     const cal = c && isCalibrated(c.doc, fc);
-    $(".as-honesty").innerHTML = [S.item.kind === "run" ? "Recorded run" : "Sample data", refusedDoc ? null : "Simulated cells · not tracked cells",
+    $(".as-honesty").innerHTML = [S.item.kind === "run" ? "Recorded run" : S.item.kind === "upload" ? BROWSER_LABEL : "Sample data", refusedDoc ? null : "Simulated cells · not tracked cells",
       c && !refusedDoc && !cal ? "Uncalibrated" : null, S.active === "branch" ? "Rejected branch (recorded)" : null]
       .filter(Boolean).map(x => `<span class="st-chip st-chip--honesty">${x}</span>`).join("");
 
@@ -273,7 +331,7 @@ export async function mount(el, ctx) {
         branchAvailable: !!(S.branch && cNow && branchCut() === cNow.cut_h) };
       if (refusedDoc) {
         const im = images();
-        panel.innerHTML = refusedPanel(refusedDoc, cNow) + (im ? imagesTab(im, null, r) : "");
+        panel.innerHTML = refusedPanel(refusedDoc, cNow, S.item.kind === "upload" ? "the in-browser port of upload.py's rules" : undefined) + (im ? imagesTab(im, null, r) : "");
       } else {
         const body = S.tab === "forecast" ? forecastTab(c, S.t) : S.tab === "images" ? imagesTab(images(), c, r.start ? r : S.main) : whyTab(r, cNow, S.t, S.approvals);
         panel.innerHTML = decisionCard(ps) + tabs(S.tab) + `<div class="as-tabbody" role="tabpanel">${body}</div>`;
