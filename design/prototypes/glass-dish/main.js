@@ -74,6 +74,23 @@ function stateOf(f, k) {
   if (age >= 0 && age < 25) return 'fresh';
   return 'intact';
 }
+// cell age (sim steps since the cell filled in; original tissue counts as oldest). ?age=skin: intact cells fade
+// new tissue colour -> intact -> darker, quieter intact as they mature. ?heat (or the AGE HEATMAP button): age heatmap overlay
+const AGE_SPAN = Math.max(60, frames.length * 0.6), AGE_SKIN = Q.get('age') === 'skin';
+let HEAT = Q.has('heat');
+const ageT = age => Math.min(1, Math.max(0, (age - 25) / AGE_SPAN));
+const cA = new THREE.Color(), cB = new THREE.Color();
+function ageSkin(c, age) {   // young -> fresh colour, mid -> intact, old -> intact at 45%, slightly toward the wound tone
+  const t = ageT(age); cA.setHex(PAL.fresh); cB.setHex(PAL.intact);
+  if (t < 0.35) return c.copy(cA).lerp(cB, t / 0.35);
+  cA.copy(cB).multiplyScalar(0.45).lerp(new THREE.Color(PAL.wound), 0.15); return c.copy(cB).lerp(cA, (t - 0.35) / 0.65);
+}
+// inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow
+const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
+function heatCol(c, age) {
+  const u = (1 - ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
+  return c.copy(HEAT_STOPS[i]).lerp(HEAT_STOPS[i + 1], u - i);
+}
 const targetH = (f, k, st) => st === 'fresh' ? 0.7 + 0.3 * Math.min(1, (f.step - f.born[k]) / 25) : HEIGHT[st];
 
 // ---------- graph space: axis frame, floor grid, rulers ----------
@@ -180,7 +197,11 @@ function updateColumns(f, dt) {
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
     const on = inSel(k), lifted = sel && on && GHOST === 'lift';
     m4.makeScale(1, h, 1).setPosition(x, lifted ? LIFT : 0, z);
-    col.setHex(PAL[st]); if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
+    col.setHex(PAL[st]);
+    const age = f.step - f.born[k];
+    if (HEAT && st !== 'wound') heatCol(col, age);
+    else if (AGE_SKIN && st === 'intact') ageSkin(col, age).multiplyScalar(0.92 + 0.16 * rnd[k]);
+    else if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
     let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
     if (!on) {
       if (GHOST === 'rims') { showGhost = showRim = true; }
@@ -218,6 +239,16 @@ function drawSelBox() {
     V(x0, 0, z0), V(x0, top * 0.8, z0), V(x1, 0, z0), V(x1, top * 0.8, z0), V(x1, 0, z1), V(x1, top * 0.8, z1), V(x0, 0, z1), V(x0, top * 0.8, z1)]);
 }
 $('btn-select').addEventListener('click', () => { selecting = !selecting; controls.enabled = !selecting; $('btn-select').classList.toggle('on', selecting); });
+function ageLegend() {
+  const on = HEAT || AGE_SKIN; $('age-leg').style.display = on ? '' : 'none'; $('btn-heat').classList.toggle('on', HEAT);
+  document.querySelectorAll('.legend > .st').forEach(el => { el.style.opacity = HEAT ? 0.35 : 1; });   // state colours are hidden under the overlay
+  const hx = c => '#' + c.getHexString(), stops = HEAT ? HEAT_STOPS.slice().reverse().map(hx)
+    : [0, 0.2, 0.35, 0.7, 1].map(t => hx(ageSkin(new THREE.Color(), 25 + t * AGE_SPAN)));
+  $('age-bar').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+  $('age-title').textContent = HEAT ? 'Cell age · heatmap overlay' : 'Intact cells · colour = age';
+}
+$('btn-heat').addEventListener('click', () => { HEAT = !HEAT; ageLegend(); dirty = true; });
+ageLegend();
 $('btn-clear').addEventListener('click', () => { sel = null; drawSelBox(); $('selpanel').style.display = 'none'; dirty = true; });
 canvas.addEventListener('pointerdown', e => { if (!selecting) return; dragStart = floorHit(e); });
 canvas.addEventListener('pointermove', e => {

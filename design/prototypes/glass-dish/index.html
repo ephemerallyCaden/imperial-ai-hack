@@ -67,6 +67,7 @@
 <div class="hud tools">
   <div class="seg"><button data-view="overview">OVERVIEW</button><button data-view="close">CLOSE</button><button data-view="cells">CELLS</button></div>
   <div class="seg"><button id="btn-select">SELECT AREA</button><button id="btn-clear">CLEAR</button></div>
+  <div class="seg"><button id="btn-heat">AGE HEATMAP</button></div>
   <div class="chip">SAMPLE DATA · FLY EMBRYO WOUND</div>
   <div class="chip">SIMULATED CELLS · NOT TRACKED CELLS</div>
 </div>
@@ -87,6 +88,9 @@
   <div class="st"><i style="background:#F9D6FB"></i>New tissue (rising)</div>
   <div class="st"><i style="background:radial-gradient(circle,#0B1116 0 28%,#FFFFFF 30%)"></i>Dividing (dark centre dot)</div>
   <div class="st"><i style="background:#0B1116;outline:1px solid #3A3F52"></i>Wound (floor)</div>
+  <div id="age-leg" style="display:none;margin-top:8px"><div class="k" id="age-title"></div>
+    <div id="age-bar" style="height:8px;margin:5px 0 3px;width:200px"></div>
+    <div style="display:flex;justify-content:space-between;width:200px;color:var(--dim);font-size:10px"><span>new</span><span>old</span></div></div>
 </div>
 
 <div class="hud chartbox">
