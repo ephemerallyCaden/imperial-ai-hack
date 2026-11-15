@@ -35,7 +35,7 @@ Three modes:
   - A Claude lead agent works inside code-enforced policy: refusals and stall flags force "ask a human".
   - A plain-code Critic removes any number it can't trace to a tool output.
   - Every run is logged and replayed on held-out wounds.
-- **Front end:** plain ES modules in the browser, with a design system made in Figma. [P3: Figma file link and how Figma was used: style guide, wireframes, components]
+- **Front end:** plain ES modules in the browser, with a design system made in Figma. Figma file: https://www.figma.com/design/vTCApH2oLBShNu4Oi9dsGg. We drew the style guide (colour tokens, type, the colour-blind-safe cell-state palette) and wireframes for Assay, Ops and Draw in Figma first, with shared components (menu bar, panel tabs, decision card, refusal panel). The app's `web/tokens.css` is exported from that style guide. Details in `docs/figma-usage.md`.
 
 ## Results (held-out data)
 - **The band is honest on new wounds.** On 28 WHAD wounds the model never saw, the 90% band contains 92% of what actually happened.
@@ -73,7 +73,7 @@ Three modes:
 - [P2: Adaption fine-tune for the Intake step, if it ships]
 
 ## Built with
-Python, NumPy, SciPy, pandas, PyTorch, matplotlib, Pillow, tifffile, JSON Schema, JavaScript (ES modules), Claude (Anthropic) [P3: add web libraries and any partner tools used]
+Python, NumPy, SciPy, pandas, PyTorch, matplotlib, Pillow, tifffile, JSON Schema, JavaScript (ES modules, no build step), three.js 0.170 (3D cell field), Claude (Anthropic), Figma
 
 **Research use only. Not for diagnosis or treatment.**
 
