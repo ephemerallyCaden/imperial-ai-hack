@@ -21,6 +21,7 @@
 :where(.dr-root) .st-btn--icon { width: 28px; padding: 0; justify-content: center; }
 :where(.dr-root) .st-seg { display: inline-flex; } :where(.dr-root) .st-seg > .st-btn + .st-btn { border-left: 0; }
 :where(.dr-root) .st-chip { display: inline-flex; padding: 4px 10px; border: 1px dashed var(--line); color: var(--dim); font: 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+:where(.dr-root) .st-chip--flag { color: var(--accent); border: 1px solid var(--accent); }
 :where(.dr-root) .st-panel--solid { background: var(--panel-solid); border: 1px solid var(--hair); }
 :where(.dr-root) .st-row { display: flex; justify-content: space-between; gap: var(--s3); margin: 7px 0; }
 :where(.dr-root) .st-row > :first-child { color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }

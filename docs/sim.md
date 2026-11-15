@@ -53,6 +53,20 @@ Parameters fitted per wound (#23): `Tm`, `bias` only (n_params = 2). Fixed: `den
 | `params` | str | repr of the Params used |
 Invariant (on the cropped region when H or W is not a multiple of g): `density.mean() == occ.mean()` (agent area = density area every frame).
 
+**Run length (user requirement: end a simulation only when the wound is fully healed).** Simulations shown as simulations
+run until fully closed (every site occupied): live agent runs (worker `run` with `untilClosed`: stall guard 12 simulated h
+without a change in the occupied count, cap 500 h), live NCA runs (`nca.js` `isHealed` / `isStalled`, below) and the synthetic zoom playback
+(`make_zoom_playback.py --until-closed --hours 500`, `zoom_follow.json` closes at 27.5 h). Data-comparison panels stop at the
+data horizon: scored forecasts, gate files, fits and the real-wound files (`whad_partII_C61_P2*`, `sim38`, `nca`) stay bound
+to the 0-19 h observed window. Under `"follow"` a wound touching the field edge still closes (connected movers keep the
+border sites behind them); under `"free"` it can stall there, and with no reservoir at all (whole border band empty) the cell
+count is conserved, so it never closes (`node sim/js/heal_check.mjs`).
+NCA closure criterion: density is continuous and never exactly 1 (v2 on the r9 disc: not all 1.0 within 300 h, mean rho
+0.9997 when healed), so `isHealed(rho, {minRho: 0.95})` = every coarse cell >= 0.95. 0.95 sits above 0.75, a 2x2 coarse cell
+missing one of its 4 sites, so "healed" means no site-sized hole is left; it is below 1 so round-off never blocks the stop.
+Stall: `isStalled(means, {window: 12, eps: 1e-4})` on hourly mean rho. v2 heals the r9 disc at 25 h (the agent sim closes
+it at about 24 h); v1 with no reservoir stalls at 12 h.
+
 ## Start state from a WHAD mask (`sim/start_state.py`)
 `load_png_mask(position, frame)` (full-res PNG, `$WHAD_DIR`) or `load_npz_masks(path)` (P1's downsampled npz), then
 `mask_to_lattice(wound, um_per_px, site_um=20)` gives `occ0` for `simulate`. Area-preserving: the number of empty sites is

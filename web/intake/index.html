@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Stitch Intake</title>
+<link rel="stylesheet" href="../draw/draw.css">
+<style>body{margin:0;padding:16px 24px;background:var(--bg);color:var(--ink);font:12px/1.4 var(--font-mono)} #intake{max-width:520px}</style></head>
+<body class="dr-root"><main id="intake" class="dr-side st-panel--solid"></main>
+<script type="module">
+import { mountIntake } from './intake.js';
+mountIntake(document.getElementById('intake'), '../data/intake/whad_protocol_intake.json', { onConfirm: (s) => console.log('confirmed', JSON.stringify(s)) });
+</script></body></html>
