@@ -69,21 +69,27 @@ export function analyse({ w, h, px }) {
   const stats = { colourFrac: +colourFrac.toFixed(2), skinFrac: +skinFrac.toFixed(2) };
   if (colourFrac < 0.05) return { kind: 'microscopy', stats };
   if (skinFrac < 0.2) return { kind: 'other', stats };
-  // wound score: redder (Cr) and darker (Y) than the typical skin pixel
-  const sk = []; for (let i = 0; i < N; i++) if (skin[i]) sk.push(i);
+  // search only inside the body part: the largest skin region with its holes filled (wounds are holes in the skin),
+  // so dark backgrounds, floors and image padding can't be picked
+  let sc = skin; for (let k = 0; k < 2; k++) sc = morph(sc, w, h, true); for (let k = 0; k < 2; k++) sc = morph(sc, w, h, false);
+  const region = largestComponent(sc, w, h).mask;
+  // wound score inside that region: redder (Cr) and darker (Y) than the typical skin pixel; non-skin pixels inside the
+  // region (slough, scab, open tissue) count as candidates too
+  const sk = []; for (let i = 0; i < N; i++) if (skin[i] && region[i]) sk.push(i);
   const mCr = median(sk.map(i => Cr[i])), mY = median(sk.map(i => Y[i]));
-  const score = new Float32Array(N); for (let i = 0; i < N; i++) score[i] = (Cr[i] - mCr) + 0.35 * (mY - Y[i]);
-  const thr = Math.max(otsu(score), 10);   // at least 10 units redder/darker than skin, so plain skin never passes
-  let m = new Uint8Array(N); for (let i = 0; i < N; i++) m[i] = score[i] > thr ? 1 : 0;
+  const score = new Float32Array(N), inR = [];
+  for (let i = 0; i < N; i++) if (region[i]) { score[i] = (Cr[i] - mCr) + 0.35 * (mY - Y[i]) + (skin[i] ? 0 : 12); inR.push(score[i]); }
+  const thr = Math.max(otsu(inR), 12);   // at least 12 units redder/darker than skin, so plain skin never passes
+  let m = new Uint8Array(N); for (let i = 0; i < N; i++) m[i] = region[i] && score[i] > thr ? 1 : 0;
   m = morph(morph(m, w, h, false), w, h, true);                                 // open: drop specks
-  m = morph(morph(morph(morph(m, w, h, true), w, h, true), w, h, false), w, h, false);   // close: join the region
+  m = morph(morph(m, w, h, true), w, h, false);                                 // close: join the region
   const { mask, n } = largestComponent(m, w, h), frac = n / N;
   stats.woundFrac = +frac.toFixed(3);
   // skin tone = median colour of skin pixels well away from the wound
   const near = morph(morph(morph(mask, w, h, true), w, h, true), w, h, true), tone = [[], [], []];
   for (let i = 0; i < N; i++) if (skin[i] && !near[i]) for (let c = 0; c < 3; c++) tone[c].push(px[4 * i + c]);
   const skinRGB = tone.map(median);
-  if (frac < 0.005 || frac > 0.6) return { kind: 'skin', stats, skinRGB };
+  if (frac < 0.002 || frac > 0.6) return { kind: 'skin', stats, skinRGB };
   return { kind: 'wound', stats, skinRGB, mask, w, h };
 }
 
