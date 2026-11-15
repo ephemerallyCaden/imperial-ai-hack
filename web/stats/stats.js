@@ -3,7 +3,7 @@ import { renderEvidence } from "../ops/evidence.js";
 
 export async function mount(el) {
   const host = Object.assign(document.createElement("div"), { className: "stats" });
-  host.style.cssText = "padding: 16px 24px; overflow: auto; height: 100%;";
+  host.style.cssText = "padding: 16px; overflow: auto; height: 100%;";   // same padding as Ops
   el.replaceChildren(host);
   try { await renderEvidence(host); } catch (e) { console.error(e); host.innerHTML = `<div class="error">${e.message}</div>`; }
   return () => el.replaceChildren();

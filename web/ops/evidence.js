@@ -66,6 +66,23 @@ const CSS = `
 .evidence .ev-tip { position: absolute; z-index: 5; pointer-events: none; background: ${C.ink}; color: ${C.bg}; font: var(--fs-label, 10px)/1.4 var(--font-mono, monospace);
   padding: 4px 8px; white-space: pre; display: none; }
 .evidence .ev-foot { color: ${C.dim}; font: italic var(--fs-label, 10px) var(--font-serif, Georgia, serif); margin-top: var(--ev-gap); }
+/* one look with the Ops overview: full width, hairline panel grid, number-first tiles, caps titles */
+.evidence { max-width: none; margin: 0; padding: 0; background: transparent; }
+.evidence.ev-embed { padding: 0; }
+.evidence .ev-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3, 12px); margin-bottom: var(--s3, 12px); }
+.evidence .ev-chips { margin: 0; }
+.evidence .ev-tiles { margin-bottom: 0; }
+.evidence .ev-tile { display: grid; gap: 2px; align-content: start; }
+.evidence .ev-tile b { font: 500 24px/1 var(--font-mono, monospace); color: ${C.ink}; margin: 0; }
+.evidence .ev-tile b.is-flag { color: ${C.accent}; }
+.evidence .ev-tile span { color: ${C.dim}; font-size: var(--fs-label, 10px); text-transform: uppercase; letter-spacing: .06em; }
+.evidence .ev-grid { gap: 1px; background: var(--hair, rgba(232,236,239,.18)); border: 1px solid var(--hair, rgba(232,236,239,.18)); border-top: 0; }
+.evidence .ev-card { border: 0; padding: var(--s3, 12px) var(--s4, 16px); }
+.evidence h3 { font: 600 var(--fs-label, 10px) var(--font-cond, "Arial Narrow", sans-serif); letter-spacing: var(--track-label, .1em); text-transform: uppercase; color: ${C.dim}; margin: 0 0 4px; }
+.evidence .ev-note { color: ${C.dim}; font-size: var(--fs-small, 11px); }
+.evidence .ev-tip { background: var(--panel-solid, #0B0D10); color: ${C.ink}; border: 1px solid var(--line, rgba(232,236,239,.5)); font: var(--fs-small, 11px)/1.4 var(--font-mono, monospace);
+  padding: 6px 8px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.evidence .ev-foot { margin-top: var(--s3, 12px); }
 @media (max-width: 760px) { .evidence .ev-grid { grid-template-columns: minmax(0, 1fr); } .evidence { padding: var(--s4, 16px); } }
 `;
 
@@ -252,13 +269,18 @@ function failureChart(f) {
   };
 }
 
+export function ensureEvidenceCss() {
+  if (document.getElementById("evidence-css")) return;
+  const s = document.createElement("style");
+  s.id = "evidence-css";
+  s.textContent = CSS;
+  document.head.appendChild(s);
+}
+// Shared with the Ops Overview so both tabs draw these charts the same way.
+export { lineChart, reliabilityChart, responsive, legend, colorOf };
+
 export async function renderEvidence(host, { root = "../" } = {}) {
-  if (!document.getElementById("evidence-css")) {
-    const s = document.createElement("style");
-    s.id = "evidence-css";
-    s.textContent = CSS;
-    document.head.appendChild(s);
-  }
+  ensureEvidenceCss();
   host.innerHTML = "";
   const box = document.createElement("section");
   box.className = "evidence";
@@ -280,46 +302,39 @@ export async function renderEvidence(host, { root = "../" } = {}) {
   const wins = byCut[0].points.filter((p, i) => p.qscore < byCut[1].points[i].qscore).map((p) => `${p.cut} h`);
 
   box.innerHTML = `
-    <p class="ev-kicker">Ops · Forecast evidence</p>
-    <h2>How good are the forecasts on wounds the model never saw?</h2>
-    <p class="ev-sub">Every wound below was forecast by a model that never trained on it (${D.n_wounds} WHAD wounds, ${D.n_series} series, ${D.horizon_h} h each),
-      using the same calibration as the product. Numbers come from <code>docs/results.md</code>.</p>
-    <div class="ev-chips"><span class="ev-chip">Held-out recorded data</span><span class="ev-chip">Research use only, not for diagnosis or treatment</span></div>
+    <div class="ev-top"><p class="ev-kicker">Held-out evaluation · ${D.n_wounds} WHAD wounds · ${D.n_series} series · ${D.horizon_h} h each</p>
+      <div class="ev-chips"><span class="ev-chip" data-tip="Each wound is forecast by a model that never trained on it, with the product's calibration. Source: docs/results.md">Held-out recorded data</span><span class="ev-chip">Research use only</span></div></div>
     <div class="ev-tiles">
-      <div class="ev-tile"><p class="ev-kicker">90% band holds</p><b class="is-accent num">${pct(ship38.coverage)}</b><span>of later frames on unseen wounds (target 90%)</span></div>
-      <div class="ev-tile"><p class="ev-kicker">vs best simple model, 3.8 h</p><b class="num">${ship38.qscore > best38.qscore ? "+" : ""}${Math.round((ship38.qscore / best38.qscore - 1) * 100)}%</b><span>quantile score; better at ${wins.join(" and ")}</span></div>
-      <div class="ev-tile"><p class="ev-kicker">New cell type</p><b class="num" style="color:${C.accent}">${pct(newType.coverage)}</b><span>▲ band does not transfer: calibrate per cell line</span></div>
-      <div class="ev-tile"><p class="ev-kicker">Stall flag</p><b class="num">${f2(Math.min(...aucs))}–${f2(Math.max(...aucs))}</b><span>AUC across the four checks</span></div>
+      <div class="ev-tile" data-tip="Share of later frames inside the 90% band, unseen wounds, shipped NCA after 3.8 h (target 90%)"><b class="num">${pct(ship38.coverage)}</b><span>90% band coverage</span></div>
+      <div class="ev-tile" data-tip="Quantile score of the shipped NCA against the best statistical baseline at 3.8 h (lower is better); better at ${wins.join(" and ")}"><b class="num">${ship38.qscore > best38.qscore ? "+" : ""}${Math.round((ship38.qscore / best38.qscore - 1) * 100)}%</b><span>Score vs best baseline · 3.8 h</span></div>
+      <div class="ev-tile" data-tip="${esc(newType.model_label)}, calibrated on ordinary MCF-7, tested on stem-cell-enriched: the band does not transfer; calibrate per cell line"><b class="num is-flag">▲ ${pct(newType.coverage)}</b><span>Coverage · new cell type</span></div>
+      <div class="ev-tile" data-tip="Area under the ROC curve for the stall flag across the four checks"><b class="num">${f2(Math.min(...aucs))}–${f2(Math.max(...aucs))}</b><span>Stall flag AUC</span></div>
     </div>
     <div class="ev-grid">
       <div class="ev-card ev-card--wide" id="ev-score">
-        <div class="ev-head"><div><h3>Scorecard</h3><p class="ev-note" style="margin:0">Unseen WHAD wounds. Pass = score within 10% of the best simple model and band coverage 0.85–0.95, fixed before testing.</p></div>
+        <div class="ev-head"><div><h3>Scorecard · quantile score by model</h3><p class="ev-note" style="margin:0" data-tip="Pass = score within 10% of the best statistical baseline and coverage 0.85–0.95, fixed before testing">Lower is better · gate fixed before testing</p></div>
           <div class="ev-seg" role="group" aria-label="History seen before forecasting">${D.cutoffs.map((c) =>
             `<button type="button" data-cut="${c}" aria-pressed="${c === 3.8}">${c} h</button>`).join("")}</div></div>
         <div class="ev-chart"></div>
         <details><summary>Table</summary><div class="ev-tbl"></div></details>
       </div>
-      <div class="ev-card" id="ev-bycut"><h3>Score by history seen</h3><p class="ev-note" style="margin:0 0 4px">Lower is better. Shaded: 95% CI over wounds.</p>
+      <div class="ev-card" id="ev-bycut"><h3>Quantile score by check</h3><p class="ev-note" style="margin:0 0 4px">Lower is better · shaded: 95% CI over wounds</p>
         <div class="ev-legend-slot"></div><div class="ev-chart"></div>
-        <p class="ev-note">Trained only on simulator output, the NCA failed the gate. Fine-tuned on real frames, it beats edge speed at ${wins.join(" and ")} and is within a few percent in between.</p>
         <details><summary>Table</summary>${table(["Check", ...byCut.map((s) => s.short)], D.cutoffs.map((c) => [`${c} h`, ...byCut.map((s) => f4(s.points.find((p) => p.cut === c).qscore))]))}</details>
       </div>
-      <div class="ev-card" id="ev-rel"><h3>Is the 90% band honest?</h3><p class="ev-note" style="margin:0 0 4px">Shipped NCA where it was tested (WHAD); best simple model on WHiM-BC.</p>
+      <div class="ev-card" id="ev-rel"><h3>90% band coverage by test set</h3><p class="ev-note" style="margin:0 0 4px">NCA on WHAD · best statistical baseline on WHiM-BC</p>
         <div class="ev-chart"></div>
         <details><summary>Table</summary>${table(["Test", "Model", "Check", "Band holds", "Wounds"], rel.map((r) => [`${r.label} (${r.detail})`, r.model_label, `${r.cut} h`, ci(r.coverage, r.cov_lo, r.cov_hi, f2), r.n_wounds]))}</details>
       </div>
-      <div class="ev-card" id="ev-narrow"><h3>More frames, narrower band</h3><p class="ev-note" style="margin:0 0 4px">Mean width of the 90% band (fraction of the starting area), unseen wounds.</p>
+      <div class="ev-card" id="ev-narrow"><h3>90% band width by check</h3><p class="ev-note" style="margin:0 0 4px">Mean width, share of the starting wound area</p>
         <div class="ev-legend-slot"></div><div class="ev-chart"></div>
-        <p class="ev-note">Why the agent may say "image again": the band for the shipped NCA narrows from ${f2(D.narrowing[0].points[0].width)} at 1.9 h to ${f2(D.narrowing[0].points[1].width)} at 3.8 h.</p>
         <details><summary>Table</summary>${table(["Check", ...D.narrowing.map((s) => s.label)], D.cutoffs.map((c) => [`${c} h`, ...D.narrowing.map((s) => f2(s.points.find((p) => p.cut === c).width))]))}</details>
       </div>
-      <div class="ev-card" id="ev-stall"><h3>Stall flag</h3><p class="ev-note" style="margin:0 0 8px">Flags wounds whose area at 19 h is still at least 90% of the area at the check. Thresholds tuned leave-one-wound-out.</p>
+      <div class="ev-card" id="ev-stall"><h3>Stall flag performance</h3><p class="ev-note" style="margin:0 0 8px" data-tip="Stall = area at 19 h still at least 90% of the area at the check. Thresholds tuned leave-one-wound-out. A fired flag forces 'ask a human'.">By check · leave-one-wound-out</p>
         ${table(["Check", "AUC", "Precision", "Recall", "Stalled / series"], st.map((s) => [`${s.cut} h`, f2(s.auc), f2(s.precision), f2(s.recall), `${s.positives} / ${s.n}`]))}
-        <p class="ev-note">A fired stall flag forces "stall flagged, ask a human"; the agent cannot override it.</p>
       </div>
-      <div class="ev-card ev-card--wide" id="ev-fail"><h3>Where it fails</h3>
-        <p class="ev-note" style="margin:0 0 4px">Hardest unseen wound for the shipped NCA (${esc(D.failure.wound_id.replace(/_/g, " "))}): slow for the first hours, then far faster than any forecast from its start.
-          Quantile score ${f4(D.failure.qscore)}, against a median of ${f4(D.failure.median_qscore)} over all unseen wounds.</p>
+      <div class="ev-card ev-card--wide" id="ev-fail"><h3>Worst-case wound · ${esc(D.failure.wound_id.replace(/_/g, " "))}</h3>
+        <p class="ev-note" style="margin:0 0 4px" data-tip="Slow for the first hours, then far faster than any forecast from its start">Quantile score ${f4(D.failure.qscore)} · median over unseen wounds ${f4(D.failure.median_qscore)}</p>
         <div class="ev-legend-slot"></div><div class="ev-chart"></div>
       </div>
     </div>
