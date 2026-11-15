@@ -60,7 +60,12 @@ def hf_generate():
         d = tmpdir()
         import subprocess  # Adaption serves zstd despite the .tgz name and gzip content-type; bsdtar/GNU tar autodetect
         # Only ever run on our own Adaption adapter download. bsdtar and GNU tar both refuse members with absolute paths or
-        # '..' by default (no -P), so a crafted archive can't write outside d.
+        # '..' by default (no -P), so a crafted archive can't write outside d. Belt and braces: list the members first and
+        # refuse the archive if any is absolute or has a '..' component (tarfile can't read zstd on Python 3.12).
+        names = subprocess.run(["tar", "-tf", adapter], check=True, capture_output=True, text=True).stdout.splitlines()
+        bad = [n for n in names if n.startswith("/") or ".." in n.replace("\\", "/").split("/")]
+        if bad:
+            sys.exit(f"refusing adapter archive with unsafe member paths: {bad[:3]}")
         subprocess.run(["tar", "-xf", adapter, "-C", d], check=True)
         hits = [r for r, _, fs in os.walk(d) if "adapter_config.json" in fs]
         adapter = hits[0]
