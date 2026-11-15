@@ -13,7 +13,9 @@ export function pickForecast(doc, woundId) {
 export function isCalibrated(doc, fc) {
   if (!doc || doc.refused || doc.error) return false;
   if (["sim_ensemble", "nca_ensemble"].includes(doc.model) || doc.calibrated === false) return false;
-  if ((fc?.flags || []).some(f => f?.type === "uncalibrated_condition")) return false;
+  // any forecast in the doc carrying the flag makes the doc's band uncalibrated (as agent/run.py checks every forecast)
+  const all = [...(Array.isArray(doc.forecasts) ? doc.forecasts : []), fc].filter(Boolean);
+  if (all.some(f => (f.flags || []).some(x => x?.type === "uncalibrated_condition"))) return false;
   return typeof doc.level === "number" && Math.abs(doc.level - 0.9) < 1e-9;
 }
 

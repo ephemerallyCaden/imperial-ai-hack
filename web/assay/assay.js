@@ -241,6 +241,8 @@ export async function mount(el, ctx) {
       const txt = sq.status === "manual_mask" ? "QC · manual mask (WHAD replay)" : sq.status === "flagged" ? "QC flagged" : `QC ${sq.status}`;
       qc = `<span class="st-chip ${sq.status === "flagged" ? "st-chip--flag" : ""}" title="${esc((sq.reasons || []).join("; "))}">${txt} · ${obs.length} image${obs.length === 1 ? "" : "s"}${gap ? ` · ${gap} h apart` : ""}${sq.reasons?.length ? ` · ${esc(sq.reasons[0])}` : ""}</span>`;
     }
+    const uncFlag = !refusedDoc && (fc?.flags || []).find(f => f?.type === "uncalibrated_condition");
+    if (uncFlag) qc += `<span class="st-chip st-chip--flag" title="${esc(uncFlag.reason)}">New condition · band widened, uncalibrated</span>`;
     $(".as-qc").innerHTML = qc;
     const cal = c && isCalibrated(c.doc, fc);
     $(".as-honesty").innerHTML = [S.item.kind === "run" ? "Recorded run" : "Sample data", refusedDoc ? null : "Simulated cells · not tracked cells",
