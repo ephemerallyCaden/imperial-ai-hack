@@ -1,8 +1,9 @@
 """NCA training data from the cell-agent simulator (sim/cellsim.py, Agent 1's canonical rules).
 
-Start states: real WHAD mask shapes from frames t <= EARLY_T only (the earliest cut-off, so every forecast already
-has them at t0; no held-out wound's later shapes or dynamics enter training), flipped, and synthetic WHAD-like
-scratches/blobs on the same 32 x 44 lattice; parameters sampled over the calibration range (log Tm, bias).
+Start states: real WHAD manual-mask shapes, start shapes only, from frames t <= EARLY_T (P1's earliest cut-off),
+taken from every manual position, so possibly the sibling part (part I / part II) of a scored wound (e.g. exp1_pos1021);
+the training dynamics are simulated, never real frames. Flipped, plus synthetic WHAD-like scratches/blobs on the same
+32 x 44 lattice; parameters sampled over the calibration range (log Tm, bias).
 python nca/gen_data.py --n 1200 --out /tmp/nca_data.npz
 Saves density (N,F,h,w), R (N,h,w) coarse reservoir fraction, params (N,2) [Tm, bias].
 """
