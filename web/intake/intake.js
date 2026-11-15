@@ -15,7 +15,7 @@ export async function mountIntake(host, url, { onConfirm } = {}) {
     <blockquote style="margin:8px 0;padding:8px 12px;border-left:2px solid var(--hair);color:var(--dim);font:italic 11px/1.5 var(--font-serif)">${esc(doc.source_text)}<br><span style="font-style:normal">${esc(doc.source || '')}</span></blockquote>
     ${FIELDS.map(([k, label, u]) => `<div class="st-row"><span>${label}</span><span>${v(k, u)}</span></div>`).join('')}
     ${(doc.notes || []).map((n) => `<p class="st-chip st-chip--flag" style="display:block;white-space:normal;margin:6px 0">${esc(n)}</p>`).join('')}
-    <p class="st-chip ${doc.scope?.in_validated_scope ? 'st-chip--honesty' : 'st-chip--flag'}" style="display:block;white-space:normal">${doc.scope?.in_validated_scope ? 'Within the validated scope (MCF10A, phase contrast, proliferation blocked)' : 'Outside the validated scope: ' + esc(doc.scope.reasons.join('; '))}</p>
+    <p class="st-chip ${doc.scope?.in_validated_scope ? 'st-chip--honesty' : 'st-chip--flag'}" style="display:block;white-space:normal">${doc.scope?.in_validated_scope ? 'Within the validated scope (MCF10A, phase contrast, proliferation blocked)' : 'Outside the validated scope: ' + esc((doc.scope?.reasons || []).join('; ') || 'no scope check in this proposal')}</p>
     <p class="st-caption">${esc(doc.evaluation)}</p>
     ${onConfirm ? '<button class="st-btn st-btn--primary" type="button">Use these settings</button>' : ''}`;
   host.querySelector('button')?.addEventListener('click', () => onConfirm(doc.proposed_upload_settings, doc));

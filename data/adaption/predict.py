@@ -9,7 +9,7 @@ examples. hf: the model's chat template (training used data_format "chat"), gree
 claude: claude-opus-5-5, zero-shot, same prompt (sampling params are not settable on this model; effort "low").
 Output rows: {"id", "completion"}.
 """
-import argparse, json, os, sys, tempfile
+import argparse, atexit, json, os, shutil, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from prompt import build_prompt
@@ -28,16 +28,22 @@ a = ap.parse_args()
 rows = [json.loads(l) for l in open(a.test) if l.strip()][: a.limit]
 
 
+def tmpdir():
+    """Temp dir removed when the script exits (renamed adapter copy, unpacked archive)."""
+    d = tempfile.mkdtemp()
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
+    return d
+
+
 def text_only_adapter(src):
     """Adaption trains Qwen3.5 through its multimodal wrapper, so LoRA keys read model.language_model.layers.N...; the
     text-only AutoModelForCausalLM names the same layers model.layers.N... . PEFT silently attaches NOTHING on a name
     mismatch (fine-tune output == base output), so rename the keys into a temp copy and check every key maps."""
-    import shutil
     from safetensors.torch import load_file, save_file
     w = load_file(os.path.join(src, "adapter_model.safetensors"))
     if not any(".language_model." in k for k in w):
         return src
-    dst = tempfile.mkdtemp()
+    dst = tmpdir()
     for f in os.listdir(src):
         if f != "adapter_model.safetensors":
             shutil.copy(os.path.join(src, f), dst)
@@ -51,8 +57,10 @@ def hf_generate():
     from transformers import AutoModelForCausalLM, AutoTokenizer
     adapter = a.adapter
     if adapter and adapter.endswith((".tgz", ".tar.gz")):
-        d = tempfile.mkdtemp()
+        d = tmpdir()
         import subprocess  # Adaption serves zstd despite the .tgz name and gzip content-type; bsdtar/GNU tar autodetect
+        # Only ever run on our own Adaption adapter download. bsdtar and GNU tar both refuse members with absolute paths or
+        # '..' by default (no -P), so a crafted archive can't write outside d.
         subprocess.run(["tar", "-xf", adapter, "-C", d], check=True)
         hits = [r for r, _, fs in os.walk(d) if "adapter_config.json" in fs]
         adapter = hits[0]
@@ -63,7 +71,6 @@ def hf_generate():
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16 if dev == "mps" else torch.float32)
     if adapter:
         from peft import PeftModel
-        n_before = sum(1 for n, _ in model.named_modules())
         model = PeftModel.from_pretrained(model, adapter)
         n_lora = sum(1 for n, _ in model.named_modules() if n.endswith("lora_A"))
         if n_lora == 0:
@@ -76,7 +83,7 @@ def hf_generate():
                                       enable_thinking=False).to(dev)  # extra kwarg is ignored by non-Qwen templates
         with torch.no_grad():
             out = model.generate(**enc, max_new_tokens=a.max_new, do_sample=False,
-                                 pad_token_id=tok.pad_token_id or tok.eos_token_id)
+                                 pad_token_id=tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id)
         yield r["id"], tok.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
 
