@@ -44,7 +44,7 @@ Rules that hold for both rules:
   - Explicit `{weights, config}` still works. `config` is the parsed `*.config.json`, which sets the source gate, the Tm range (to 500 h) and the clip. Weights without a config are treated as v1.
   - The reply is `{type:'nca-ready', model}`.
 - **Uncalibrated band, NCA v2 on the panel wound:** the 20–50-member spread lies *below* the deterministic rollout (for example 0.059–0.075 against 0.085 at 11 h). The noise shifts the dynamics as well as widening them. Show it only with the "uncalibrated" caption.
-- **Later real-data fine-tunes of v2** (`nca_follow_realft`, or `weights_real_fold{0..3}`) only replace the default after the same torch check and mass_check pass.
+- **v2 real-data fine-tune evaluated and not adopted:** `weights_real_fold{0..3}` degraded the held-out diagnostic in 4 of 4 folds (user decision). The band stays on base NCA v2 (`nca_v2_weights.json`, sha256 `a426643dab3b`).
 
 ## 1. Draw tool (worker)
 
