@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { routeUpload, NOT_EITHER } from "./route.js";
+import { routeUpload } from "./route.js";
 import { greyFromRGBA } from "./segment.js";
 import { runUpload } from "./forecast.js";
 import { photoKind, photoCheck, segmentBox, fitToLattice, COLOUR_MIN, SKIN_MIN } from "../assay/photo.js";
@@ -31,21 +31,23 @@ const check = (pass, msg) => { ok &&= !!pass; console.log(`${pass ? "ok  " : "FA
 const stats = k => `${k.kind}; colour ${k.colour.toFixed(3)} (photo >= ${COLOUR_MIN}), skin ${k.skin.toFixed(3)} (photo >= ${SKIN_MIN})`;
 const kindOf = p => photoKind(load(p)).kind;
 
-// 1. single images -> route
-const micro = [...readdirSync(SAMPLES).filter(f => f.endsWith(".png")).sort().map(f => join(SAMPLES, f)), join(GLASS, "test_microscopy_synthetic.png")];
-for (const p of micro) {
-  const k = photoKind(load(p)), r = routeUpload([k.kind]);
-  check(r.route === "microscopy", `${basename(p)} -> ${r.route} (${stats(k)})`);
-}
+// 1. single images -> route. Synthetic "tinted grey" (r, g, b) = (v + 12, v, v - 8) is skin-toned but has almost no
+// colour: the two tests disagree -> one inline choice
 const SKIN = join(GLASS, "test_skin_wound_synthetic.jpg"), OTHER = join(GLASS, "test_other_synthetic.jpg");
-{ const k = photoKind(load(SKIN)), r = routeUpload([k.kind]); check(r.route === "photo", `${basename(SKIN)} -> ${r.route} (${stats(k)})`); }
-{ const k = photoKind(load(OTHER)), r = routeUpload([k.kind]);
-  check(r.route === "refused" && r.reason === NOT_EITHER, `${basename(OTHER)} -> ${r.route}: ${r.reason} (${stats(k)})`); }
-// skin-toned but greyscale (r, g, b) = (v + 12, v, v - 8): the colour and skin tests disagree -> one inline choice
 const W = 200, H = 150, tint = new Uint8ClampedArray(W * H * 4);
 for (let i = 0; i < W * H; i++) { const v = 90 + ((i * 7919) % 61); tint.set([v + 12, v, v - 8, 255], 4 * i); }
+const single = [
+  ...[...readdirSync(SAMPLES).filter(f => f.endsWith(".png")).sort().map(f => join(SAMPLES, f)), join(GLASS, "test_microscopy_synthetic.png")]
+    .map(p => [basename(p), load(p), "microscopy"]),
+  [basename(SKIN), load(SKIN), "photo"],
+  [basename(OTHER), load(OTHER), "refused", /^This does not look like a skin photo/],
+  ["tinted grey (synthetic)", { data: tint, width: W, height: H }, "ask"],
+];
+for (const [what, im, want, why] of single) {
+  const k = photoKind(im), r = routeUpload([k.kind]);
+  check(r.route === want && (!why || why.test(r.reason)), `${what} -> ${r.route}${r.reason ? `: ${r.reason}` : ""} (${stats(k)})`);
+}
 const amb = photoKind({ data: tint, width: W, height: H });
-check(amb.kind === "ambiguous" && routeUpload([amb.kind]).route === "ask", `tinted grey (synthetic) -> ${routeUpload([amb.kind]).route} (${stats(amb)})`);
 
 // 2. selections of several images
 const F = [1, 2, 3].map(i => join(SAMPLES, `sample_frame${i}.png`));
@@ -67,17 +69,15 @@ for (const n of [1, 3]) {
   const d = runUpload(F.slice(0, n).map(p => grey(load(p))), 1, 0.908, calib).doc, f = d.forecasts?.[0];
   check(!d.refused && f?.area_q05?.length && f.area_q95?.length, `${n} sample frame(s): forecast ${d.model}, band of ${f?.area_q05?.length} points`);
 }
-for (const [bad, want] of [["bad_blank", /^frame 1: blank frame$/], ["bad_blurred", /^frame 1: out of focus/]]) {
-  const p = join(SAMPLES, bad + ".png"), d = runUpload([grey(load(p))], 1, 0.908, calib).doc;
-  check(routeUpload([kindOf(p)]).route === "microscopy" && d.refused && want.test(d.reasons[0]), `${bad}: microscopy route, refused: ${JSON.stringify(d.reasons)}`);
+for (const bad of ["bad_blank", "bad_blurred"]) {   // same reasons as the stored sample docs (upload.py's refusals)
+  const p = join(SAMPLES, bad + ".png"), d = runUpload([grey(load(p))], 1, 0.908, calib).doc, want = JSON.parse(readFileSync(join(SAMPLES, bad + ".json"))).reasons;
+  check(routeUpload([kindOf(p)]).route === "microscopy" && d.refused && JSON.stringify(d.reasons) === JSON.stringify(want), `${bad}: microscopy route, refused: ${JSON.stringify(d.reasons)}`);
 }
 
-// 4. photo route -> box around the wound, photoCheck passes, the outline fits the WHAD field; the "other" photo keeps its text
+// 4. photo route -> box around the wound, photoCheck passes, the outline fits the WHAD field
 {
-  const im = load(SKIN), seg = segmentBox(im, 60, 100, 600, 420), why = photoCheck(im, seg, "skin"), mask = fitToLattice(seg);
+  const im = load(SKIN), seg = segmentBox(im, 60, 100, 600, 420), why = photoCheck(im, seg), mask = fitToLattice(seg);
   const cells = mask.reduce((s, v) => s + v, 0);
-  check(why === null && photoCheck(im, seg) === null && cells > 0, `skin photo traced: photoCheck ${why}, outline ${cells} of ${mask.length} field sites`);
-  const o = load(OTHER), msg = photoCheck(o, segmentBox(o, 60, 100, 600, 420));
-  check(msg === "This does not look like a skin photo.", `other photo, photoCheck: ${msg}`);
+  check(why === null && cells > 0, `skin photo traced: photoCheck ${why}, outline ${cells} of ${mask.length} field sites`);
 }
 console.log(ok ? "route check OK" : "route check FAILED"); process.exit(ok ? 0 : 1);

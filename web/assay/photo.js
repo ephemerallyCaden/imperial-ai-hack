@@ -55,11 +55,9 @@ export function photoKind(img) {
   const colour = n ? colourful / n : 0, sk = n ? skin / n : 0, c = colour >= COLOUR_MIN, s = sk >= SKIN_MIN;
   return { kind: c ? (s ? "skin" : "other") : (s ? "ambiguous" : "microscopy"), colour, skin: sk };
 }
-// Photo-type check before segmenting: greyscale microscopy, not skin, or no clear wound -> say so instead of tracing
-// something meaningless. `kind` = the type the caller already settled (Assay's upload router); else from photoKind.
-export function photoCheck(img, seg, kind = photoKind(img).kind) {
-  if (kind === "microscopy" || kind === "ambiguous") return "This looks like greyscale microscopy: use Upload images for cell-culture frames.";
-  if (kind === "other") return "This does not look like a skin photo.";
+// Wound check before carving (the photo type is settled first, by photoKind in Assay's upload router): no clear wound in
+// the box -> say so instead of tracing something meaningless.
+export function photoCheck(img, seg) {
   let a = 0; for (const v of seg.mask) a += v;
   const frac = a / ((img.width * img.height) || 1);
   if (frac < 0.002 || frac > 0.6) return "Skin, but no clear wound in that box: try a tighter box around the wound.";
@@ -79,8 +77,8 @@ export function fitToLattice(seg, fill = 0.6) {
 }
 
 // Box-the-wound dialog inside `host` (Assay's notice panel): file -> photo canvas -> drag a box -> Trace.
-// onMask(Uint8Array(W*H)) gets the fitted outline; the caller carves it into the live tissue. `kind` goes to photoCheck.
-export function photoDialog(host, file, onMask, kind) {
+// onMask(Uint8Array(W*H)) gets the fitted outline; the caller carves it into the live tissue.
+export function photoDialog(host, file, onMask) {
   host.innerHTML = `<div class="st-kicker">Draw from photo · the photo stays in this browser tab</div>
     <canvas class="as-photo" width="420" height="300" aria-label="Photo: drag a box around the wound"></canvas>
     <p class="as-caption as-photo-hint">Drag a box around the wound, then press Trace outline.</p>
@@ -100,14 +98,15 @@ export function photoDialog(host, file, onMask, kind) {
     box = [Math.min(drag[0], x), Math.min(drag[1], y), Math.max(drag[0], x), Math.max(drag[1], y)].map(Math.round);
     pg.putImageData(img, 0, 0); pg.strokeStyle = "#E0A458"; pg.lineWidth = 2; pg.setLineDash([5, 3]); pg.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]); pg.setLineDash([]); });
   pc.addEventListener("pointerup", () => (drag = null));
-  host.addEventListener("click", function on(e) {
+  // on the dialog's own buttons, not on host: the listener (and the photo it holds) goes when the next notice replaces it
+  host.querySelector(".as-btns").addEventListener("click", e => {
     const a = e.target.closest("[data-photo]")?.dataset.photo; if (!a) return;
-    if (a === "close") { host.hidden = true; host.removeEventListener("click", on); return; }
+    if (a === "close") { host.hidden = true; return; }
     if (!box || box[2] - box[0] < 12 || box[3] - box[1] < 12) { hint.textContent = "Draw a bigger box around the wound."; return; }
-    const seg = segmentBox(img, ...box), why = photoCheck(img, seg, kind);
+    const seg = segmentBox(img, ...box), why = photoCheck(img, seg);
     if (why) { hint.textContent = why; return; }
     const mask = fitToLattice(seg);
     if (!mask.some(Boolean)) { hint.textContent = "No outline found in that box: try a tighter box."; return; }
-    host.hidden = true; host.removeEventListener("click", on); onMask(mask);
+    host.hidden = true; onMask(mask);
   });
 }

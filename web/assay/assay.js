@@ -6,11 +6,11 @@ import { parseRun, mergeBranch, docAsChecks, isCalibrated, HORIZON_H } from "./r
 import { areaAt, curveX } from "./curve.js";
 import { decisionCard, refusedPanel, charts, framesRow, decisionKind, esc, ICON } from "./panel.js";
 import { createTimeline } from "./timeline.js";
-import { greyFromFile } from "../upload/segment.js";
+import { greyFromFile, rgbaFromFile } from "../upload/segment.js";
 import { runUpload, BROWSER_LABEL } from "../upload/forecast.js";
 import { createLive, livePanel, liveReadouts, LIVE_LABEL } from "./live.js";
-import { photoDialog, COLOUR_MIN, SKIN_MIN } from "./photo.js";
-import { kindOfFile, routeUpload, KIND_LABEL } from "../upload/route.js";
+import { photoDialog, photoKind, COLOUR_MIN, SKIN_MIN } from "./photo.js";
+import { routeUpload, KIND_LABEL } from "../upload/route.js";
 import { mountHeldout } from "./heldout.js";
 
 const PLAYBACK = "web/public/sim/whad_partII_C61_P2_follow.json";   // P2 cell-agent playback (follow rule), docs/p2-handoff.md
@@ -301,7 +301,7 @@ export async function mount(el, ctx) {
     const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); e.target.value = "";
     if (!files.length) return;
     let kinds;
-    try { kinds = await Promise.all(files.map(kindOfFile)); } catch (err) {
+    try { kinds = await Promise.all(files.map(async f => photoKind(await rgbaFromFile(f)))); } catch (err) {
       console.error(err);
       return notice(`<div class="st-kicker">Could not read images · PNG / JPEG</div><p>${esc(err.message)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
     }
@@ -326,7 +326,7 @@ export async function mount(el, ctx) {
     photoDialog($(".as-notice"), file, mask => {
       if (!live.state.ready) { pendingPhoto = mask; return; }   // NCA still loading: liveState carves it on the first state
       live.carveMask(mask); renderLivePanel();
-    }, "skin");
+    });
   }
   function uploadFrames(files) {
     const used = files.slice(0, 5);
