@@ -61,3 +61,13 @@ Read this first if you are a new Claude session picking up #90. It is self-conta
 - Adaption's win rate is computed by the platform on evaluations derived from OUR dataset, i.e. a held-out split of the templated rows, judged by the platform. It is not our real test set. Report both, and say which is which.
 - The training data is synthetic (templates); the test set is real open-access paragraphs, agent-labelled with quoted spans and spot-checked by a human. Contamination check: 0 shared 8-grams.
 - Wire-up (design 9c step 7): Intake uses the fine-tuned model locally if shipped, with Claude as the fallback.
+
+## Open item for P2: prompt style at inference
+
+The Adaption docs (Running AutoScientist, Overview, Create a dataset, Run on non-adapted data, Download the model,
+Supported models; checked 2026-11-15) do not say whether AutoScientist applies the base model's chat template to the
+`prompt` column for `training_method="instruction"`. The only formatting statement is "Maps `prompt` and `completion`
+for SFT". So `agent/intake.py` makes it an explicit setting, `STITCH_INTAKE_PROMPT_STYLE=chat|raw` (default chat), records
+it in every Intake result and in `--eval` output, and `python -m agent.intake --eval --backend base` runs the base model
+with the same style. To do: ask Adaption which format training used, and score both styles on the real test set
+before the go/no-go (pre-declare which style is primary).

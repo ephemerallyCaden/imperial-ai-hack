@@ -92,7 +92,7 @@ def test_out_of_band_triggers_once_and_decision_unchanged(tmp_path, monkeypatch)
     assert out["steps"] <= config.MAX_STEPS and out["reason"] == "schedule_complete"
     # the model saw the hypotheses; the Critic traced the fit error and removed the made-up number
     mc = [r for r in recs if r["kind"] == "model_call"]
-    assert any("investigation" in r["data"] for r in mc)
+    assert any("investigation" in r.get("data", {}) for r in mc)
     cr = [r for r in recs if r["kind"] == "critic" and "fit error" in r["text_in"]]
     top = inv[0]["output"]["hypotheses"][0]
     assert cr and f"fit error {top['fit_error']}" in cr[0]["text_out"] and "0.777" not in cr[0]["text_out"]

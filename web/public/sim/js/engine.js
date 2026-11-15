@@ -180,8 +180,16 @@ export class Engine {
     for (let i = 0; i < n; i++) this.step();
   }
 
-  get wound_frac() {
+  get occupied() { // integer site count: closed iff occupied === w*h (no float compare)
     let c = 0; for (let i = 0; i < this.occ.length; i++) c += this.occ[i];
-    return 1 - c / this.occ.length;
+    return c;
+  }
+
+  get wound_frac() { return 1 - this.occupied / this.occ.length; }
+
+  // wound touches the field edge: some border-band site was empty at t0, so the reservoir is smaller than the band
+  get touches_edge() {
+    const { w, h } = this, e = this.p.edge;
+    return this.res.length < w * h - Math.max(0, w - 2 * e) * Math.max(0, h - 2 * e);
   }
 }

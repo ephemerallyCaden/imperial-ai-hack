@@ -39,6 +39,21 @@ export function coarseGrain(occ, h, w, g = 2) {
   return { rho: out, h: H, w: W };
 }
 
+// "Run until fully healed" for density runs (NCA). The agent sim closes exactly (every site occupied, worker `closed`);
+// NCA density is continuous and approaches 1 without a guarantee of reaching it, so healed = every coarse cell has
+// rho >= minRho. Default 0.95: above 0.75 (a 2x2 coarse cell missing one of its 4 lattice sites), so a healed field has
+// no site-sized hole left, and below 1 so float round-off never blocks the stop.
+export function isHealed(rho, { minRho = 0.95 } = {}) {
+  for (let i = 0; i < rho.length; i++) if (rho[i] < minRho) return false;
+  return true;
+}
+export function meanRho(rho) { let s = 0; for (let i = 0; i < rho.length; i++) s += rho[i]; return s / rho.length; }
+// stall guard: means = meanRho per frame (one per hour from rollout); true once the last `window` frames moved mean rho
+// by less than eps (default 12 frames, as the draw worker's 12 h stall window; eps 1e-4 of the field)
+export function isStalled(means, { window = 12, eps = 1e-4 } = {}) {
+  return means.length > window && Math.abs(means[means.length - 1] - means[means.length - 1 - window]) < eps;
+}
+
 const sigmoid = (x) => 1 / (1 + Math.exp(-x));
 
 export class NCA {

@@ -16,23 +16,26 @@ const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || d
 // colour-blind-safe teal/vermillion: min ΔE ~26 under protan/deutan/tritan sim (Machado 2009), and states step
 // ~20-30 apart in lightness (L 5/31/65/89/100); dividing is told from new tissue by a dark centre dot (M8 cue) so they still read in greyscale
 const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFFFFF, wound: 0x0B1116 };
-// look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
+// look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time;
+// ?nohud hides the HUD and the axis text labels only (time, camera and buttons still work: clean clip capture)
 const Q = new URLSearchParams(location.search);
 // final look (chosen 15 Nov): skin palette, toon, age colouring, 8 deg hue shift. URL params still override for look-dev.
 for (const [k, v] of Object.entries({ pal: 'C68B6E,B3122E,FFD2C6,FFFFFF,24120F', bg: '120A09', mat: 'toon', age: 'skin' })) if (!Q.has(k)) Q.set(k, v);
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
 const paintLegend = () => document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
 paintLegend();
-if (Q.has('bare')) document.body.classList.add('bare');
+const NOHUD = Q.has('nohud'); if (Q.has('bare') || NOHUD) document.body.classList.add('bare');
 const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: Q.has('capture') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene(); scene.background = new THREE.Color(parseInt(Q.get('bg') || '050607', 16));   // ?bg=hex look-dev
 const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
 const controls = new OrbitControls(camera, canvas);
+// ?speed=x playback multiplier, ?orbit=deg slow auto-orbit (for recording clips)
+const SPEED = +(Q.get('speed') || 1); if (Q.has('orbit')) { controls.autoRotate = true; controls.autoRotateSpeed = +Q.get('orbit') || 0.5; }
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
 const LIT = Q.get('mat') && Q.get('mat') !== 'matte' ? [0.4, 1.25, 0.3] : [1.1, 1.6, 0.5];   // new materials add env + emissive light, so dim the rig
 // ?light=warm: warm rig (the default sky is cool blue-white, which greys out reds and oranges) with brighter fill so colours stay vivid
@@ -151,7 +154,7 @@ function label(text, pos, size = 0.9, color = '#8a949c') {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64;
   const g = c.getContext('2d'); g.font = '28px ui-monospace, Menlo, monospace'; g.fillStyle = color; g.textBaseline = 'middle'; g.fillText(text, 4, 32);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-  sp.scale.set(size * 4, size, 1); sp.position.copy(pos); sp.center.set(0, 0.5); frame.add(sp); return sp;
+  sp.scale.set(size * 4, size, 1); sp.position.copy(pos); sp.center.set(0, 0.5); sp.visible = !NOHUD; frame.add(sp); return sp;
 }
 for (let k = 0; k * step <= xb - xa + 1e-6; k += 4) label(`${k * 50}`, V(xa + k * step, 0, zb + 1.6), 0.8);
 label('x (µm)', V(0, 0, zb + 3.6), 1.0, '#e8ecef');
@@ -449,11 +452,14 @@ if (composer) {
 function resize() { renderer.setSize(innerWidth, innerHeight, false); composer?.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const clock = new THREE.Clock(); let settle = 0;
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(0.05, clock.getDelta());
-  if (playing) { const nt = Math.min(tEnd(), t + dt * (PHOTO ? 30 : 5)); setTime(nt); if (nt >= tEnd()) { playing = false; playBtn.textContent = 'PLAY'; } }
+// ?capture: no real-time loop; window.__tick(n) advances n fixed 1/30 s frames (frame-exact video capture)
+const CAPTURE = Q.has('capture');
+if (CAPTURE) window.__tick = (n = 1) => { for (let i = 0; i < n; i++) tick(1 / 30); };
+else renderer.setAnimationLoop(() => tick(Math.min(0.05, clock.getDelta())));
+function tick(dt) {
+  if (playing) { const nt = Math.min(tEnd(), t + dt * (PHOTO ? 30 : 5) * SPEED); setTime(nt); if (nt >= tEnd()) { playing = false; playBtn.textContent = 'PLAY'; } }
   if (dirty) { settle = 1.2; dirty = false; }
   if (settle > 0) { settle -= dt; updateColumns(frameNow, dt); selStats(); }
   if (fly) { fly.t = Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
   controls.update(); if (composer) { const g = composer.passes.at(-1).uniforms?.uT; if (g) g.value = clock.elapsedTime % 10; composer.render(); } else renderer.render(scene, camera);
-});
+}
