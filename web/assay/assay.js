@@ -538,8 +538,8 @@ export async function mount(el, ctx) {
   const COLORS = { wound: cv("--cell-wound", "#24120F"), intact: cv("--cell-intact", "#C68B6E"), edge: cv("--cell-edge", "#B3122E"), fresh: cv("--cell-new", "#FFD2C6") };
   // minimaps of the same display hexes (positions in lattice sites from tissue.grid), field / wound / edge crops
   function drawThumbs() {
-    if (!tissue) return;
-    const { COUNT, u, v, spacing, W, H } = tissue.grid, st = Array.from({ length: COUNT }, (_, k) => tissue.stateOf(k));
+    if (!tissue || !el.querySelector(".as-thumb")) return;   // no minimaps on the page: skip the per-hex state scan
+    const { COUNT, NX, NY, u, v, spacing, W, H } = tissue.grid, st = Array.from({ length: COUNT }, (_, k) => tissue.stateOf(k));
     let cx = 0, cy = 0, n = 0, ex = W / 2, ey = H / 2, bd = Infinity;
     for (let k = 0; k < COUNT; k++) if (st[k] === "wound" || st[k] === "edge") { cx += u[k]; cy += v[k]; n++; }
     if (n) { cx /= n; cy /= n; } else { cx = W / 2; cy = H / 2; }
@@ -548,9 +548,11 @@ export async function mount(el, ctx) {
     el.querySelectorAll(".as-thumb").forEach(b => {
       const cv = b.querySelector("canvas"), g = cv.getContext("2d"), [mx, my, span] = regions[b.dataset.view];
       const sc = cv.width / span; g.fillStyle = "#050607"; g.fillRect(0, 0, cv.width, cv.height);
-      const r = sc * spacing * 0.55;
-      for (let k = 0; k < COUNT; k++) {
-        const x = (u[k] - mx) * sc + cv.width / 2, y = (v[k] - my) * sc + cv.height / 2;
+      const r = sc * spacing * 0.55, hx = (cv.width / 2 + r) / sc, hy = (cv.height / 2 + r) / sc, dz = NY > 1 ? v[NX] - v[0] : 1;
+      // only the rows / columns inside the crop (row-major, same drawing order as a full scan)
+      const j0 = Math.max(0, Math.floor((my - hy - v[0]) / dz)), j1 = Math.min(NY - 1, Math.ceil((my + hy - v[0]) / dz));
+      for (let j = j0; j <= j1; j++) for (let i = Math.max(0, Math.floor((mx - hx) / spacing - 0.75)), i1 = Math.min(NX - 1, Math.ceil((mx + hx) / spacing)); i <= i1; i++) {
+        const k = j * NX + i, x = (u[k] - mx) * sc + cv.width / 2, y = (v[k] - my) * sc + cv.height / 2;
         if (x < -r || y < -r || x > cv.width + r || y > cv.height + r) continue;
         g.fillStyle = COLORS[st[k]];
         if (r < 3) { g.fillRect(x - r, y - r, 2 * r, 2 * r); continue; }   // hexes under ~3 px: a square reads the same and is cheap
