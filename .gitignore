@@ -35,3 +35,6 @@ secrets/
 *.pem
 *.key
 upload_out/
+
+# Adaption LoRA downloads (#90)
+*.tgz
