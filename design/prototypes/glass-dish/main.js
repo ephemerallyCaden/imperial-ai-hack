@@ -4,6 +4,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
@@ -114,12 +119,27 @@ const MATS = {
   matte: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), emit: 0, rim: 0 },
   skin: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.5, sheen: 0.5, sheenRoughness: 0.5, sheenColor: 0xff9c8c }), emit: 0.1, rim: 0.3, rimCol: 0xffc4b0 },
   wet: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.06 }), emit: 0.05, rim: 0.2, rimCol: 0xffffff },
-  gel: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.82 }), emit: 0.12, rim: 0.8, rimCol: 0xdfeaff },
+  gel: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.25, transparent: true, opacity: 0.82 }), emit: 0.12, rim: 0.8, rimCol: 0xdfeaff },
   glow: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 }), emit: 0.4, rim: 0.35, rimCol: 0xffffff },
+  // toon: 3-band cel shading | pearl: thin-film iridescence | xray: additive fresnel shells, hologram / glass-heart look
+  toon: { make: () => new THREE.MeshToonMaterial({ gradientMap: (() => { const t = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1, THREE.RedFormat);
+    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })() }), emit: 0.05, rim: 0.5, rimCol: 0xffffff },
+  pearl: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.22, clearcoat: 0.6, iridescence: 1, iridescenceIOR: 1.35, iridescenceThicknessRange: [180, 520] }), emit: 0.06, rim: 0.3, rimCol: 0xffe0ee },
+  xray: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.4, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }), emit: 0.25, rim: 2.2, rimCol: 0xffffff },
 };
+// ?ramp=1: colour by world height like a space-time stack (dark base -> state colour -> pale tips); works with any ?mat=
+const RAMP = Q.has('ramp');
 const M = MATS[Q.get('mat')] || MATS.matte;
 const colMat = M.make();
-if (M.emit || M.rim) colMat.onBeforeCompile = sh => {
+if (M.emit || M.rim || RAMP) colMat.onBeforeCompile = sh => {
+  if (RAMP) {
+    sh.uniforms.uHMax = { value: HMAX };
+    sh.vertexShader = 'uniform float uHMax; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vH = (instanceMatrix * vec4(position, 1.0)).y / uHMax;');
+    sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    float rh = clamp(vH, 0.0, 1.1);
+    diffuseColor.rgb = mix(diffuseColor.rgb * 0.2, diffuseColor.rgb, smoothstep(0.0, 0.7, rh));
+    diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb, vec3(1.0, 0.93, 0.95), 0.32), smoothstep(0.85, 1.1, rh));`);
+  }
   sh.uniforms.uEmit = { value: M.emit }; sh.uniforms.uRim = { value: M.rim }; sh.uniforms.uRimCol = { value: new THREE.Color(M.rimCol) };
   sh.fragmentShader = 'uniform float uEmit; uniform float uRim; uniform vec3 uRimCol;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
     `#include <emissivemap_fragment>
@@ -281,7 +301,16 @@ playBtn.textContent = 'PAUSE'; setTime(0);
 if (Q.get('sel')) { const [x0, z0, x1, z1] = Q.get('sel').split(',').map(Number); sel = { x0, z0, x1, z1 }; drawSelBox(); $('selpanel').style.display = ''; }
 if (Q.has('bare')) { playing = false; setTime(+(Q.get('t') || 30)); const v = views[Q.get('view') || 'close']; camera.position.copy(v.p); controls.target.copy(v.t); }
 
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+// ?fx=bloom,grain post-processing (soft glow on bright cells; film grain like the reference poster)
+const FX = (Q.get('fx') || '').split(','), composer = FX.some(Boolean) ? new EffectComposer(renderer) : null;
+if (composer) {
+  composer.addPass(new RenderPass(scene, camera));
+  if (FX.includes('bloom')) composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.5, 0.82));
+  composer.addPass(new OutputPass());
+  if (FX.includes('grain')) composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform float uT; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); float n = fract(sin(dot(vUv * 1000.0 + uT, vec2(12.9898, 78.233))) * 43758.5453); gl_FragColor = vec4(c.rgb + (n - 0.5) * 0.07, c.a); }' }));
+}
+function resize() { renderer.setSize(innerWidth, innerHeight, false); composer?.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const clock = new THREE.Clock(); let settle = 0;
 renderer.setAnimationLoop(() => {
@@ -290,5 +319,5 @@ renderer.setAnimationLoop(() => {
   if (dirty) { settle = 1.2; dirty = false; }
   if (settle > 0) { settle -= dt; updateColumns(frameNow, dt); selStats(); }
   if (fly) { fly.t = Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
-  controls.update(); renderer.render(scene, camera);
+  controls.update(); if (composer) { const g = composer.passes.at(-1).uniforms?.uT; if (g) g.value = clock.elapsedTime % 10; composer.render(); } else renderer.render(scene, camera);
 });
