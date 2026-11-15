@@ -80,7 +80,22 @@ def test_forced_stall_skips_model(tmp_path):
     d = _kind(recs, "decision")[0]
     assert d["decision"] == policy.ASK_HUMAN_STALL and d["source"] == "forced" and d["allowed"] == [policy.ASK_HUMAN_STALL]
     assert calls == [] and not _kind(recs, "model_call")
-    assert out["reason"] == "handed_to_human" and out["stopped"] is False
+    assert _kind(recs, "approval")[0]["decision"] == policy.ASK_HUMAN_STALL   # approved stall = stop (#83)
+    assert out["reason"] == "stopped" and out["stop_kind"] == "stall" and out["stop_h"] == 1.9
+
+
+def test_rejected_stall_keeps_imaging(tmp_path):
+    llm.set_stub(_schedule_stub())
+    out, recs = _go(tmp_path, STALL, approve=lambda d: False)
+    assert out["stopped"] is False and len(_kind(recs, "decision")) > 1
+
+
+def test_general_ask_human_continues(tmp_path):
+    llm.set_stub(lambda m, s, t: {"tool_calls": [{"id": "t", "name": prompts.TOOL_NAME, "input": {
+        "decision_id": policy.ASK_HUMAN, "explanation": "Please review."}}]})
+    out, recs = _go(tmp_path, NORMAL)
+    assert len(_kind(recs, "human_review")) == len(_kind(recs, "decision")) == len(config.CHECKS_H)
+    assert out["reason"] == "schedule_complete" and out["stopped"] is False
 
 
 def test_forced_refusal_skips_model(tmp_path):

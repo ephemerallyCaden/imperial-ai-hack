@@ -19,6 +19,14 @@ decisions, a forced decision (refused / stall) skips the model, otherwise the mo
 policy.check() validates it (fallback: first allowed reversible decision), the Critic traces every number in the
 explanation, and an irreversible decision (a stop) needs approve(decision). Everything goes to agent/runs/<run_id>.jsonl.
 
+What a human answer does (issue #83 replay semantics):
+  - "stall flagged, ask a human": approve(decision) is asked; approved = stop the plate at that check (stop_kind
+    "stall"), rejected = keep imaging.
+  - "stop, unlikely / likely to close": approved = stop at that check (stop_kind "unlikely" / "likely"), rejected =
+    keep imaging.
+  - "ask a human to review": the human reviews (logged as human_review) and imaging continues.
+  - "data refused, ask a human": nothing to image on; the run ends as handed_to_human.
+
 CLI: python -m agent.run --wound <id> --run-id <id>
 """
 import argparse
@@ -31,7 +39,8 @@ from agent import config, critic, llm, policy, prompts, tools
 from agent.runlog import RunLog, fingerprint
 
 LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
-HANDOVER = {policy.ASK_HUMAN, policy.ASK_HUMAN_STALL, policy.ASK_HUMAN_REFUSED}
+HANDOVER = {policy.ASK_HUMAN_REFUSED}   # ends the run with no stop
+STOP_KIND = {policy.ASK_HUMAN_STALL: "stall", policy.STOP_UNLIKELY: "unlikely", policy.STOP_LIKELY: "likely"}
 META_KEYS = ("wound_id", "wound", "condition", "part", "name", "notes", "metadata", "protocol_text", "dataset")
 
 
@@ -270,7 +279,7 @@ class _Run:
         try:
             while k < len(checks):
                 item, cut = self._check(k, checks)
-                if item["irreversible"]:
+                if item["irreversible"] or item["id"] == policy.ASK_HUMAN_STALL:   # approved = stop the plate
                     dec = {**self.last, "run_id": self.run_id}
                     try:
                         ok, note = bool(self.approve(dec)), None
@@ -280,7 +289,9 @@ class _Run:
                     if ok:
                         if self.record_both:
                             self._branch(item, cut, k, checks)
-                        return self._end("stopped", stop_h=cut)
+                        return self._end("stopped", stop_h=cut, stop_kind=STOP_KIND[item["id"]])
+                elif item["id"] == policy.ASK_HUMAN:
+                    self.log.log("human_review", cut_h=cut, decision=item["id"], note="human reviewed; imaging continues")
                 elif item["id"] in HANDOVER:
                     return self._end("handed_to_human")
                 k += 1
@@ -297,11 +308,11 @@ class _Run:
         child._approval(item, cut, False, "recorded rejected branch")
         self.branches.append(child.run_from(k + 1, checks))
 
-    def _end(self, reason, stop_h=None):
+    def _end(self, reason, stop_h=None, stop_kind=None):
         last = self.last or {}
         summary = self.log.log(
             "run_end", reason=reason, decision=last.get("id"), decision_label=last.get("label"),
-            explanation=last.get("explanation"), stopped=stop_h is not None, stop_h=stop_h, ended_at_h=self.last_cut,
+            explanation=last.get("explanation"), stopped=stop_h is not None, stop_h=stop_h, stop_kind=stop_kind, ended_at_h=self.last_cut,
             horizon_h=config.HORIZON_H,
             plate_hours_saved=round(config.HORIZON_H - stop_h, 3) if stop_h is not None else 0.0,
             steps=self.steps, tokens={"input": self.tok_in, "output": self.tok_out, "total": self._tokens()},
