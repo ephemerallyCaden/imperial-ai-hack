@@ -1,0 +1,141 @@
+/* Stitch design tokens + base components. Import once: <link rel="stylesheet" href="tokens.css">.
+   Source of truth for the web viewer (web/). Matches the glass-dish prototype, the M6 wordmark
+   and the decisions in docs/decisions.md (palette checked for colour blindness and greyscale). */
+
+:root {
+  /* ---- surfaces ---- */
+  --bg: #050607;                       /* page + 3D scene background */
+  --panel: rgba(5, 6, 7, 0.62);        /* floating HUD panels (with --blur) */
+  --panel-solid: #0B0D10;              /* side panels, menus, tables */
+  --raise: #12151A;                    /* hover / selected row */
+  --blur: blur(6px);
+
+  /* ---- text ---- */
+  --ink: #E8ECEF;                      /* primary text, observed data (17:1 on --bg) */
+  --dim: #8A949C;                      /* secondary text, axis labels (6.6:1) */
+  --faint: #5C656D;                    /* decoration only, never body text (3.4:1) */
+
+  /* ---- lines ---- */
+  --line: rgba(232, 236, 239, 0.5);    /* control borders */
+  --hair: rgba(232, 236, 239, 0.18);   /* panel borders, table rules, grids */
+
+  /* ---- accent (one only) ---- */
+  --accent: #E0A458;                   /* amber: forecast median, band, selection, focus, decision card (9.3:1) */
+  --accent-fill: rgba(224, 164, 88, 0.18);
+  --accent-soft: rgba(224, 164, 88, 0.08);
+
+  /* ---- cell states (3D columns + legend). DECIDED 2026-11-14; do not change without re-running the CVD check ---- */
+  --cell-wound: #0B1116;               /* floor; lightness 5 */
+  --cell-intact: #1F4F5C;              /* lightness 31; never text; 2D swatches need a --hair outline */
+  --cell-edge: #EE7F2D;                /* leading edge; lightness 65 */
+  --cell-new: #F9D6FB;                 /* new tissue; lightness 89 */
+  --cell-dividing: #FFFFFF;            /* always with a dark centre dot (--cell-wound) */
+  /* outside a box selection: matte greyscale steps (linear RGB in three.js: 0 / .010 / .045 / .11 / .16) */
+  --ghost-wound: #000000; --ghost-intact: #1A1A1A; --ghost-edge: #3B3B3B; --ghost-new: #5C5C5C; --ghost-dividing: #6E6E6E;
+
+  /* ---- status (always paired with a word or icon, never colour alone) ---- */
+  --ok: var(--ink);                    /* on track: plain ink + check icon */
+  --flag: var(--accent);               /* flagged / stall / needs a human: amber + triangle or hatch */
+  --refused: var(--accent);            /* refused: amber outline + "refused" text, no data drawn */
+  --untested: var(--dim);              /* untested decisions, uncalibrated outputs: dim + label */
+
+  /* ---- charts ---- */
+  --chart-observed: var(--ink);        /* solid 1.7px, dots at each image */
+  --chart-median: var(--accent);       /* dashed 4 3, 1.3px */
+  --chart-band: var(--accent-fill);    /* the calibrated 90% band; only data/upload.py output may use this */
+  --chart-member: rgba(232, 236, 239, 0.22); /* ensemble members, 0.7px */
+  --chart-cut: rgba(232, 236, 239, 0.5);     /* t0 / cut-off line, dashed 2 3 */
+  --chart-grid: rgba(232, 236, 239, 0.08);
+  --chart-axis: rgba(232, 236, 239, 0.3);
+  --hatch-forecast: repeating-linear-gradient(135deg, rgba(232,236,239,.28) 0 2px, transparent 2px 6px); /* forecast part of the timeline */
+  --hatch-flag: repeating-linear-gradient(135deg, rgba(224,164,88,.6) 0 2px, transparent 2px 6px);       /* stall window on the flag strip */
+
+  /* ---- type ---- */
+  --font-cond: "Avenir Next Condensed", "IBM Plex Sans Condensed", "Helvetica Neue Condensed", "Arial Narrow", sans-serif;
+  --font-serif: Charter, "Iowan Old Style", Georgia, serif;
+  --font-mono: ui-monospace, "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+  --fs-wordmark: 22px; --fs-h2: 13px; --fs-body: 12px; --fs-small: 11px; --fs-label: 10px; --fs-axis: 9px;
+  --track-wordmark: 0.2em; --track-label: 0.1em; --track-button: 0.12em;
+
+  /* ---- space, shape, motion ---- */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --radius: 0;                         /* square everything: technical / figure look */
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --ease: cubic-bezier(0.65, 0, 0.35, 1);   /* camera fly + panel slide */
+  --t-fast: 120ms; --t-med: 240ms; --t-fly: 1400ms;
+}
+
+/* ---------- base ---------- */
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs-body)/1.4 var(--font-mono); -webkit-font-smoothing: antialiased; }
+*, *::before, *::after { box-sizing: border-box; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0ms !important; animation-duration: 0ms !important; } }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- wordmark (M6) ---------- */
+.st-wordmark { display: flex; align-items: center; gap: var(--s4); }
+.st-wordmark b { font: 600 var(--fs-wordmark)/1 var(--font-cond); letter-spacing: var(--track-wordmark); text-transform: uppercase; }
+.st-wordmark i { font: italic 13px var(--font-serif); color: #AEB4C8; padding-left: var(--s4); border-left: 1px solid #3A4160; }
+
+/* ---------- labels ---------- */
+.st-kicker { font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--dim); }
+.st-caption { font: italic var(--fs-label) var(--font-serif); color: var(--dim); }
+
+/* ---------- buttons ---------- */
+.st-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--s3); border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 600 var(--fs-small) var(--font-cond); letter-spacing: var(--track-button); text-transform: uppercase; cursor: pointer; border-radius: var(--radius); transition: background var(--t-fast); }
+.st-btn:hover { background: var(--raise); }
+.st-btn--primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.st-btn--primary:hover { background: #fff; }
+.st-btn[aria-pressed="true"], .st-btn--selected { background: var(--raise); border-color: var(--ink); color: var(--ink); }  /* distinct from the white primary */
+.st-btn--icon { width: 28px; padding: 0; justify-content: center; }   /* must have aria-label + a tooltip */
+.st-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.st-btn:disabled { color: var(--faint); border-color: var(--hair); cursor: not-allowed; }
+.st-seg { display: inline-flex; } .st-seg > .st-btn + .st-btn { border-left: 0; }
+
+/* ---------- chips (status + honesty labels) ---------- */
+.st-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); font: var(--fs-label) var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.st-chip--flag { color: var(--flag); border-color: var(--flag); }
+.st-chip--honesty { border-style: dashed; }
+
+/* ---------- panels ---------- */
+.st-panel { background: var(--panel); backdrop-filter: var(--blur); border-left: 1px solid var(--line); padding: var(--s2) var(--s3); }
+.st-panel--solid { background: var(--panel-solid); border: 1px solid var(--hair); }
+.st-row { display: flex; justify-content: space-between; gap: var(--s3); margin: 7px 0; }
+.st-row > :first-child { color: var(--dim); text-transform: uppercase; letter-spacing: var(--track-label); font-size: var(--fs-label); }
+.st-row > :last-child { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ---------- tabs ---------- */
+.st-tabs { display: flex; border-bottom: 1px solid var(--hair); }
+.st-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--dim); padding: 8px 12px; font: 600 var(--fs-small) var(--font-cond); letter-spacing: var(--track-button); text-transform: uppercase; cursor: pointer; }
+.st-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* ---------- menu bar + dropdown ---------- */
+.st-menubar { display: flex; gap: 2px; } .st-menubar button { background: none; border: 0; color: var(--ink); font: var(--fs-body) var(--font-mono); padding: 4px 8px; cursor: pointer; }
+.st-menubar button[aria-expanded="true"], .st-menubar button:hover { background: var(--raise); }
+.st-dropdown { min-width: 240px; background: var(--panel-solid); border: 1px solid var(--hair); padding: 6px 0; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.st-dropdown [role="menuitem"] { display: flex; justify-content: space-between; gap: var(--s4); padding: 6px 12px; cursor: pointer; }
+.st-dropdown [role="menuitem"]:hover { background: var(--raise); } .st-dropdown kbd { color: var(--dim); font: var(--fs-label) var(--font-mono); }
+.st-dropdown hr { border: 0; border-top: 1px solid var(--hair); margin: 6px 0; }
+
+/* ---------- tables ---------- */
+.st-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.st-table th { text-align: left; font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--ink); padding: 6px 8px 6px 0; }
+.st-table td { border-bottom: 1px solid var(--hair); padding: 6px 8px 6px 0; }
+.st-table tr.is-shipped td:first-child { color: var(--accent); }
+
+/* ---------- decision card ---------- */
+.st-card { border: 1px solid var(--accent); background: var(--accent-soft); padding: var(--s3); display: grid; gap: var(--s2); }
+.st-card h3 { margin: 0; font: 500 15px var(--font-mono); }
+.st-card p { margin: 0; color: var(--dim); font-size: var(--fs-small); }
+.st-card--forced { border-width: 2px; }                  /* refused / stall: set by code, no LLM alternative */
+.st-card--approved { border-color: var(--ink); background: rgba(232,236,239,.05); }
+.st-card--rejected { border-color: var(--line); background: none; }
+
+/* ---------- tooltip ---------- */
+.st-tip { background: var(--ink); color: var(--bg); font: var(--fs-label) var(--font-mono); padding: 4px 8px; pointer-events: none; }
+
+/* ---------- timeline ribbon ---------- */
+.st-ribbon { position: relative; height: 12px; display: flex; }
+.st-ribbon .obs { background: var(--ink); opacity: .6; } .st-ribbon .fc { flex: 1; background: var(--hatch-forecast); border: 1px solid var(--hair); }
+.st-ribbon .t0 { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); }
