@@ -128,6 +128,21 @@ NCA variants: **sim-trained** (Caden's, trained on 3000 simulator runs only), **
 
 **Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (29% worse than edge speed at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition (CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained on that wound (its own forecast never does).
 
+## Can closure curves separate movement from division? (Jin 2016 PC-3, Fisher-KPP)
+
+Fisher-KPP (u_t = D u_xx + r u(1 - u/K), K = 1.7e-3 cells/um^2) fitted over a grid of (D, r) at each of 6 initial densities, once to the full density profiles and once to the closure curve derived from the same profiles. Ranges = 95% region (`eval/jin_identifiability.py`, figure `eval/figures/jin_identifiability.png`).
+
+| Initial density | Profiles: D (um^2/h) | Profiles: r (1/h) | Profile fit R^2 | Closure only: D range | Closure only: r range |
+|---|---|---|---|---|---|
+| 10000 | 315 (232-429) | 0.042 | 0.90 | x10 | x18 |
+| 12000 | 271 (199-315) | 0.042 | 0.95 | x9 | x5 |
+| 14000 | 792 (680-792) | 0.048 | 0.94 | x14 | x2 |
+| 16000 | 583 (583-680) | 0.048 | 0.95 | x29 | x26 |
+| 18000 | 792 (680-792) | 0.054 | 0.95 | x34 | x39 |
+| 20000 | 1077 (1077-1256) | 0.062 | 0.94 | x63 | x39 |
+
+**Closure curves alone do not separate cell movement from division** (D uncertain over 9-63x, r over 2-39x, often along a constant-front-speed valley); **full density profiles do** (D within ~20%, r within one grid step, R^2 0.90-0.95). Fitted D rises with initial density, as Jin et al. reported. So Stitch, which sees wound area only, does not claim to separate the two.
+
 ## Figures
 
 `eval/figures/calibration.png`, `error_vs_history.png`, `reliability.png`, `worst_wounds.png` (regenerate with `python eval/figures.py`).

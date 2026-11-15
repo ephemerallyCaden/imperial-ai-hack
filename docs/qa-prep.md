@@ -65,6 +65,9 @@ Not clearly. C61 looks slower in normalised area, but mostly because its wounds 
 **Is cell division modelled?**
 Off for WHAD: the 19 h assay is treated as migration-dominated (Migliaccio's Phi check). We have not verified it on WHAD separately, so we don't claim it.
 
+**Can you tell cell movement from cell division?**
+"Not from wound area, and we tested that rather than assumed it. We fitted the standard Fisher-KPP model to the Jin 2016 scratch-assay density profiles. With full profiles, movement and division come out separately: D within about 20% and r to one grid step, R^2 0.90-0.95. From the closure curve of the same experiments, D is uncertain over 9 to 63-fold and r over 2 to 39-fold, along a constant-front-speed valley. Stitch only sees wound area, so it doesn't claim to separate them; you'd need density profiles or a division-blocked control."
+
 **What does the fitted migration time Tm mean?**
 It ranks wounds (part II 0.14-0.65 h vs part I 0.4-5 h) but depends on the imaged field size under our rules, so it is not a measured migration time.
 
@@ -95,7 +98,7 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 - "Predicts drug effects" or anything clinical.
 - "The simulated cells are real cells" (they are labelled "simulated, not tracked").
 - "First ever".
-- "Identifies migration vs proliferation" (closure curves cannot separate them; WHAD wounds are mitomycin-treated).
+- "Identifies migration vs proliferation" from wound area (we showed closure curves cannot separate them, Fisher-KPP on Jin; WHAD wounds are mitomycin-treated).
 
 ## Numbers to remember
 | | |

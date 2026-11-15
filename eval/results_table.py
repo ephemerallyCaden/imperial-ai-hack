@@ -118,6 +118,20 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "(CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step "
           "is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained "
           "on that wound (its own forecast never does).", "",
+          "## Can closure curves separate movement from division? (Jin 2016 PC-3, Fisher-KPP)", "",
+          "Fisher-KPP (u_t = D u_xx + r u(1 - u/K), K = 1.7e-3 cells/um^2) fitted over a grid of (D, r) at each of 6 initial "
+          "densities, once to the full density profiles and once to the closure curve derived from the same profiles. "
+          "Ranges = 95% region (`eval/jin_identifiability.py`, figure `eval/figures/jin_identifiability.png`).", "",
+          "| Initial density | Profiles: D (um^2/h) | Profiles: r (1/h) | Profile fit R^2 | Closure only: D range | Closure only: r range |",
+          "|---|---|---|---|---|---|"] + [
+          f"| {int(p.density)} | {p.D_best:.0f} ({p.D_min:.0f}-{p.D_max:.0f}) | {p.r_best:.3f} | {p.profile_R2:.2f} | "
+          f"x{c.D_fold_range:.0f} | x{c.r_fold_range:.0f} |"
+          for J in [pd.read_csv(f"{HERE}/results/jin_identifiability.csv")] for d in sorted(J.density.unique())
+          for p in [J[(J.density == d) & (J.fit == "profiles")].iloc[0]] for c in [J[(J.density == d) & (J.fit == "closure")].iloc[0]]] + ["",
+          "**Closure curves alone do not separate cell movement from division** (D uncertain over 9-63x, r over 2-39x, often "
+          "along a constant-front-speed valley); **full density profiles do** (D within ~20%, r within one grid step, R^2 "
+          "0.90-0.95). Fitted D rises with initial density, as Jin et al. reported. So Stitch, which sees wound area only, "
+          "does not claim to separate the two.", "",
           "## Figures", "",
           "`eval/figures/calibration.png`, `error_vs_history.png`, `reliability.png`, `worst_wounds.png` (regenerate with `python eval/figures.py`)."]
 open(OUT, "w", encoding="utf-8").write("\n".join(lines) + "\n")
