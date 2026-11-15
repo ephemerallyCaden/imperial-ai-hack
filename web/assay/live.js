@@ -15,8 +15,7 @@ export const LIVE_LABEL = "simulation (NCA emulator, follower rule; preset param
 const WOUND_RHO = 0.5, HEAL_PCT = 95;
 const BRUSHES = { S: 1.5, M: 2.5, L: 4 };   // radius in sites (one site = 20 µm)
 const SPEEDS = [1, 2, 4, 8];                // simulated hours per second
-const STATUS = { running: "healing", paused: "paused", healed: `healed (every cell ≥ ${HEAL_PCT}% density); idle`,
-  stalled: "stalled (no progress for 12 simulated h); idle", cap: "stopped at the 500 h cap", loading: "loading the NCA…" };
+const STATUS = { running: "healing", paused: "paused", healed: `healed · ≥ ${HEAL_PCT}%`, stalled: "stalled · 12 h", cap: "500 h cap", loading: "loading…" };
 
 export function createLive(tissue, { onState } = {}) {
   const { COUNT, u: hu, v: hv } = tissue.grid, CW = FIELD_W / GRAIN, CH = FIELD_H / GRAIN;
@@ -76,26 +75,18 @@ export function livePanel(S) {
   const seg = (key, opts, cur, fmt = x => x) => `<div class="st-seg">${opts.map(o => `<button class="st-btn" data-live="${key}:${o}" aria-pressed="${o === cur}">${fmt(o)}</button>`).join("")}</div>`;
   const p = PRESETS_FOLLOW, playing = S.status !== "paused" && S.status !== "loading";
   return `<div class="as-card as-live">
-    <div class="st-kicker">Draw a wound · live</div>
-    <div class="as-chips"><span class="st-chip st-chip--honesty">${LIVE_LABEL}</span>${S.fromPhoto ? `<span class="st-chip st-chip--honesty">${PHOTO_LABEL}</span>` : ""}</div>
-    <p class="as-caption">Drag on the tissue to remove cells. Right-drag orbits, the wheel zooms. The NCA keeps running and fills the gap;
-      it idles once every cell is back to ${HEAL_PCT}% density, and any new cut restarts it. Upload images also takes one
-      skin-wound photo: its traced outline becomes the cut.</p>
+    <div class="st-kicker">Draw · live NCA${S.fromPhoto ? " · photo outline" : ""}</div>
     <div class="as-btns">
       <button class="st-btn st-btn--primary" data-live="play">${playing ? "Pause" : "Play"}</button>
-      <button class="st-btn" data-live="reset">Reset to intact tissue</button>
+      <button class="st-btn" data-live="reset">Reset</button>
       <button class="st-btn" data-live="brush" aria-pressed="${S.brushOn}" title="Brush · B">Brush ${S.brushOn ? "on" : "off"}</button>
     </div>
-    <div class="st-row"><span>Condition preset</span>${seg("preset", ["CC", "C61"], S.preset)}</div>
-    <p class="as-caption">Follow-rule presets fed to the NCA as (Tm, bias): CC Tm ${p.CC.Tm.toFixed(1)} h, bias ${p.CC.bias.toFixed(2)};
-      C61 Tm ${p.C61.Tm.toFixed(1)} h, bias ${p.C61.bias.toFixed(2)}. ${PRESET_CAPTION_FOLLOW}.</p>
-    <div class="st-row"><span>Brush radius</span>${seg("size", Object.keys(BRUSHES), S.brush, b => `${b} · ${Math.round(BRUSHES[b] * SITE_UM)} µm`)}</div>
+    <div class="st-row"><span>Condition</span>${seg("preset", ["CC", "C61"], S.preset)}</div>
+    <div class="st-row"><span>Brush</span>${seg("size", Object.keys(BRUSHES), S.brush, b => `${b} · ${Math.round(BRUSHES[b] * SITE_UM)} µm`)}</div>
     <div class="st-row"><span>Speed</span>${seg("speed", SPEEDS, S.speed, v => `${v} h/s`)}</div>
-    <div class="st-row"><span>${S.fromPhoto ? "Simulation steps since the cut" : "Simulated time"}</span><span class="num as-live-t"></span></div>
+    <div class="st-row"><span>${S.fromPhoto ? "Steps" : "Sim time"}</span><span class="num as-live-t"></span></div>
     <div class="st-row"><span>Status</span><span class="as-live-status"></span></div>
-    <div class="st-row"><span>Open (density &lt; ${WOUND_RHO})</span><span class="num as-live-open"></span></div>
-    <p class="as-caption">No band and no forecast: a drawn wound is a simulation, not a measurement. Display interpolation: each hex
-      (${SITE_UM / 2} µm) samples the NCA's coarse density (${GRAIN * SITE_UM} µm per model cell) bilinearly at its centre; a hex is a sample, not a cell.</p>
+    <div class="st-row"><span>Open</span><span class="num as-live-open"></span></div>
   </div>`;
 }
 export function liveReadouts(root, S) {
@@ -103,8 +94,8 @@ export function liveReadouts(root, S) {
   if (!q(".as-live-t")) return;
   const since = S.tCut == null ? null : S.t - S.tCut;
   // photo shapes count NCA substeps (0.5 h each), never hours: the healing is a cell-culture model, not the photo's wound
-  set(".as-live-t", S.fromPhoto ? String(Math.round((since ?? 0) * 2)) : `${S.t.toFixed(1)} h${since == null ? "" : ` · ${since.toFixed(1)} h since this cut`}`);
-  set(".as-live-status", S.status === "error" ? `NCA failed to load: ${S.error}` : STATUS[S.status] || S.status);
-  set(".as-live-open", `${(S.open * 100).toFixed(1)}% of the field`);
+  set(".as-live-t", S.fromPhoto ? String(Math.round((since ?? 0) * 2)) : `${S.t.toFixed(1)} h`);
+  set(".as-live-status", S.status === "error" ? "NCA error" : STATUS[S.status] || S.status);
+  set(".as-live-open", `${(S.open * 100).toFixed(1)}%`);
   set('[data-live="play"]', S.status === "paused" ? "Play" : "Pause");
 }
