@@ -7,8 +7,10 @@ def test_video_upload_scale_is_half_resolution():
 
 
 def test_leaks_windows_home_does_not_crash(monkeypatch):
+    import os
     home = "C:\\Users\\x"                                          # "\\U" is a bad escape if used as a regex
-    monkeypatch.setenv("HOME", home)
+    # patch expanduser itself: on Windows it reads USERPROFILE, not HOME, so setting HOME alone does nothing there
+    monkeypatch.setattr(os.path, "expanduser", lambda p: home if p == "~" else p)
     monkeypatch.setenv("USER", "xuser")
     assert record.leaks("a clean run log") == []
     assert record.leaks("written to " + home + "\\runs\\r.jsonl") == ["home folder"]
