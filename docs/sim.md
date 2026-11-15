@@ -1,5 +1,33 @@
 # Cell simulator: rules and output format (P2, `sim/cellsim.py`)
 
+> **Scope.** Stitch models migration-only closure of MCF10A scratch wounds (mitomycin C, serum- and EGF-free medium, so division is off). The
+> follower rule keeps the sheet packed, a simple stand-in for force transmission that published measurements put at hundreds of um behind the front.
+> It is not a model of skin healing: no clotting, inflammation, fibroblasts, matrix, proliferation or 3D tissue. Parameters are fitted per wound for
+> this 640x880 um field and are not measured cell properties. The wound-bias parameter is not identified from these data, so Tm carries the signal.
+> All tuning and evaluation are on WHAD only (WHiM-BC as an external check).
+> Sources: WHAD protocol, Iheme et al. 2024, IEEE Data Descr. 1:95, doi 10.1109/ieeedata.2024.3481394 (Zenodo 12806149): mitomycin C 10 ug/mL for 2 h,
+> then imaging in DMEM-F12 + 1% pen/strep without serum or EGF. MCF10A doubles in about 20-27 h (Cellosaurus CVCL_0598), so division is off because of
+> the protocol, not because growth is slow. Force and velocity correlations extend about 170-200 um, and more than 500 um for MCF10A on stiff gels
+> (Vishwakarma 2018, doi 10.1038/s41467-018-05927-6; Petitjean 2010, doi 10.1016/j.bpj.2010.01.030; Ng 2012, doi 10.1083/jcb.201207148); each sheet
+> beside a WHAD wound is about 15 sites (300 um) wide. Skin healing: Gurtner 2008, doi 10.1038/nature07039; Rodrigues 2019, doi 10.1152/physrev.00067.2017.
+
+> **P2 v2 (Sun 00:00): the follower rule is the default for WHAD forecasts, upload, draw tool and playback.** Use `Params(rule="follow")`
+> (Agent 4, 3dd4fcf). When a cell connected to the sheet moves, the sites behind it stay filled, so the sheet stays packed and the wound closes as a
+> front, and fitted Tm no longer depends on field size. This is a simple stand-in for force transmission through the sheet, NOT "leaders pull passive
+> followers": follower cells crawl actively (Farooqui & Fenteany 2005, doi 10.1242/jcs.01577). Lattice precedent: pulling in exclusion models,
+> Chappelle & Yates 2019, doi 10.1103/PhysRevE.99.062413 (our chain rule is a many-cell generalisation); Simpson 2007, doi 10.1103/PhysRevE.76.021918.
+> Reach is unlimited here (consistent with the 170-500 um correlation lengths against a 300 um sheet); a finite reach is future work.
+> Not modelled: leader cells and fingers (Poujade 2007, doi 10.1073/pnas.0705062104); purse-string vs crawling closure, which depends on gap geometry
+> (Ravasio 2015, doi 10.1038/ncomms8683; Anon 2012, doi 10.1073/pnas.1117814109; Brugues 2014, doi 10.1038/nphys3040). The code default stays `rule="free"`, so the v1 results (sim_ensemble, rules below) reproduce bit for bit. Under the follower rule:
+> Tm grid 0.05-500 h (fits are about 8-10x the free-rule Tm; part II about 4-8 h, part I stalls up to 500 h); fits in `sim/fits/whad_fits_follow.json` (sim/v2.py,
+> series time at P1's cut-offs, near-tie break); gate files `sim_follow*` via `python sim/v2.py gate sim_follow`; upload `sim/upload.py` (follower fits and
+> prior, NCA band only with the follower weights `nca/v2/weights.pt`). Results and the pre-declared criterion it did not pass: `docs/p2-results.md` "P2 v2".
+> Upload bands (Sun 00:15): `area_q05/q50/q95` = P1's leave-one-wound-out conformal (`forecast_file`, upload = test series, pool = WHAD series minus
+> the upload's own wound, point = member median; pool points from follower fits at the upload's cut-off), as `data/upload.py`. The raw ensemble is
+> kept in `raw_band` ("uncalibrated spread"); `band` says which was used. One frame: population-prior draws, with no conformal step (as `data/upload.py`).
+> The 3-frame sample (exp1_partII_CC_P2): the observed 0.06 at 19 h is inside the calibrated band (0.00-0.45), whereas the raw band was 0/0/0. The observation
+> is inside at 13 of 17 forecast hours, and just above the top at 7-10 h (by up to 0.02), because the follower sim closes this wound too fast mid-course.
+
 Run: `python3 sim/cellsim.py --hours 24 --Tm 0.1 [--Td 20] [--out run.npz]` (synthetic straight scratch, ~1 s).
 API: `simulate(occ0, Params(...), hours, frame_dt=1.0, seed=0, grain=GRAIN) -> dict`; `occ0` is an (H,W) uint8 array, 1 = cell.
 Shared constants in `sim/cellsim.py`: `DT = 0.05` (h per step), `SITE_UM = 20` (one site = one cell), `GRAIN = 2`. A WHAD field (1920x1440 px at 0.454 um/px) becomes a **32 x 44** lattice and a **16 x 22** density grid.
@@ -11,6 +39,7 @@ Shared constants in `sim/cellsim.py`: `DT = 0.05` (h per step), `SITE_UM = 20` (
 4. Wound bias: with prob `bias` (default 7/9) the target is restricted to empty neighbours pointing up the gradient of blurred emptiness (radius `blur`); otherwise any empty neighbour.
 5. Two cells claiming one site: random priority wins.
 6. Boundary: border-band sites (width `edge`) occupied at t0 are a reservoir, refilled every step (cells keep entering the field of view; a wound touching the border stays open there).
+7. **Rule** (`Params.rule`, P2 v2): `"free"` (default; every result merged before v2, reproduced bit for bit, see `sim/tests/test_rules.py`) = a mover leaves a vacancy behind. `"follow"` = a mover connected to the reservoir (Moore path through occupied sites) moves with the sheet behind it shifting one site (a stand-in for force transmission, not passive followers); in occupancy terms its target fills and its source stays occupied. Movers not connected (islands) leave a vacancy. Front-like, size-independent closure (`docs/follower-report.md`). JS port must match: only cells with an empty Moore neighbour draw random numbers; the reservoir's connected component is kept incrementally (connected winners' targets join; `join_islands` absorbs an island that touches it); the run stops early once the field is full. Fitted `Tm` is about 8-10x larger under `"follow"` (grid up to 50 h).
 Parameters fitted per wound (#23): `Tm`, `bias` only (n_params = 2). Fixed: `dens_exp` = 0.5, `blur` = 6, `edge` = 2, `Td` = None. Time step: `dt` = 0.05 h; keep `dt` <= the smallest `Tm` (the move probability `dt/Tm` saturates at 1, so smaller `Tm` stops making cells faster).
 
 ## Output (`np.savez_compressed`, keys of the dict `simulate` returns)
@@ -82,7 +111,7 @@ The notes below describe the earlier `sim/forecasts/whad/` files (t0 2/4/6/10, f
 `python3 sim/upload.py --masks f0.png [f1.png ...] --um-per-px U --interval H [--condition CC] [--wound-value 255] [--seg-quality q.json] --out-dir D`.
 Masks are True = wound, in time order, `interval_h` apart. The output is `{wound_id}_sim_ensemble.json`, plus `{wound_id}_nca_ensemble.json` when Agent 2's `nca/api.py` and its weights import (`$NCA_DIR`, default `<repo>/nca`); fold = dataset = "upload".
 - Refused, so no file and exit code 2: `seg_quality.status == "refused"`, missing scale, or any mask outside 1-70% of the field.
-- 1 frame: 50 draws from the t0 = 10 fits of WHAD wounds of the same condition (never `exclude_wound`), so the band is wide; flagged `measure_again`. 2+ frames: grid fit plus bootstrap, as in #23.
+- 1 frame: 50 draws from the t0 = 10 fits of WHAD wounds of the same condition (never `exclude_wound`), so the band is wide; noted in the `band` field and notes, with no flag (design R16: no measure-again flag until a signal passes). A different field size is a `segmentation_quality` reason, not a flag. 2+ frames: grid fit plus bootstrap, as in #23.
 - The field is windowed or padded to 640 x 880 um around the wound; differences above 5% are flagged. The lattice area check (< 2%) is asserted. The grid runs hourly to 19 h.
 - NCA band: `NCA_DIR=<agent2 worktree>/nca /tmp/p2venv/bin/python sim/upload.py --samples` (needs torch; `/tmp/p2venv` is Agent 2's venv and is not durable). The committed `sample_*_nca_ensemble.json` came from Agent 2's `a9ef439` code with weights sha256 `c413a063825e`.
 - `python3 sim/upload.py --samples` writes `sim/forecasts/upload/sample_3frames_*.json` and `sample_1frame_*.json` (manual masks t00-t02 of `exp1_partII_CC_P2`, with wound `exp1_pos2033` excluded from the prior) and checks that a blank mask is refused.
