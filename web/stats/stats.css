@@ -1,0 +1,11 @@
+/* Stats: held-out test replay. Layout only; components and chart marks come from web/ops/ops.css (.cr, .kpi, svg classes). */
+.cr.st-test { grid-template-columns: minmax(0, 1fr) 360px; grid-template-areas: "top top" "hero side"; margin-bottom: var(--s4); }
+.st-test .st-hero { grid-area: hero; display: flex; flex-direction: column; gap: var(--s2); }
+.st-test .st-side { grid-area: side; display: flex; flex-direction: column; gap: var(--s2); }
+.st-test .cr-clock [data-n] { font: 500 28px/1 var(--font-mono); min-width: 7ch; }
+.st-test .cr-kpis b b { font: inherit; }
+svg .pin { fill: var(--ink); stroke: var(--panel-solid); stroke-width: 1.5; }
+svg .pout { fill: var(--accent); stroke: var(--panel-solid); stroke-width: 1.5; }
+.lg-in { width: 8px !important; height: 8px !important; border-radius: 50%; background: var(--ink); }
+.lg-out { width: 9px !important; height: 9px !important; border-radius: 50%; background: var(--accent); }
+.st-test .stream li { grid-template-columns: 28px 1fr; }
