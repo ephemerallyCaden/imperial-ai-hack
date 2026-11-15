@@ -87,6 +87,34 @@ ROWS = [
 ]
 
 
+# Sources not in Europe PMC: paragraph stored verbatim here (checked by Agent 1 against its own pdftotext extraction of the
+# open PDF; superscript exponents written as 10^6 / 10^5, degree sign as °C). Same label/quote asserts as above.
+WHAD_SRC = dict(citation="Iheme et al. 2024, Collection: Wound Healing Assay Dataset (WHAD) and Cell Adhesion and Motility Assay "
+                         "Dataset (CAMAD). IEEE Data Descriptions 1:95-102",
+                doi="10.1109/IEEEDATA.2024.3481394", pmcid=None,
+                url="https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=10720536",
+                licence="CC BY 4.0 (printed on p. 95; IEEE metadata CCBY)")
+EXTERNAL = [
+    ("real_29", dict(WHAD_SRC, section="Wound Healing Assay Protocols, p. 98"),
+     "The main steps of the wound healing assay are illustrated in Fig. 1. Briefly, cells were seeded on 12-well plates at the "
+     "density of 1 × 10^6 cells/well and 7.5 × 10^5 cells/well, for MCF10A and MCF7 cells, respectively. A 2-h treatment with "
+     "10 µg/mL mitomycin C was applied to block proliferation. The phase-contrast images of defined positions were recorded every "
+     "hour for 48 or 72 h with Leica DMI8 confocal microscope supplemented with 5% CO2 at 37 °C.",
+     dict(frame_interval_h=1.0, cell_type="MCF10A", imaging="phase_contrast", proliferation_blocked=True, in_scope=True),
+     dict(frame_interval_h="recorded every hour", cell_type="MCF10A", imaging="phase-contrast images",
+          proliferation_blocked="mitomycin C was applied to block proliferation"),
+     "WHAD protocol. Two lines named (MCF10A, MCF7): labelled the first, check. '48 or 72 h' is not one value -> duration null. "
+     "Scratch only in Fig. 1 -> assay_type null (wound-healing assay described -> in scope). 'confocal microscope' but phase-contrast "
+     "images -> phase_contrast. Distractors: cell densities, 2-h, 10 ug/mL, 5% CO2, 37 C."),
+    ("real_30", dict(WHAD_SRC, section="Validation and Quality, p. 98"),
+     "Spatial resolution was satisfied by using 10× and 40× objectives to give pixel size of 0.454 × 0.454 µm and of 0.117 × 0.117 "
+     "µm for WHAD and CAMAD, respectively.",
+     dict(pixel_um=0.454, in_scope=False),
+     dict(pixel_um="0.454 × 0.454 µm"),
+     "Pixel size for the WHAD wound images by 'respectively' (0.117 um is CAMAD, 3D adhesion). No assay described -> in_scope false "
+     "under the strict rule; check."),
+]
+
 def text(e):
     return " ".join("".join(e.itertext()).split())
 
@@ -157,9 +185,11 @@ def main():
         out.append(dict(id=f"real_{i:02d}", source=source(meta, pmcid), paragraph=para, labels=labels, quotes=quotes,
                         note=note, labelled_by="agent (pending human check)", prompt=P.build_prompt(para),
                         completion=P.canonical(labels)))
-    for path in a.extra:  # Agent 3's rows: re-verify quotes, re-derive prompt/completion with prompt.py
-        for line in open(path):
-            r = json.loads(line)
+    extra = [json.loads(l) for p in a.extra for l in open(p)]
+    if not a.extra and os.path.exists(a.out):  # default: carry over Agent 3's merged rows from the current file
+        extra = [json.loads(l) for l in open(a.out) if json.loads(l)["id"].startswith("a3_")]
+    for r in extra:  # Agent 3's rows: re-verify quotes, re-derive prompt/completion with prompt.py
+        if True:
             labels = P.finalize({k: r["labels"].get(k) for k in P.NULLABLE} | {"in_scope": r["labels"]["in_scope"]})
             check_labels(labels)
             for k in P.NULLABLE:
@@ -168,6 +198,15 @@ def main():
             r.update(labels=labels, prompt=P.build_prompt(r["paragraph"]), completion=P.canonical(labels))
             r.setdefault("labelled_by", "agent 3 (pending human check)")
             out.append(r)
+    for rid, src, para, lab, quotes, note in EXTERNAL:
+        labels = P.finalize({k: lab.get(k) for k in P.NULLABLE} | {"in_scope": lab["in_scope"]})
+        check_labels(labels)
+        for k in P.NULLABLE:
+            if labels[k] is not None:
+                assert quotes.get(k) and quotes[k] in para, f"{rid}: bad quote for {k}"
+        assert set(quotes) <= {k for k in P.NULLABLE if labels[k] is not None}, f"{rid}: quote for a null field"
+        out.append(dict(id=rid, source=src, paragraph=para, labels=labels, quotes=quotes, note=note,
+                        labelled_by="agent (pending human check)", prompt=P.build_prompt(para), completion=P.canonical(labels)))
     ids = [r["id"] for r in out]
     assert len(ids) == len(set(ids)), "duplicate ids"
     paras = [r["paragraph"] for r in out]

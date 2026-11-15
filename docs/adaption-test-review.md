@@ -5,7 +5,7 @@
 > (about 10 minutes), especially the rows whose note says *check*. These paragraphs are **test only**: they must never enter training data
 > (`overlap_check.py`: 0 shared 8-grams with train.jsonl).
 
-28 paragraphs, all CC BY open access (Europe PMC). 18 in scope, 10 out of scope. Fields: value ← "quote"; null fields are omitted.
+30 paragraphs, all CC BY open access (28 via Europe PMC, 2 from the WHAD paper on IEEE). 19 in scope, 11 out of scope. Fields: value ← "quote"; null fields are omitted.
 
 | id | source | in_scope | labels (value ← quote) | note |
 |---|---|---|---|---|
@@ -37,9 +37,11 @@
 | a3_12 | [PMC10586696](https://europepmc.org/article/PMC/PMC10586696) Yu X, Ma X, Zhou J (2023). DNMT3A-mediated epigenetic silencing of SOX | False | **assay_type** other ← "BALB/c mice (7-week-old) were used to establish a wound healing model" | in vivo skin wound -> other, out of scope |
 | a3_13 | [PMC12910046](https://europepmc.org/article/PMC/PMC12910046) Richardson EL, Knebel A, Straatman KR, Gourlay R, Lamont D, Hardy T, T | False | **assay_type** other ← "Spheroids were imaged" | spheroid invasion -> other; siRNA target not named -> condition null; Ph1 objective named only -> imaging null |
 | a3_14 | [PMC12834970](https://europepmc.org/article/PMC/PMC12834970) Tseng CC, Zhang P, Ishak Gabra MB, Kong M, Lee AS (2025). Targeting ce | False | **cell_type** MDA-MB-231 ← "MDA-MB-231 cells"; **assay_type** other ← "for the 7-hour cell tracking"; **imaging** other ← "differential interference contrast (DIC)"; **condition** drug:76-E6 ← "76-E6 antibody" | single-cell tracking, no wound -> other; two experiments (5 min/7 h and 1 min/2 h) -> interval and duration null |
+| real_29 | [10.1109/IEEEDATA.2024.3481394](https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=10720536) Iheme et al. 2024, Collection: Wound Healing Assay Dataset (WHAD) and  | True | **frame_interval_h** 1.0 ← "recorded every hour"; **cell_type** MCF10A ← "MCF10A"; **imaging** phase_contrast ← "phase-contrast images"; **proliferation_blocked** True ← "mitomycin C was applied to block proliferation" | WHAD protocol. Two lines named (MCF10A, MCF7): labelled the first, check. '48 or 72 h' is not one value -> duration null. Scratch only in Fig. 1 -> assay_type null (wound-healing assay described -> in scope). 'confocal microscope' but phase-contrast images -> phase_contrast. Distractors: cell densities, 2-h, 10 ug/mL, 5% CO2, 37 C. |
+| real_30 | [10.1109/IEEEDATA.2024.3481394](https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=10720536) Iheme et al. 2024, Collection: Wound Healing Assay Dataset (WHAD) and  | False | **pixel_um** 0.454 ← "0.454 × 0.454 µm" | Pixel size for the WHAD wound images by 'respectively' (0.117 um is CAMAD, 3D adhesion). No assay described -> in_scope false under the strict rule; check. |
 
 ## Excluded dataset papers (no usable open protocol paragraph)
 - Zaritsky et al. 2015, GigaScience (PMC4341232): a Data Note whose body has no protocol paragraph (imaging details are in the cited papers); it also mixes two cell lines.
 - Migliaccio et al. 2023, Cancers (PMC10647277): computational; only a generic description of scratch assays.
 - Jin et al. 2016, J Theor Biol: not open access.
-- WHAD (Iheme et al. 2024, IEEE Data Descr.): pending. IEEE Xplore blocks the download, and the scout is fetching the verbatim protocol via an open-access route.
+- WHAD (Iheme et al. 2024) is INCLUDED as real_29 (protocol) and real_30 (pixel size), verbatim from the open PDF (checked against pdftotext).
