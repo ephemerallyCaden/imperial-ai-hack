@@ -36,3 +36,13 @@ Reproduce: `python -I data/adaption/score.py data/adaption/test_real.jsonl --com
 
 ## Go/no-go (pre-declared)
 Ship only if the fine-tune beats the base on the real set in BOTH exact match AND mean per-field accuracy. **GO**: exact match 0% -> 20%, mean field accuracy 47.4% -> 80.4%. Intake uses the fine-tune locally, with Claude as the fallback. Weak spots to show honestly: imaging (57%) and in_scope (73%); 80% of paragraphs still have at least one field wrong, so the extraction is shown next to the source text for review (R10).
+
+## Triage and Reporter (#115; data `data/adaption/reporter/`, scorer `score_agents.py`, go rule pre-declared there)
+| | Triage | Reporter |
+|---|---|---|
+| run_id | `c80436bb-6c4b-46d9-9d2b-bd60d676c756` | `05c4f3ef-c8d5-4f82-b996-c702665680be` |
+| dataset | `069e05bc-892f-417c-84ba-e0a147745bac` (1,188 rows) | `8a1498b8-1190-44bb-81d0-0745555f54dc` (1,973 rows) |
+| model / settings | Qwen/Qwen3.5-2B, LoRA, 1 iteration, target 0.7 | same |
+| platform best_win_rate | **0.8793** | **0.50** (below target; exactly 0.5 may mean all ties or no real judging: asked Adaption) |
+| base on held-out wounds | accuracy 9.5% (clean 5.4%, injected 21.4%) | pass 3.2% (traced 70.5%, decision named 28.9%) |
+| fine-tuned on held-out wounds | pending download | pending download |
