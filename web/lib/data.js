@@ -2,13 +2,20 @@
 // so paths outside web/ resolve with ROOT. Only real files are read; nothing is invented here.
 export const ROOT = new URL("../../", import.meta.url).href;   // web/lib/ -> repo root
 
+// A fetch the browser cancels or drops on a busy first load (seen as "Failed to fetch") is retried twice before failing.
+async function get(path) {
+  for (let k = 0; ; k++) {
+    try { return await fetch(ROOT + path); }
+    catch (e) { if (k >= 2) throw e; await new Promise(r => setTimeout(r, 250 * (k + 1))); }
+  }
+}
 export async function json(path) {
-  const r = await fetch(ROOT + path);
+  const r = await get(path);
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
   return r.json();
 }
 export async function text(path) {
-  const r = await fetch(ROOT + path);
+  const r = await get(path);
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
   return r.text();
 }

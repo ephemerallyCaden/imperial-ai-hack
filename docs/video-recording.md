@@ -206,9 +206,9 @@ This is the new shot. It shows the real Python pipeline finding the wound and fo
 - **Length:** 20 s. Capture about 40 s and speed up.
 - **On-screen text:** "Replay on held-out wounds · simulation on recorded data" · "Gain from the forecaster and policy code" · "Adversarial set: stub models, no real model calls".
 - **Numbers and sources:**
-  - 82% called at the first check, 91% right, 75% always "won't close": `docs/results.md` lines 69 and 72 (same with the shipped NCA v3).
+  - 71% called at the first check, 82% by 9.5 h, 91% right, 75% always "won't close": `docs/results.md` lines 69 and 72 (same with the shipped NCA v3).
   - 15 of 15 met: `agent/results/adversarial.md` line 5.
-  - Scoreboard rows, if you caption them: fixed 0, simple rules 338.2, forecast policy 761.9 plate-hours over 55 wounds: `agent/results/scoreboard.md`, main table. Do not quote the "Real model" row (4 practice runs, not comparable).
+  - Scoreboard rows, if you caption them: fixed 0, simple rules 330.6, forecast policy 741.0 plate-hours over 55 wounds: `agent/results/scoreboard.md`, main table. Do not quote the "Real model" row (4 practice runs, not comparable).
 - **Label:** simulation on recorded data · stub models (adversarial table) · sped up.
 
 ### Shot 10. Close (1:47-1:56, hold to 2:00)

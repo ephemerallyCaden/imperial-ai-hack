@@ -33,7 +33,7 @@ Use cases (diabetic wounds, infection, cancer, fibrosis, drug screens) are motiv
 - 58% on a new cell type, so calibrate per cell line
 - NCA trained only on simulation failed our pre-set test; fine-tuned on real frames it is within 3% of edge speed at 3.8 h and better at 1.9 h and 9.5 h
 - inside the band at 15 of 16 later frames
-- 82% called at the first check, 91% right vs 75% for always guessing "won't close" (replay, simulation on recorded data)
+- 71% called at the first check (1.9 h), 82% by 9.5 h, 91% of calls right vs 75% for always guessing "won't close" (replay, simulation on recorded data)
 - 15 of 15 adversarial inputs handled
 
 ## Never say

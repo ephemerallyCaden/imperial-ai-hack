@@ -1,6 +1,6 @@
 # Imperial AI Hack Playbook (about 11 in-building hours, 1-4 students)
 
-**Runs:** Sat 14 Nov to Sun 15 Nov 2026. Building starts 12:10 Sat (pre-existing projects not eligible). **Submissions close 12:00 sharp Sun 15 Nov**: Devpost entry = public GitHub repo + demo video up to 2 minutes; video AND last commit must be before 12:00. Building closes 21:00 Sat (no overnight hacking), reopens 10:00 Sun. Venue: Huxley Building, Imperial College London. Teams of 1-4 students. Team name: [TBC]. Verified rules: docs/event-rules.md.
+**Runs:** Sat 14 Nov to Sun 15 Nov 2026. Building starts 12:10 Sat (pre-existing projects not eligible). **Submissions close 12:00 sharp Sun 15 Nov**: Devpost entry = public GitHub repo + demo video up to 2 minutes; video AND last commit must be before 12:00. Building closes 21:00 Sat (no overnight hacking), reopens 10:00 Sun. Venue: Huxley Building, Imperial College London. Teams of 1-4 students. Team name: Stitch. Verified rules: docs/event-rules.md.
 
 ## Tracks
 
@@ -14,16 +14,16 @@ Main tracks:
 5. Reply Challenge: AI on Campus
 
 Cross-cutting (enter regardless of main track):
-- **Best Designed AI Product**: as well designed as it is smart. Designed in Figma (not Figma Make). **Leaning towards this.**
+- **Best Designed AI Product**: as well designed as it is smart. Designed in Figma (not Figma Make).
 - **Best use of Adaption**: fine-tune a model with Adaption; ranked on Adaption's leaderboard by win rate vs the base model.
 
 Chosen main track: AI for Science (GBP 700: 1st 500, 2nd 200). Project: wound healing forecaster (see docs/wound-plan.md, docs/decisions.md).
-Chosen sub-bounty: none yet (Boltz bounty only if a compound-labelled closure table is found; Figma prize is open to every track).
+Cross-cutting prizes entered: Best Designed AI Product (Figma) and Best use of Adaption. No Boltz bounty.
 
 AI for Science marks (0-3 each, weighted): scientific rigour 30, technical execution 25, path to the lab 20, novelty 15, video and answers 10. Bounties judged on how central the partner tool is. Judging Sun 13:00-16:30, 10-minute slot: 2-minute video, 6 minutes of judge questions, no slides and no live demo. Track winners present at 17:00. Full details: docs/event-rules.md.
 
 ## Tech partners we have access to
-Listed on the event's tech partners slide. Credits/keys and exact offers: [TBC, fill in when received].
+Listed on the event's tech partners slide. Credits and keys: see docs/event-rules.md.
 
 | Partner | Area | Possible use |
 |---------|------|--------------|
@@ -132,7 +132,6 @@ Things that don't matter for the demo: auth, CRUD for non-demo entities, error h
 ### Setup
 - API key in `.env` (never in source)
 - SDK: [install command]
-- Docs: [link]
 
 ### Core calls
 ```
