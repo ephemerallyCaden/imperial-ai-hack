@@ -31,6 +31,7 @@ RULE = {"follow": "follow", "frozen": "free"}  # sim/cellsim.py Params.rule (Age
 VARIANTS = {"sim_follow": ("follow", "boot"), "sim_follow_shrink": ("follow", "shrink"),
             "sim_follow_fixbias": ("follow", "fixbias"), "sim_frozen_shrink": ("frozen", "shrink")}
 AUTO_REASON = "sim start state = synthetic vertical band with the observed area (no auto mask on disk)"
+GATE_FOLDS = ("loo_all", "loo_manual", "CC_to_C61")  # P1's folds the P2 gate files were scored on (P1 later added more)
 
 
 def series_rows():
@@ -216,7 +217,7 @@ def cmd_gate(variants):
     import forecast as F
     S, rows = series_rows()
     G_all = np.unique(np.concatenate([s["t"] for s in S.values()]))
-    splits = FB.splits("whad", S)
+    splits = {k: v for k, v in FB.splits("whad", S).items() if k in GATE_FOLDS}
     rd = lambda v: [round(float(x), 4) for x in v]
     for model in variants:
         rule, kind = VARIANTS[model]
