@@ -80,6 +80,7 @@ python -I data/build_curves.py && python -I data/build_whad.py && python -I data
 python eval/forecast_baselines.py                # calibrated baseline forecasts
 python eval/score_forecasts.py eval/forecasts    # scorecard
 python eval/flags.py && python eval/scheduler.py && python eval/results_table.py && python eval/figures.py
+python -m pytest -q tests/                       # fast checks, no raw data needed
 ```
 
 ## Open-source libraries
