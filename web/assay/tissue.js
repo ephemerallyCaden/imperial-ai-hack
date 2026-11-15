@@ -14,6 +14,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { viewFrame } from "../public/sim/js/playback.js";
+import { edgeSpeed, stallSpeed } from "../edge/edge_speed.js";
 import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from "../vendor-design/look.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
@@ -25,7 +26,8 @@ const PAL = { intact: hexNum(tok("--cell-intact", "#C68B6E")), edge: hexNum(tok(
   fresh: hexNum(tok("--cell-new", "#FFD2C6")), wound: hexNum(tok("--cell-wound", "#24120F")) };
 const SCENE_BG = hexNum(tok("--scene-bg", "#120A09"));
 const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11 };                // tokens.css --ghost-* (linear)
-export const STATE_LABEL = { wound: "wound (no cells)", intact: "intact sheet", edge: "leading edge", fresh: "new tissue" };
+export const STATE_LABEL = { wound: "Wound", intact: "Intact", edge: "Leading edge", fresh: "New tissue" };
+const STALL = { stalled: 0xFF2D2D, moving: 0xE8ECEF, dim: 0.18 };   // edge-stall overlay: edges slower than stall pace red
 const STATES = ["wound", "intact", "edge", "fresh"];     // state codes 0..3
 const HY = Math.sqrt(3) / 2, S = 0.5;                    // S = world units per lattice site
 // height of density 1: the mockup's column proportions (look.js HMAX per 0.5 world units of hex spacing) at this hex spacing
@@ -143,7 +145,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   for (let k = 0; k * step <= zb - za + 1e-6; k += 2) label(`${k * 100}`, V(xb + 0.6, 0, za + k * step), 0.4);
   label("y (µm)", V(xb + 1.6, 0, 0), 0.5, "#e8ecef");
   for (let q = 0; q <= 4; q++) label((q / 4).toFixed(2), V(xa - 0.2, q * HMAX / 4, za), 0.4).center.set(1, 0.5);
-  label("local density (simulated)", V(xa - 0.2, top + 0.6, za), 0.5, "#e8ecef").center.set(1, 0.5);
+  label("density", V(xa - 0.2, top + 0.6, za), 0.5, "#e8ecef").center.set(1, 0.5);
 
   // ---------- columns: coloured + matte greyscale (outside a selection) ----------
   // the mockup's hex prism and proportions: radius 0.55 x hex spacing, turned 30 deg (look.js colGeo)
@@ -181,23 +183,37 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // simulated outline (area-matched contour from smooth.js), labelled uncalibrated
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
   const outlineGroup = new THREE.Group(); scene.add(outlineGroup);
-  const outlineLabel = label("simulated outline (uncalibrated)", V(0, HMAX * 1.1, 0), 0.4, "#e8ecef", scene);
   const siteToWorld = (x, y) => V(X0 + x * S, HMAX * 0.9, Z0 + y * S);
   function drawOutline(disp) {
     outlineGroup.children.forEach(c => c.geometry.dispose()); outlineGroup.clear();
     outlineMat.opacity = 0.8 * (disp?.opacity ?? 0);
-    outlineLabel.visible = !!disp && disp.opacity > 0.05 && disp.lines.length > 0;
-    if (!outlineLabel.visible) return;
-    let best = null;
+    if (!disp || disp.opacity <= 0.05 || !disp.lines.length) return;
     for (const l of disp.lines) {
       const pts = []; for (let i = 0; i + 1 < l.length; i += 2) pts.push(siteToWorld(l[i], l[i + 1]));
       outlineGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), outlineMat));
-      for (const p of pts) if (!best || p.z < best.z) best = p;
     }
-    if (best) outlineLabel.position.set(best.x, HMAX * 1.15, best.z - 0.3);
   }
 
   let sel = null, cur = null, moving = true, heat = false;   // heat: age heatmap overlay on non-wound hexes (look.js heatColour)
+  // ---------- edge-stall overlay: front speed from the real wound's area change (prev = the frame matching the area dt
+  // hours earlier); the hex grid is read as a rectangle (10 µm hexes), edges below the stall pace (eval/flags.py rule) red ----------
+  let stall = null, stallOpts = null;
+  const HEX_UM = SITE_UM * DX;
+  function computeStall() {
+    if (!stallOpts || !cur?.wound) { stall = null; return; }
+    const m0 = frameData(frameForArea(stallOpts.prevArea), f0.wound).wound, m1 = cur.wound;
+    const e = edgeSpeed(m0, m1, NY, NX, stallOpts.dtHours, HEX_UM);
+    const front = new Float32Array(COUNT).fill(NaN); for (const p of e.sites) front[p.i] = p.v;
+    let wn = 0; for (let k = 0; k < COUNT; k++) wn += m1[k];
+    const pace = stallSpeed(wn * HEX_UM * HEX_UM * HY, e.sites.length * HEX_UM, stallOpts.cutH, stallOpts.horizonH);
+    const v = new Float32Array(COUNT).fill(NaN); let edges = 0, slow = 0;
+    for (let k = 0; k < COUNT; k++) {
+      if (m1[k]) continue; let b = Infinity;
+      for (let q = 6 * k; q < 6 * k + 6; q++) { const m = nb[q]; if (m >= 0 && !Number.isNaN(front[m])) b = Math.min(b, front[m]); }
+      if (b < Infinity) { v[k] = b; edges++; if (pace != null && b < pace) slow++; }
+    }
+    stall = { v, pace, stalledFrac: edges ? slow / edges : 0 };
+  }
   const liveFd = { dens: new Float32Array(COUNT), wound: new Uint8Array(COUNT), state: new Uint8Array(COUNT) };   // reused per live step
   // full write: instance placement + membership (colour mesh inside the selection, grey mesh outside) + colours
   function writeAll() {
@@ -219,7 +235,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
       const s = st[k], a = age[k]; if (s === lastS[k] && a === lastAge[k]) continue;
       lastS[k] = s; lastAge[k] = a;
       const o = 3 * k, g = GREY[s] * (s === 1 ? 0.85 + 0.3 * rnd[k] : 1);
-      if (heat && s !== 0) heatColour(col, a, ramp); else cellColour(col, STATES[s], a, rnd[k], ramp);
+      if (stall) { const v = stall.v[k]; if (!Number.isNaN(v)) col.setHex(stall.pace != null && v < stall.pace ? STALL.stalled : STALL.moving); else { cellColour(col, STATES[s], a, rnd[k], ramp); col.multiplyScalar(STALL.dim); } }
+      else if (heat && s !== 0) heatColour(col, a, ramp); else cellColour(col, STATES[s], a, rnd[k], ramp);
       cc[o] = col.r; cc[o + 1] = col.g; cc[o + 2] = col.b; dc[o] = dc[o + 1] = dc[o + 2] = g;
     }
     cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
@@ -280,7 +297,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   function setTool(t, b = null) {
     tool = t; brush = t === "brush" ? b : null; painting = false; dragStart = null; ring.visible = false; lastK = -1;
     controls.enabled = t !== "select";
-    controls.mouseButtons.LEFT = brush ? -1 : THREE.MOUSE.ROTATE; controls.mouseButtons.RIGHT = brush ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    controls.mouseButtons.LEFT = brush ? -1 : THREE.MOUSE.ROTATE; controls.mouseButtons.RIGHT = brush ? THREE.MOUSE.ROTATE : -1;   // right drag = box zoom
     controls.touches.ONE = brush ? -1 : THREE.TOUCH.ROTATE;
     canvas.style.cursor = t ? "crosshair" : "";
     if (brush) {   // ring built once per brush; it only moves afterwards
@@ -320,11 +337,18 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (k >= 0 && painting && k !== lastK) brush.onPaint({ k, u: hu[k], v: hv[k], radius: brush.radius });
     lastK = k; return k;
   }
+  let zoomDrag = null;
   const onDown = e => {
     if (brush && e.button === 0) { painting = true; lastK = -1; canvas.setPointerCapture(e.pointerId); paint(e); return; }
+    if (!brush && e.button === 2) { zoomDrag = floorHit(e); return; }
     if (tool === "select") dragStart = floorHit(e);
   };
   const onMove = e => {
+    if (zoomDrag) {
+      const p = floorHit(e); if (!p) return;
+      sel = { x0: Math.min(zoomDrag.x, p.x), x1: Math.max(zoomDrag.x, p.x), z0: Math.min(zoomDrag.z, p.z), z1: Math.max(zoomDrag.z, p.z) };
+      drawSelBox(); return;
+    }
     if (tool === "select" && dragStart) {
       const p = floorHit(e); if (!p) return;
       sel = { x0: Math.min(dragStart.x, p.x), x1: Math.max(dragStart.x, p.x), z0: Math.min(dragStart.z, p.z), z1: Math.max(dragStart.z, p.z) };
@@ -334,12 +358,15 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   };
   const onUp = () => {
     painting = false;
+    if (zoomDrag) { zoomDrag = null; const b = sel; sel = null; drawSelBox(); if (b && b.x1 - b.x0 >= 0.5 && b.z1 - b.z0 >= 0.5) zoomToBox(b); return; }
     if (tool !== "select" || !dragStart) return; dragStart = null; setTool(null);
     setSel(sel && (sel.x1 - sel.x0 < 0.5 || sel.z1 - sel.z0 < 0.5) ? null : sel); emitSel();
   };
   const onLeave = () => { ring.visible = false; lastK = -1; onHover && onHover(null); };
   canvas.addEventListener("pointerdown", onDown); canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerup", onUp); canvas.addEventListener("pointerleave", onLeave);
+  const onContext = e => e.preventDefault(); canvas.addEventListener("contextmenu", onContext);
+  controls.mouseButtons.RIGHT = -1;
 
   // ---------- camera presets: field (x1), wound (x10, about 16 sites across), cells (x40, a few sites) ----------
   let woundC = V(0, 0, 0);
@@ -364,6 +391,16 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, off.length()));
     camera.position.copy(controls.target).add(off.setLength(len));
   }
+  function zoomToBox(b) {
+    const c = V((b.x0 + b.x1) / 2, 0.3, (b.z0 + b.z1) / 2), span = Math.max(b.x1 - b.x0, b.z1 - b.z0);
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const dist = Math.min(controls.maxDistance, Math.max(controls.minDistance, span / (2 * Math.tan(camera.fov * Math.PI / 360)) * 1.15));
+    view = "box"; fly = { t: 0, p0: camera.position.clone(), q0: controls.target.clone(), p1: c.clone().add(dir.multiplyScalar(dist)), q1: c };
+  }
+  // zoom level 0 (whole field) .. 1 (closest), log-scaled camera distance
+  const FIELD_D = views.field().p.distanceTo(views.field().t), NEAR_D = controls.minDistance * 1.2;
+  const zoomLevel = () => { const d = camera.position.distanceTo(controls.target); return Math.max(0, Math.min(1, Math.log(FIELD_D / d) / Math.log(FIELD_D / NEAR_D))); };
+  function setZoom(z) { const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
 
   // screen length of 100 µm at the orbit target (for the HUD scale bar)
   const sa = new THREE.Vector3(), sb = new THREE.Vector3();
@@ -394,8 +431,13 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     frameForArea,
     showArea(area) {
       const f = frameForArea(area); if (cur && f === cur.f) return cur;
-      bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline); return cur;
+      bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline);
+      if (stallOpts) { computeStall(); lastAge.fill(NaN); writeColours(); }
+      return cur;
     },
+    // edge-stall overlay: opts = { prevArea, dtHours, cutH, horizonH } or null (off) -> { pace, stalledFrac } | null
+    setStall(opts) { stallOpts = opts; computeStall(); lastAge.fill(NaN); if (cur) writeColours(); return stall && { pace: stall.pace, stalledFrac: stall.stalledFrac }; },
+    isStall: () => !!stallOpts, zoomLevel, setZoom,
     // live field { data, w, h, perSite, norm?, level, step? } sampled onto the hexes; `fresh` (Uint8Array per hex) is kept
     // by the caller: pass the same array each time and it accumulates every hex that was ever wound (clear it on reset).
     // step (optional): the NCA step of this state, for speed-independent cell ages; default = states received so far
@@ -425,7 +467,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     dispose() {
       renderer.setAnimationLoop(null); ro.disconnect(); controls.dispose();
       canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove);
-      canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointerleave", onLeave);
+      canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointerleave", onLeave); canvas.removeEventListener("contextmenu", onContext);
       scene.traverse(o => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
       renderer.dispose(); canvas.remove();
     },

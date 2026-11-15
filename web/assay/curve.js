@@ -3,7 +3,7 @@
 // as dim dotted lines and labelled "uncalibrated". Members: faint.
 import { HORIZON_H } from "./runlog.js";
 
-const CW = 360, CH = 210, L = 34, R = 10, T = 22, B = 30;
+const CW = 360, CH = 170, L = 34, R = 10, T = 22, B = 26;
 const X = t => L + (t / HORIZON_H) * (CW - L - R);
 export const curveX = X;   // for moving the 'now' line without a re-render
 const Y = a => T + (1 - Math.min(1.05, Math.max(0, a)) / 1.05) * (CH - T - B);
@@ -32,18 +32,17 @@ export function curveSVG(fc, { cutoff, t = null, calibrated }) {
   const now = t == null ? "" : `<line x1="${f1(X(t))}" x2="${f1(X(t))}" y1="${T}" y2="${CH - B}" class="c-now"/>`;
   const label = `closure curve: wound area as % of start; forecast from t0 = ${cutoff} h; P(90% closed by ${HORIZON_H} h) = ${fc.p_close_by_T}`;
   return `<svg viewBox="0 0 ${CW} ${CH}" role="img" aria-label="${label}" class="as-curve">
-    <text x="${L}" y="12" class="c-lbl">area % of start</text>
+    <text x="${L}" y="12" class="c-lbl">area %</text>
     ${grid}<line x1="${L}" x2="${CW - R}" y1="${f1(Y(0.1))}" y2="${f1(Y(0.1))}" class="c-ninety"/>
     <text x="${CW - R}" y="${f1(Y(0.1) - 3)}" class="c-lbl" text-anchor="end">90% closed</text>
     ${band}${members}${held}
     <path d="${path(ft, join(fc.area_q50))}" class="c-med"/>${obs}
     <line x1="${f1(X(cutoff))}" x2="${f1(X(cutoff))}" y1="${T - 6}" y2="${CH - B}" class="c-cut"/>
-    <text x="${f1(X(cutoff) + 4)}" y="${T + 2}" class="c-lbl">t0 = ${cutoff} h · forecast from here</text>
-    ${calibrated ? "" : `<text x="${CW - R}" y="${T + 14}" class="c-unc-lbl" text-anchor="end">spread uncalibrated · not a 90% band</text>`}
+    <text x="${f1(X(cutoff) + 4)}" y="${T + 2}" class="c-lbl">t0</text>
     <line x1="${L}" x2="${CW - R}" y1="${CH - B}" y2="${CH - B}" class="c-axis"/>${xt}${now}
   </svg>
-  <div class="as-legend"><span><i class="lg-obs"></i>observed</span>${later.length ? `<span><i class="lg-held"></i>observed after t0 (held out)</span>` : ""}<span><i class="lg-med"></i>median</span>
-    ${calibrated ? `<span><i class="lg-band"></i>90% band</span>` : `<span><i class="lg-unc"></i>spread (uncalibrated)</span>`}${(fc.members || []).length ? `<span><i class="lg-mem"></i>members</span>` : ""}</div>`;
+  <div class="as-legend"><span><i class="lg-obs"></i>observed</span>${later.length ? `<span><i class="lg-held"></i>held out</span>` : ""}<span><i class="lg-med"></i>median</span>
+    ${calibrated ? `<span><i class="lg-band"></i>90% band</span>` : `<span><i class="lg-unc"></i>spread</span>`}${(fc.members || []).length ? `<span><i class="lg-mem"></i>members</span>` : ""}</div>`;
 }
 
 // area (relative to the first frame) at time t: observed up to t0, forecast median after

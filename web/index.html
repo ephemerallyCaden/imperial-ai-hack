@@ -29,15 +29,11 @@
       <li data-action="toggle-panel:legend">Panels · Legend</li>
       <li data-action="toggle-panel:selection">Panels · Selection stats</li>
       <li data-action="toggle-panel:steps">Panels · Agent steps</li>
-      <li class="sep" data-action="camera:field">Camera · Field</li>
-      <li data-action="camera:wound">Camera · Wound</li>
-      <li data-action="camera:cells">Camera · Cells</li>
-      <li data-action="reset-camera">Reset camera<kbd>R</kbd></li></ul></div>
+      <li class="sep" data-action="toggle-heatmap">Edge heatmap<kbd>H</kbd></li>
+      <li data-action="reset-camera">Zoom out<kbd>Esc</kbd></li></ul></div>
     <div class="menu" data-menu="analysis"><button>Analysis</button><ul role="menu">
       <li data-action="run-forecast">Run forecast<kbd>Ctrl Enter</kbd></li>
-      <li data-action="select-area">Select area<kbd>S</kbd></li>
-      <li data-action="clear-selection">Clear selection<kbd>Esc</kbd></li>
-      <li class="sep" data-action="compare-baselines">Compare with baselines (opens Ops)</li>
+      <li class="sep" data-action="compare-baselines">Stats</li>
       <li data-action="stall-details">Open stall flag details</li></ul></div>
     <div class="menu" data-menu="help"><button>Help</button><ul role="menu">
       <li data-action="shortcuts">Keyboard shortcuts<kbd>?</kbd></li>
@@ -48,12 +44,13 @@
   <div class="modes" role="tablist" aria-label="Mode">
     <button role="tab" data-mode="assay">ASSAY</button>
     <button role="tab" data-mode="ops">OPS</button>
+    <button role="tab" data-mode="stats">STATS</button>
   </div>
-  <div class="hint">Space play · ←/→ step · +/− zoom</div>
+  <div class="hint">Space · ←/→ · +/− · right-drag · Esc · H · A · B</div>
   <button class="help-btn" data-action="shortcuts" aria-label="Keyboard shortcuts">?</button>
 </header>
 <main id="mode-root"></main>
-<footer class="purpose">Research use only. Not for diagnosis or treatment. Simulated cells are labelled as simulated.</footer>
+<footer class="purpose">Research use only · simulated cells</footer>
 <dialog id="dialog"><div class="dialog-body"></div><form method="dialog"><button>Close</button></form></dialog>
 <script type="module" src="app.js"></script>
 </body>
