@@ -38,9 +38,12 @@ export function segmentBox(img, x0, y0, x1, y1) {
   for (let i = 0; i < w * h; i++) if (!seen[i]) out[i] = 1;
   return { mask: out, w, h };
 }
-// Photo-type check before segmenting (thresholds from the look-dev prototype, design/prototypes/glass-dish/photo.js):
-// greyscale microscopy, not skin, or no clear wound -> say so instead of tracing something meaningless.
-export function photoCheck(img, seg) {
+// Photo type from two colour tests (thresholds from the look-dev prototype, design/prototypes/glass-dish/photo.js), over
+// the non-black pixels: colour = share with max - min > 25, skin = share in the YCbCr skin box. Grey pixels are never in
+// the box. kind: "microscopy" (neither), "skin" (both), "other" (colour, little skin), "ambiguous" (skin-toned but
+// almost no colour: a tinted grey frame or a washed-out photo). Assay's upload routes on it (web/upload/route.js).
+export const COLOUR_MIN = 0.05, SKIN_MIN = 0.2;
+export function photoKind(img) {
   const d = img.data; let n = 0, colourful = 0, skin = 0;
   for (let i = 0; i < d.length; i += 16) {   // every 4th pixel
     const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
@@ -49,8 +52,12 @@ export function photoCheck(img, seg) {
     const cb = 128 - 0.169 * r - 0.331 * g + 0.5 * b, cr = 128 + 0.5 * r - 0.419 * g - 0.081 * b;   // YCbCr skin box
     if (cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173) skin++;
   }
-  if (!n || colourful / n < 0.05) return "This looks like greyscale microscopy: use Upload images for cell-culture frames.";
-  if (skin / n < 0.2) return "This does not look like a skin photo.";
+  const colour = n ? colourful / n : 0, sk = n ? skin / n : 0, c = colour >= COLOUR_MIN, s = sk >= SKIN_MIN;
+  return { kind: c ? (s ? "skin" : "other") : (s ? "ambiguous" : "microscopy"), colour, skin: sk };
+}
+// Wound check before carving (the photo type is settled first, by photoKind in Assay's upload router): no clear wound in
+// the box -> say so instead of tracing something meaningless.
+export function photoCheck(img, seg) {
   let a = 0; for (const v of seg.mask) a += v;
   const frac = a / ((img.width * img.height) || 1);
   if (frac < 0.002 || frac > 0.6) return "Skin, but no clear wound in that box: try a tighter box around the wound.";
@@ -91,14 +98,15 @@ export function photoDialog(host, file, onMask) {
     box = [Math.min(drag[0], x), Math.min(drag[1], y), Math.max(drag[0], x), Math.max(drag[1], y)].map(Math.round);
     pg.putImageData(img, 0, 0); pg.strokeStyle = "#E0A458"; pg.lineWidth = 2; pg.setLineDash([5, 3]); pg.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]); pg.setLineDash([]); });
   pc.addEventListener("pointerup", () => (drag = null));
-  host.addEventListener("click", function on(e) {
+  // on the dialog's own buttons, not on host: the listener (and the photo it holds) goes when the next notice replaces it
+  host.querySelector(".as-btns").addEventListener("click", e => {
     const a = e.target.closest("[data-photo]")?.dataset.photo; if (!a) return;
-    if (a === "close") { host.hidden = true; host.removeEventListener("click", on); return; }
+    if (a === "close") { host.hidden = true; return; }
     if (!box || box[2] - box[0] < 12 || box[3] - box[1] < 12) { hint.textContent = "Draw a bigger box around the wound."; return; }
     const seg = segmentBox(img, ...box), why = photoCheck(img, seg);
     if (why) { hint.textContent = why; return; }
     const mask = fitToLattice(seg);
     if (!mask.some(Boolean)) { hint.textContent = "No outline found in that box: try a tighter box."; return; }
-    host.hidden = true; host.removeEventListener("click", on); onMask(mask);
+    host.hidden = true; onMask(mask);
   });
 }
