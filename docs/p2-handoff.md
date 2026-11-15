@@ -19,7 +19,32 @@ The files import each other by relative path. Use a module worker; `file://` wil
 
 `sim/js/` is the source of truth. After a change there, recopy with `cp sim/js/{engine,nca,smooth,worker,playback}.js web/public/sim/js/`.
 
-These have been tested in Node with a stubbed worker, but not yet in a real browser.
+The worker, the weights fetch and playback have been smoke-tested in headless Chrome (see the browser smoke test).
+
+## 0. v2 defaults: the follower rule (demo, user decision recorded on #68)
+
+The demo uses the **follower rule everywhere**. This is an *open departure* from the pre-declared criterion (#68). The free rule, which the 00:00 gate used, stays selectable and clearly named.
+
+| What | v2 default (follow) | Still available (free, v1) |
+|---|---|---|
+| Draw tool | `init` with no `rule` means `'follow'`, with `PRESETS_FOLLOW` (CC Tm 4.287 / bias 0.754, C61 Tm 4.707 / bias 0.533) | `rule:'free'` uses `PRESETS` (CC 0.482 / 0.25, C61 0.481 / 0.363) |
+| Draw label (frame `label`) | `"simulation, preset parameters (WHAD part II fits, follow rule)"` | `"simulation, preset parameters (WHAD part II fits)"` |
+| Draw caption (frame `caption`) | **`"bias not identified from these data; Tm carries the signal"`** | none |
+| NCA weights for the band | **v2 follower emulator** (user decision): `web/public/sim/nca_v2_weights.json` + `nca_v2_weights.config.json` (Agent 2 b2b47e8, sha256 `a426643dab3b`). `{type:'nca-load'}` with no weights loads it. Passed the torch check (JS vs torch at most 8.9e-7 over 4 cases, including clipped Tm and bias) and mass_check (flux residual ~1e-5, reservoir share ≤ 0.01, no source at isolated sites, density ≤ 1). Checked in headless Chrome. | `web/public/sim/nca_weights.json` (v1, free-rule emulator): `{type:'nca-load', model:'v1'}` |
+| Video run | `whad_partII_C61_P2_follow.json` | `whad_partII_C61_P2.json` |
+| Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` + `meta.observed`. MAE vs observed after the cut-off (16 frames): sim 0.0088, NCA v2 deterministic 0.0040. One wound only, so don't generalise. | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
+| Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 39 frames at 0.5 h; display only, not scored | none |
+
+Rules that hold for both rules:
+- **No band on drawn wounds.** The band is only for uploaded or real wounds with fitted parameters.
+- **The band is uncalibrated.** Caption it "NCA emulator ensemble spread (uncalibrated)", and never call it a 90% interval.
+- **Never mix weights and fits across rules.** v2 weights need follow fits (`sim/fits/whad_fits_follow.json`), and v1 weights need free fits. `make_nca_playback.mjs` refuses a mismatch.
+- **Loading the band model:**
+  - `{type:'nca-load'}` fetches the default v2 weights and config. `{model:'v1'}` loads v1.
+  - Explicit `{weights, config}` still works. `config` is the parsed `*.config.json`, which sets the source gate, the Tm range (to 500 h) and the clip. Weights without a config are treated as v1.
+  - The reply is `{type:'nca-ready', model}`.
+- **Uncalibrated band, NCA v2 on the panel wound:** the 20–50-member spread lies *below* the deterministic rollout (for example 0.059–0.075 against 0.085 at 11 h). The noise shifts the dynamics as well as widening them. Show it only with the "uncalibrated" caption.
+- **v2 real-data fine-tune evaluated and not adopted:** `weights_real_fold{0..3}` degraded the held-out diagnostic in 4 of 4 folds (user decision). The band stays on base NCA v2 (`nca_v2_weights.json`, sha256 `a426643dab3b`).
 
 ## 1. Draw tool (worker)
 
@@ -38,6 +63,28 @@ These have been tested in Node with a stubbed worker, but not yet in a real brow
 
 > **Under this model, the CC and C61 fits heal the same, with no visible gap.** A drawn disc starting at a wound fraction of 0.18 reaches 0.022 (CC) and 0.018 (C61) at 24 h, mean of 10 seeds (`node sim/js/draw_check.mjs`). With the earlier 65c035a presets, Agent 1 got 0.024 and 0.020. This is the honest result. Part II C61 looks slower in normalised area mostly because its wounds start larger; the absolute closure speed and the fitted Tm overlap. The presets stay exactly as fitted, with nothing tuned to create a difference. The UI choice is yours: drop the toggle, or keep it with a caption such as "the fitted conditions differ little under this model".
 >
+**Follow-rule presets** (`PRESETS_FOLLOW`, used automatically when `init` has `rule:'follow'`; from `sim/fits/whad_fits_follow.json` → `presets.draw_tool`, Agent 1 490b4c7, sha256 `b5859c8c0993`). Part II medians at cut-off 9.5 h under the follow rule:
+
+| Preset | Tm (h) | Tm IQR | Bias | Bias IQR | n (manual) |
+|---|---|---|---|---|---|
+| `CC` | 4.287 | 4.06–7.34 | 0.754 | 0.64–0.90 | 7 (4) |
+| `C61` | 4.707 | 4.42–5.04 | 0.533 | 0.43–0.66 | 7 (3) |
+
+Show both of these strings, which frames also carry:
+- the label `"simulation, preset parameters (WHAD part II fits, follow rule)"` (`label`);
+- the caption **`"bias not identified from these data; Tm carries the signal"`** (`caption`, Agent 1).
+
+Tm is about 9× the free-rule value, so never mix the two preset sets.
+
+On the drawn disc (0.18 at the start, 10 seeds), wound fraction at 6/12/18/24 h:
+
+| Preset | JS | Python |
+|---|---|---|
+| CC | 0.110 / 0.053 / 0.015 / 0.000 | 0.112 / 0.055 / 0.016 / 0.000 |
+| C61 | 0.116 / 0.061 / 0.022 / 0.001 | 0.118 / 0.067 / 0.025 / 0.001 |
+
+The disc closes fully, and CC is slightly faster than C61. Reproduce with `node sim/js/draw_check.mjs follow`.
+
 > **The CC bias of 0.25 sits on the lower edge of the fit range (0.25–0.9), so treat it as poorly identified** (Agent 1's caveat). Don't present it as a measured property of CC cells.
 
 Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `presets.draw_tool.label`) next to the draw tool. **Never show a band or a coverage claim on a drawn wound.** The draw tool is a simulation under a preset, not a forecast (design.md).
@@ -47,6 +94,7 @@ Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `
 | Message | Effect |
 |---|---|
 | `{type:'init', w, h, wound, preset, seed}` | `wound`: `Uint8Array(w*h)`, 1 = drawn (empty), 0 = cells. `preset`: `'CC'` or `'C61'`. Posts frame 0. Any message sent before `init` is ignored. |
+| `init` option `rule` | `'free'` (default; `'frozen'` is accepted as an alias) is the gate rules. `'follow'` is the sheet-like follower rule (`cellsim.Params.rule`, Agent 4 3dd4fcf): a moving cell connected to the reservoir pulls the chain behind it, so no vacancy is left behind. It is fixed per `init`, and frames report `rule`. Parity against 3dd4fcf over 20 seeds at Tm 3, 4/12/24 h: JS 0.1685 / 0.1236 / 0.0532, Python 0.1686 / 0.1236 / 0.0545 (24 h difference about 1.3 standard errors). Invariants over 10 seeds × 24 h: area never grows and a connected site never empties. The presets are fitted to the free rule; follower presets come with Agent 1's follower fits. |
 | `{type:'run', hoursPerFrame}` | Starts the loop at up to about 30 fps; default 0.5 h of sim time per frame |
 | `{type:'pause'}` | Stops the loop |
 | `{type:'step', hours}` | Advances once and posts one frame |
