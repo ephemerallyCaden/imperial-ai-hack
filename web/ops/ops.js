@@ -177,32 +177,35 @@ function wireTips(root) {
 }
 
 // Live replay: the recorded run logs are played on one clock (replay hours). Steps inside a check are spaced so the
-// pipeline can be followed; the wait for approval is held a little longer. Labelled "replayed · sped up" on screen.
-const STEP_H = 0.14, WAIT_H = 0.5, SPEEDS = { "1×": 0.6, "4×": 2.4 };   // replay hours per step / per approval / per second
-const NODES = ["Images", "Forecast", "Flags", "Decide", "Numbers", "You", "Report"];
+// pipeline can be followed; the wait for approval is held a little longer. Labelled "recorded · replayed" on screen.
+const STEP_H = 0.14, WAIT_H = 0.5;
+const SPEEDS = { "2160×": 0.6, "8640×": 2.4 };            // replay hours per second (2160× = 0.6 h of assay per second)
+const NODES = [["Images", "code"], ["Forecast", "code"], ["Flags", "code"], ["Propose", "Claude"], ["Critic", "code"], ["Policy", "code"], ["You", "reviewer"], ["Report", "Claude"]];
+const COND = { CC: "Control", C61: "CYR61 knockdown" };
+const FORECASTER = { edge_speed: "edge-speed baseline", nca_realft3: "Stitch NCA" };
 const short = id => id.replace(/^exp(\d)_part(I+)_/, "E$1·$2·").replace(/_/g, "·");
 
 function nodeOf(r) {
-  if (r.kind === "tool_call") return /forecast/.test(r.tool) ? "Forecast" : r.tool === "flags_schedule" ? "Flags" : r.tool === "investigate" ? "Investigator" : r.tool === "intake" ? "Intake" : null;
-  if (r.kind === "model_call") return r.purpose === "report" ? null : r.purpose === "intake" ? null : "Decide";
-  return { critic: "Numbers", decision: "Decide", approval: "You", human_review: "You", report: "Report", run_end: "Done" }[r.kind] || null;
+  if (r.kind === "tool_call") return /forecast/.test(r.tool) ? "Forecast" : r.tool === "flags_schedule" ? "Flags" : r.tool === "investigate" ? "Investigator" : null;
+  if (r.kind === "model_call") return r.purpose === "report" || r.purpose === "intake" ? null : "Propose";
+  return { critic: "Critic", decision: "Policy", approval: "You", human_review: "You", report: "Report", run_end: "Done" }[r.kind] || null;
 }
-function evText(r, end) {
+function evText(r, end, heldOut) {
   const o = r.output || {};
-  if (r.kind === "tool_call" && o.forecasts) return `P(90% closed by ${H} h) ${o.forecasts[0].p_close_by_T}`;
+  if (r.kind === "tool_call" && o.forecasts) return `${FORECASTER[o.model] ?? o.model} · P(close) ${pct(o.forecasts[0].p_close_by_T)}`;
   if (r.kind === "tool_call" && o.results) { const s = o.results[0]?.stall; return s?.fired ? "stall flag fired" : "no stall"; }
   if (r.kind === "tool_call" && o.hypotheses) return `top hypothesis: ${o.hypotheses[0]?.name ?? "–"}`;
-  if (r.kind === "model_call") { const p = (r.tool_calls || []).find(t => t.input?.decision_id); return p ? `Claude proposes ${p.input.decision_id.replace(/_/g, " ")}` : "Claude"; }
+  if (r.kind === "model_call") { const p = (r.tool_calls || []).find(t => t.input?.decision_id); return p ? `proposes ${p.input.decision_id.replace(/_/g, " ")}` : "proposal"; }
   if (r.kind === "critic") return `${r.traced}/${r.traced + r.untraced} numbers traced`;
-  if (r.kind === "decision") return `${r.label}${r.source === "forced" ? " · forced by rule" : ""}`;
-  if (r.kind === "approval") return r.approved ? "you approved" : "you rejected";
-  if (r.kind === "human_review") return "you reviewed";
+  if (r.kind === "decision") return r.source === "forced" ? `${r.label} (forced by rule)` : `allowed: ${r.label}`;
+  if (r.kind === "approval") return r.approved ? "approved (simulated reviewer)" : "rejected (recorded branch)";
+  if (r.kind === "human_review") return "reviewed (simulated reviewer)";
   if (r.kind === "report") return "report written";
-  if (r.kind === "run_end") return end.stopped ? `stopped at ${end.stop_h} h · ${(H - end.stop_h).toFixed(1)} h freed` : `imaged to ${H} h`;
+  if (r.kind === "run_end") return end.stopped ? `stopped at ${end.stop_h} h` : heldOut ? `no stop · imaged to ${H} h` : `run ended at ${end.ended_at_h} h · keep imaging`;
   return r.kind;
 }
 function prep(run, recs) {
-  const end = recs.find(x => x.kind === "run_end") || {};
+  const end = recs.find(x => x.kind === "run_end") || {}, heldOut = run.kind === "whad_loo";
   const ev = [], fcs = []; let cut = 0, t = 0;
   for (const r of recs) {
     const node = nodeOf(r); if (!node) continue;
@@ -212,57 +215,60 @@ function prep(run, recs) {
       ev.push({ t, node: "Images", text: `frames to ${cut} h`, r: { kind: "images" } });
     }
     t += r.kind === "approval" ? WAIT_H : STEP_H;
-    if (r.kind === "run_end" && !end.stopped) t = H;
-    if (r.kind === "report" && !end.stopped) t = H - STEP_H;
-    ev.push({ t, node, text: evText(r, end), r, ai: r.kind === "model_call" || (r.kind === "decision" && r.source === "llm") });
+    if (heldOut && !end.stopped && (r.kind === "run_end" || r.kind === "report")) t = r.kind === "run_end" ? H : H - STEP_H;   // no stop: plate imaged to the horizon
+    ev.push({ t, node, text: evText(r, end, heldOut), r });
   }
   const f0 = fcs[0]?.f;
   const obs = f0 ? f0.observed.t_hours.map((x, k) => [x, f0.observed.area[k]]) : [];
-  const stopT = end.stopped ? ev.find(e => e.node === "Done")?.t ?? end.stop_h : null;
-  return { run, end, ev, fcs, obs, cond: f0?.condition ?? "", heldOut: run.kind === "whad_loo", stopT,
-    name: run.kind === "frames" ? "Your upload" : short(run.wound_id) };
+  const closeT = obs.find(([x, a]) => x <= H && a <= 0.1)?.[0] ?? null;
+  return { run, end, ev, fcs, obs, heldOut, closeT, cond: f0?.condition ?? "", id: run.kind === "frames" ? "upload" : short(run.wound_id),
+    stopT: end.stopped ? ev.find(e => e.node === "Done")?.t ?? end.stop_h : null, doneT: ev.find(e => e.node === "Done")?.t ?? H };
 }
+const condName = w => w.run.kind === "frames" ? "Your upload" : COND[w.cond] ?? w.cond;
+const fcAt = (w, c) => [...w.fcs].reverse().find(f => f.cut <= c);
 function statusAt(w, c) {
   if (w.stopT != null && c >= w.stopT) return w.end.stop_kind === "stall" ? ["flag", "▲", `Stall · stopped ${w.end.stop_h} h`] : ["stop", "■", `Stopped ${w.end.stop_h} h`];
-  if (!w.end.stopped && c >= H) return ["go", "→", `Imaged to ${H} h`];
-  const past = w.ev.filter(e => e.t <= c), dec = past.filter(e => e.r.kind === "decision").at(-1);
-  const app = past.filter(e => e.r.kind === "approval").at(-1);
+  if (!w.end.stopped && c >= w.doneT) return ["go", "→", w.heldOut ? `No stop · imaged to ${H} h` : "Keep imaging"];
+  const past = w.ev.filter(e => e.t <= c), dec = past.filter(e => e.r.kind === "decision").at(-1), app = past.filter(e => e.r.kind === "approval").at(-1);
   if (dec && /stop|stall/.test(dec.r.decision) && !(app && app.r.cut_h === dec.r.cut_h)) return ["flag", "⏸", "Needs you"];
   if (!past.length) return ["idle", "◌", "Imaging"];
-  if (!dec || dec.r.cut_h !== [...w.fcs].reverse().find(x => x.cut <= c)?.cut) return ["idle", "◌", "Checking…"];
+  if (!dec || dec.r.cut_h !== fcAt(w, c)?.cut) return ["idle", "◌", `Checking ${fcAt(w, c)?.cut} h`];
   return ["go", "→", dec.r.decision === "image_again" ? "Image again" : dec.r.label];
 }
 function verdict(w) {
   if (!w.heldOut) return "";
-  const closed = w.obs.some(([t, a]) => t <= H && a <= 0.1);
-  if (w.end.stopped && w.end.stop_kind === "unlikely") return closed ? `<span class="warn">✕ it closed</span>` : `<span>✓ right</span>`;
-  return `<span class="dim">${closed ? "closed" : "did not close"}</span>`;
+  if (w.end.stopped && w.end.stop_kind === "unlikely") return w.closeT != null ? `<span class="warn">✕ wrong call · closed by ${w.closeT} h</span>` : `<span>✓ right call</span>`;
+  if (w.end.stopped) return "";
+  return `<span class="dim">${w.closeT != null ? `closed at ${w.closeT} h` : `not closed by ${H} h`}</span>`;
+}
+function headline(w, c) {
+  const fc = fcAt(w, c), [, , st] = statusAt(w, c);
+  const parts = [`<b>${esc(condName(w))}</b>`, `<span class="dim">${esc(w.id)}</span>`];
+  if (fc) parts.push(`${pct(fc.f.p_close_by_T)} chance of 90% closure by ${H} h <span class="dim">(${esc(FORECASTER[fc.doc.model] ?? fc.doc.model)}, ${fc.cut} h check)</span>`);
+  else parts.push(`<span class="dim">waiting for the first check</span>`);
+  parts.push(st === "Needs you" ? `<b class="accent">proposes stop → waiting for you</b>` : esc(st));
+  return parts.join(" · ");
 }
 
 function heroChart(w, c) {
-  const W = 640, Ht = 260, L = 36, R = 16, T = 14, B = 26;
+  const W = 760, Ht = 250, L = 36, R = 16, T = 12, B = 26;
   const x = t => L + (t / H) * (W - L - R), y = a => T + a * (Ht - T - B);   // closure rises: area 1 (0% closed) at the bottom
   const path = pts => pts.map(([t, a], k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${y(a).toFixed(1)}`).join("");
-  const fc = [...w.fcs].reverse().find(f => f.cut <= c);
-  const stopH = w.stopT != null && c >= w.stopT ? w.end.stop_h : null;
-  const imgTo = Math.min(c, stopH ?? H);
-  const seen = w.obs.filter(([t]) => t <= imgTo + 1e-6), last = seen.at(-1);
-  const after = w.obs.filter(([t]) => t >= (last?.[0] ?? 0));
+  const fc = fcAt(w, c), stopH = w.stopT != null && c >= w.stopT ? w.end.stop_h : null;
+  const seen = w.obs.filter(([t]) => t <= Math.min(c, stopH ?? H) + 1e-6), last = seen.at(-1);
   let g = "";
-  if (fc) {
-    // The forecast starts at the last image the check used (frames are hourly), with zero width there.
+  if (fc) {   // the forecast starts at the last image the check used (frames are hourly), with zero width there
     const f = fc.f, at = w.obs.filter(([t]) => t <= fc.cut + 1e-6).at(-1) ?? [fc.cut, f.area_q50[0]];
-    const b = [at, ...f.t_hours.map((t, k) => [t, f.area_q95[k]]), ...f.t_hours.map((t, k) => [t, f.area_q05[k]]).reverse()];
-    g += `<path class="band" d="${path(b)}Z" data-tip="90% band from the ${fc.cut} h check"/>
+    g += `<path class="band" d="${path([at, ...f.t_hours.map((t, k) => [t, f.area_q95[k]]), ...f.t_hours.map((t, k) => [t, f.area_q05[k]]).reverse()])}Z" data-tip="90% band from the ${fc.cut} h check (${FORECASTER[fc.doc.model] ?? fc.doc.model})"/>
       <path class="med" d="${path([at, ...f.t_hours.map((t, k) => [t, f.area_q50[k]])])}"/>
-      <line class="cut" x1="${x(fc.cut)}" x2="${x(fc.cut)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${x(fc.cut) + 4}" y="${T + 9}">check ${fc.cut} h · P(close) ${f.p_close_by_T}</text>`;
+      <line class="cut" x1="${x(fc.cut)}" x2="${x(fc.cut)}" y1="${T}" y2="${Ht - B}"/>`;
   }
-  if (c >= H && w.heldOut && stopH != null && after.length > 1) g += `<path class="truth" d="${path(after)}"/>`;
+  if (c >= H && w.heldOut && stopH != null) { const after = w.obs.filter(([t]) => t >= (last?.[0] ?? 0)); if (after.length > 1) g += `<path class="truth" d="${path(after)}"/>`; }
   g += `<path class="obs" d="${path(seen)}"/>${seen.map(([t, a]) => `<circle class="fr" cx="${x(t)}" cy="${y(a)}" r="2.5"/>`).join("")}`;
   if (last) g += `<circle class="dot" cx="${x(last[0])}" cy="${y(last[1])}" r="4.5" data-tip="${pct(1 - last[1])} closed at ${last[0]} h"/>`;
-  if (stopH != null) g += `<line class="stop" x1="${x(stopH)}" x2="${x(stopH)}" y1="${T}" y2="${Ht - B}"/><text class="ax stoplab" x="${x(stopH) + 4}" y="${Ht - B - 6}">stopped · ${(H - stopH).toFixed(1)} h freed</text>`;
-  if (c < H) g += `<line class="now" x1="${x(c)}" x2="${x(c)}" y1="${T}" y2="${Ht - B}"/>`;
-  return `<svg class="hero-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${esc(w.name)}: closure observed to ${imgTo.toFixed(1)} h${fc ? `, forecast from ${fc.cut} h` : ""}">
+  if (stopH != null) g += `<line class="stop" x1="${x(stopH)}" x2="${x(stopH)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${x(stopH) + 4}" y="${Ht - B - 6}">stopped ${stopH} h</text>`;
+  if (c < H) g += `<line class="now" x1="${x(c)}" x2="${x(c)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${x(c) + 3}" y="${Ht - B - 6}">now</text>`;
+  return `<svg class="hero-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${esc(condName(w))} ${esc(w.id)}: closure observed${fc ? `, forecast from ${fc.cut} h` : ""}">
     ${[0, 0.5, 1].map(a => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(a)}" y2="${y(a)}"/><text class="ax" x="${L - 6}" y="${y(a) + 3}" text-anchor="end">${pct(1 - a)}</text>`).join("")}
     <line class="grid g90" x1="${L}" x2="${W - R}" y1="${y(0.1)}" y2="${y(0.1)}"/><text class="ax" x="${W - R}" y="${y(0.1) - 3}" text-anchor="end">90% closed</text>
     <line class="axis" x1="${L}" x2="${W - R}" y1="${Ht - B}" y2="${Ht - B}"/>
@@ -272,73 +278,95 @@ function heroChart(w, c) {
   </svg>`;
 }
 function spark(w, c) {
-  const W = 96, Ht = 26, x = t => (t / H) * W, y = a => 2 + a * (Ht - 4);
+  const W = 84, Ht = 24, x = t => (t / H) * W, y = a => 2 + a * (Ht - 4);
   const stopH = w.stopT != null && c >= w.stopT ? w.end.stop_h : null;
   const pts = w.obs.filter(([t]) => t <= Math.min(c, stopH ?? H) + 1e-6);
   return `<svg class="spark" viewBox="0 0 ${W} ${Ht}" aria-hidden="true"><line class="grid" x1="0" x2="${W}" y1="${y(0.1)}" y2="${y(0.1)}"/>
     <path class="obs" d="${pts.map(([t, a], k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${y(a).toFixed(1)}`).join("")}"/>
-    ${stopH != null ? `<line class="stop" x1="${x(stopH)}" x2="${x(stopH)}" y1="0" y2="${Ht}"/>` : ""}</svg>`;
+    ${stopH != null ? `<line class="stopk" x1="${x(stopH)}" x2="${x(stopH)}" y1="0" y2="${Ht}"/>` : ""}</svg>`;
 }
 function pipeline(w, c) {
-  const i = w.fcs.map(f => f.cut).filter(k => k <= c).length - 1;
-  if (i < 0) return `<ol class="pipe">${NODES.map(n => `<li class="ps ps-wait"><i></i>${n}</li>`).join("")}</ol><div class="pipe-next dim">first check at ${w.fcs[0]?.cut ?? CHECKS[0]} h</div>`;
-  const from = w.fcs[i].cut, to = w.fcs[i + 1]?.cut ?? Infinity;
+  const cuts = w.fcs.map(f => f.cut), i = cuts.filter(k => k <= c).length - 1;
+  const checks = `<span class="pc-lab">Check</span>${CHECKS.map(k => { const has = cuts.includes(k);
+    const s = !has ? "na" : k < (cuts[i] ?? -1) ? "ok" : k === cuts[i] ? (w.stopT != null && c >= w.stopT ? "ok" : "run") : "wait";
+    return `<span class="pc pc-${s}">${k}${s === "ok" ? " ✓" : s === "run" ? " ●" : s === "wait" ? " ○" : ""}</span>`; }).join("")}`;
+  if (i < 0) return `<div class="pipe-checks">${checks}</div><ol class="pipe">${NODES.map(([n, who]) => `<li class="ps ps-wait"><i></i>${n}<em>${who}</em></li>`).join("")}</ol>`;
+  const from = cuts[i], to = cuts[i + 1] ?? Infinity;
   const win = w.ev.filter(e => e.t >= from - 1e-9 && e.t < to && e.node !== "Done");
-  const nodes = [...NODES, ...(win.some(e => e.node === "Investigator") ? ["Investigator"] : [])];
-  const order = n => n === "Investigator" ? 2.5 : NODES.indexOf(n);
+  const nodes = [...NODES]; if (win.some(e => e.node === "Investigator")) nodes.splice(3, 0, ["Investigator", "code"]);
   let active = false;
-  const li = nodes.sort((a, b) => order(a) - order(b)).map(n => {
+  const li = nodes.map(([n, who]) => {
     const es = win.filter(e => e.node === n), done = es.length && es.every(e => e.t <= c);
     let s = done ? "ok" : es.length ? (active ? "wait" : (active = true, "run")) : (win.every(e => e.t <= c) ? "skip" : "wait");
     if (n === "You" && es.some(e => e.r.kind === "approval" && !e.r.approved && e.t <= c)) s = "x";
-    const ai = es.some(e => e.ai), tip = es.filter(e => e.t <= c).map(e => e.text).join(" · ") || (s === "skip" ? "not needed at this check" : "pending");
-    return `<li class="ps ps-${s}" data-tip="${esc(tip)}"><i></i>${n}${ai ? `<sup>AI</sup>` : ""}</li>`;
+    const tip = es.filter(e => e.t <= c).map(e => e.text).join(" · ") || (s === "skip" ? "not needed at this check" : "pending");
+    return `<li class="ps ps-${s}" data-tip="${esc(tip)}"><i></i>${n}<em>${who}</em></li>`;
   }).join("");
-  const nextCut = w.fcs[i + 1]?.cut;
-  const waiting = statusAt(w, c)[2] === "Needs you";
-  const tail = waiting ? `<b class="accent">⏸ waiting for your approval</b>` : w.stopT != null && c >= w.stopT ? `<b class="accent">■ stopped at ${w.end.stop_h} h</b>`
-    : nextCut ? `↻ next check ${nextCut} h` : c >= H ? `→ imaged to ${H} h` : `→ imaging to ${H} h`;
-  return `<ol class="pipe">${li}</ol><div class="pipe-next">${tail}</div>`;
+  const waiting = statusAt(w, c)[2] === "Needs you", next = cuts[i + 1];
+  const tail = waiting ? `<b class="accent">⏸ waiting for your approval</b>` : w.stopT != null && c >= w.stopT ? `■ stopped at ${w.end.stop_h} h`
+    : next ? `↻ next check ${next} h` : !w.end.stopped && c >= w.doneT ? (w.heldOut ? `→ no stop, imaged to ${H} h` : "→ keep imaging") : "";
+  return `<div class="pipe-checks">${checks}<span class="pipe-next">${tail}</span></div><ol class="pipe">${li}</ol>`;
+}
+function callsChart(src) {
+  const rows = src ? parseCSV(src) : [];
+  if (!rows.length) return `<p>${NA}: eval/results/calls_by_check.csv</p>`;
+  const n = +rows[0].n_series, W = 460, Ht = 210, L = 28, R = 10, T = 18, B = 34, bw = 24;
+  const max = Math.max(...rows.map(r => +r.called)), y = v => T + (1 - v / max) * (Ht - T - B), slot = (W - L - R) / rows.length;
+  const cols = rows.map((r, i) => {
+    const cx = L + slot * (i + 0.5), called = +r.called, right = r.right === "" ? null : +r.right, wrong = right == null ? 0 : called - right;
+    const lab = r.check_h === "none" ? "no call" : `${r.check_h} h`;
+    const bar = (v0, v1, cls) => v1 > v0 ? `<path class="${cls}" d="M${cx - bw / 2},${y(v0)}V${y(v1) + (v1 === called ? 4 : 0)}${v1 === called ? `a4,4 0 0 1 4,-4H${cx + bw / 2 - 4}a4,4 0 0 1 4,4` : `H${cx + bw / 2}`}V${y(v0)}Z"/>` : "";
+    const tip = r.check_h === "none" ? `${called} of ${n} series: no call, imaged to ${H} h` : `${called} of ${n} series called at ${lab}: ${right} right, ${wrong} wrong`;
+    return `<g tabindex="0" data-tip="${esc(tip)}"><rect x="${cx - slot / 2}" y="${T}" width="${slot}" height="${Ht - T - B}" fill="transparent"/>
+      ${right == null ? bar(0, called, "bar nocall") : bar(0, right, "bar right") + bar(right, called, "bar wrong")}
+      <text class="val" x="${cx}" y="${y(called) - 6}" text-anchor="middle">${called}${wrong ? `<tspan class="warn"> · ${wrong} wrong</tspan>` : ""}</text>
+      <text class="ax" x="${cx}" y="${Ht - B + 14}" text-anchor="middle">${lab}</text></g>`;
+  }).join("");
+  return `<div class="ov-key"><span><i class="k-right"></i>right call</span><span><i class="k-wrong"></i>wrong call</span><span><i class="k-none"></i>no call</span></div>
+    <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Calls by check: ${rows.map(r => `${r.check_h === "none" ? "no call" : r.check_h + " h"} ${r.called}`).join(", ")} of ${n} series">
+      <line class="axis" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>${cols}
+      <text class="ax" x="${(L + W - R) / 2}" y="${Ht - 4}" text-anchor="middle">check where the call was made (series)</text></svg>`;
 }
 
 async function renderOverview(pane, ctx, isDead) {
   const d = ctx.data;
   pane.innerHTML = `<p class="dim">Loading…</p>`;
-  const [idx, schedSrc, ev, advSrc] = await Promise.all([
+  const [idx, schedSrc, ev, advSrc, callsSrc] = await Promise.all([
     d.runIndex().catch(() => ({ runs: [], base: "agent/runs/" })),
     maybe(d.text("eval/results/scheduler.csv")), maybe(d.json("web/ops/evidence.json")), maybe(d.text("agent/results/adversarial.csv")),
+    maybe(d.text("eval/results/calls_by_check.csv")),
   ]);
   const runs = idx.runs || [];
   const logs = await Promise.all(runs.map(r => maybe(d.jsonl(idx.base + r.file))));
   if (isDead()) return;
   const W = runs.map((r, i) => (!r.branch && logs[i]) ? prep(r, logs[i]) : null).filter(Boolean);
+  if (!W.length) { pane.innerHTML = `<p>${NA}: no recorded runs in ${esc(idx.base)}</p>`; return; }
   const all = W.flatMap(w => w.ev.map(e => ({ ...e, w }))).sort((a, b) => a.t - b.t);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const q = new URLSearchParams(location.search), qt = q.has("replay") ? Math.min(H, Math.max(0, +q.get("replay"))) : null;
-  let c = qt ?? (reduce ? H : 0), playing = qt == null && !reduce, speed = "1×", hold = 0;
-  let sel = Math.max(0, q.has("wound") ? W.findIndex(w => w.run.wound_id === q.get("wound")) : W.findIndex(w => w.fcs.length > 2));
+  let c = qt ?? (reduce ? H : 0), playing = qt == null && !reduce, speed = Object.keys(SPEEDS)[0], hold = 0, emitted = 0;
+  const want = q.get("wound") || "exp1_partII_C61_P1";
+  let sel = Math.max(0, W.findIndex(w => w.run.wound_id === want));
 
   pane.innerHTML = `<div class="cr">
     <header class="cr-top">
-      <div class="cr-clock"><span class="live ${playing ? "on" : ""}">● Replay</span><b class="num" data-clock>T+00.0 h</b>
+      <div class="cr-clock"><span class="live">● Replay</span><b class="num" data-clock>T+00.0 h</b>
         <span class="st-seg"><button class="st-btn st-btn--icon" data-play aria-label="Play or pause (Space)"></button>
-        ${Object.keys(SPEEDS).map(k => `<button class="st-btn" data-speed="${k}" aria-pressed="${k === speed}">${k}</button>`).join("")}
+        ${Object.keys(SPEEDS).map(k => `<button class="st-btn" data-speed="${k}" aria-pressed="${k === speed}" data-tip="${SPEEDS[k]} h of assay per second">${k}</button>`).join("")}
         <button class="st-btn st-btn--icon" data-restart aria-label="Restart">⟲</button></span>
-        <span class="st-chip st-chip--honesty">Recorded runs · replayed · sped up</span></div>
+        <span class="st-chip st-chip--honesty">Recorded runs · replayed</span></div>
       ${kpis(schedSrc, ev)}
     </header>
-    <aside class="cr-list" aria-label="Wound status"><h2>Wound status</h2><div data-list></div></aside>
-    <section class="cr-hero"><div class="hero-head"><h2 data-hname></h2><span class="dim" data-hcond></span><span data-hverdict></span>
-      <button class="st-btn" data-open>Open in Assay ↗</button></div>
-      <div data-hchart></div><div class="hero-pipe" data-hpipe></div>
-      <div class="ov-legend"><i class="lg-obs"></i>observed <i class="lg-med"></i>forecast <i class="lg-band"></i>90% band <i class="lg-truth"></i>what happened</div></section>
+    <aside class="cr-list" aria-label="Wound status"><h2>Wound status · ${W.length} recorded runs</h2><div data-list></div></aside>
+    <section class="cr-hero"><p class="hero-line" data-hline></p><div class="hero-pipe" data-hpipe></div><div data-hchart></div>
+      <div class="hero-foot"><div class="ov-legend"><i class="lg-obs"></i>observed <i class="lg-med"></i>forecast <i class="lg-band"></i>90% band <i class="lg-truth"></i>what happened</div>
+        <span data-hverdict></span><button class="st-btn" data-open>Open in Assay ↗</button></div></section>
     <aside class="cr-stream" aria-label="Agent events">
-      <h2>This replay · ${W.length} recorded runs</h2>
-      <div class="cr-counters"><div><b class="num" data-freed>0.0 h</b><span>Imaging saved</span></div>
-        <div><b class="num" data-traced>0</b><span>Numbers traced · 0 removed</span></div><div><b class="num" data-asked>0</b><span>Approvals requested</span></div></div>
+      <div class="cr-needs"><b class="num" data-needs>0</b><span>Needs you</span></div>
+      <ul class="cr-stats"><li><b data-freed>0.0 h</b> imaging saved<span class="dim" data-wrongstop></span></li><li><b data-traced>0</b> numbers traced · <span data-removed>0</span> removed</li>
+        <li><b data-asked>0</b> approvals <span class="dim">(simulated reviewer)</span></li></ul>
       <h2>Agent event log</h2><ol class="stream" data-stream aria-live="off"></ol></aside>
-    <section class="cr-a"><h2>90% band width by check</h2><p class="cap">Mean width, share of the starting wound area · held-out series</p>
-      <div class="evidence ev-embed"><div data-legend></div><div class="ev-chart" data-c="narrow"></div></div></section>
+    <section class="cr-a"><h2>Calls by check · held-out series</h2><p class="cap">Same policy as the agent · simulation on recorded data</p>${callsChart(callsSrc)}</section>
     <section class="cr-b"><h2>90% band coverage by test set</h2><p class="cap">NCA on WHAD · best statistical baseline on WHiM-BC</p>
       <div class="evidence ev-embed"><div class="ev-chart" data-c="rel"></div></div></section>
     <section class="cr-c">${audit(runs, logs, advSrc)}
@@ -346,55 +374,50 @@ async function renderOverview(pane, ctx, isDead) {
   </div>`;
   const $ = s => pane.querySelector(s);
   ensureEvidenceCss();
-  if (ev?.narrowing && ev?.reliability) {
-    const narrow = ev.narrowing.map(s => ({ ...s, short: s.kind === "shipped" ? "NCA, real frames" : s.label }));
-    $("[data-legend]").replaceWith(legend(narrow.map(s => [colorOf(s), s.short])));
-    responsive($('[data-c="narrow"]'), lineChart(narrow, { key: "width", yLabel: "band width", cuts: ev.cutoffs, fmt: { tick: t => t.toFixed(1), value: x => x.toFixed(2) },
-      label: `Mean 90% band width: ${narrow.map(s => s.short + " " + s.points.map(p => p.width.toFixed(2)).join(", ")).join("; ")}` }));
-    responsive($('[data-c="rel"]'), reliabilityChart(ev.reliability));
-  }
+  if (ev?.reliability) responsive($('[data-c="rel"]'), reliabilityChart(ev.reliability.filter(r => r.label !== "Unseen condition, wider calibration")));
   const det = $(".ov-details");
   det.addEventListener("toggle", () => { if (det.open && !det.dataset.done) { det.dataset.done = 1; renderRuns(det.querySelector('[data-s="details"]'), ctx, isDead); } });
   $("[data-open]").addEventListener("click", () => { ctx.openItem = W[sel].run.run_id; document.querySelector('[data-mode="assay"]')?.click(); });
   const setPlay = p => { playing = p; $("[data-play]").textContent = p ? "⏸" : "▶"; $(".live").classList.toggle("on", p); };
+  const restart = () => { c = 0; hold = 0; emitted = 0; $("[data-stream]").replaceChildren(); };
   $("[data-play]").addEventListener("click", () => setPlay(!playing));
-  $("[data-restart]").addEventListener("click", () => { c = 0; hold = 0; emitted = 0; $("[data-stream]").replaceChildren(); setPlay(true); });
+  $("[data-restart]").addEventListener("click", () => { restart(); setPlay(true); });
   pane.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { speed = b.dataset.speed; pane.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
   const onKey = e => { if (isDead()) return ctx.bus.removeEventListener("key", onKey); if (e.detail.action === "play") setPlay(!playing); };
   ctx.bus.addEventListener("key", onKey);
   setPlay(playing);
 
-  let emitted = 0, lastDraw = 0, prev = performance.now();
   const stream = $("[data-stream]");
   const draw = () => {
     $("[data-clock]").textContent = `T+${c.toFixed(1).padStart(4, "0")} h`;
-    $("[data-list]").innerHTML = W.map((w, i) => { const [cls, ic, lab] = statusAt(w, c);
-      return `<button class="cl-row ${i === sel ? "sel" : ""}" data-w="${i}"><span class="cl-name">${esc(w.name)}<i>${esc(w.cond)}</i></span>${spark(w, c)}
+    $("[data-list]").innerHTML = W.map((w, i) => { const [cls, ic, lab] = statusAt(w, c), fc = fcAt(w, c);
+      return `<button class="cl-row ${i === sel ? "sel" : ""} ${lab === "Needs you" ? "need" : ""}" data-w="${i}">
+        <span class="cl-name">${esc(condName(w))}<i>${esc(w.id)}</i></span>${spark(w, c)}
+        <span class="cl-p num" data-tip="P(90% closed by ${H} h) at the latest check">${fc ? pct(fc.f.p_close_by_T) : "–"}</span>
         <span class="cl-st oc-${cls}">${ic} ${esc(lab)}</span>${c >= H ? `<span class="cl-v">${verdict(w)}</span>` : ""}</button>`; }).join("");
     const w = W[sel];
-    $("[data-hname]").textContent = w.name; $("[data-hcond]").textContent = w.cond;
+    $("[data-hline]").innerHTML = headline(w, c);
     $("[data-hverdict]").innerHTML = c >= H ? verdict(w) : "";
     $("[data-hchart]").innerHTML = heroChart(w, c); $("[data-hpipe]").innerHTML = pipeline(w, c);
-    const freed = W.reduce((a, x) => a + (x.stopT != null && c >= x.stopT ? H - x.end.stop_h : 0), 0);
-    const crit = all.filter(e => e.r.kind === "critic" && e.t <= c);
-    $("[data-freed]").textContent = freed.toFixed(1) + " h";
-    $("[data-traced]").textContent = crit.reduce((a, e) => a + e.r.traced, 0);
-    $("[data-traced]").nextElementSibling.textContent = `Numbers traced · ${crit.reduce((a, e) => a + e.r.untraced, 0)} removed`;
+    const stopped = W.filter(x => x.stopT != null && c >= x.stopT), wrong = stopped.filter(x => x.end.stop_kind === "unlikely" && x.closeT != null).length;
+    const needs = W.filter(x => statusAt(x, c)[2] === "Needs you").length, crit = all.filter(e => e.r.kind === "critic" && e.t <= c);
+    $("[data-needs]").textContent = needs; $("[data-needs]").parentElement.classList.toggle("on", needs > 0);
+    $("[data-freed]").textContent = stopped.reduce((a, x) => a + H - x.end.stop_h, 0).toFixed(1) + " h";
+    $("[data-wrongstop]").textContent = wrong ? ` · incl. ${wrong} wrong stop` : "";
+    $("[data-traced]").textContent = crit.reduce((a, e) => a + e.r.traced, 0); $("[data-removed]").textContent = crit.reduce((a, e) => a + e.r.untraced, 0);
     $("[data-asked]").textContent = all.filter(e => e.r.kind === "approval" && e.t <= c).length;
     while (emitted < all.length && all[emitted].t <= c) {
-      const e = all[emitted++];
-      stream.insertAdjacentHTML("afterbegin", `<li class="${e.ai ? "ai" : e.node === "You" ? "you" : ""}"><span class="num">T+${e.t.toFixed(1)}</span><b>${esc(e.w.name)} <em>${esc(e.node)}${e.ai ? " · AI" : ""}</em></b><span></span><span>${esc(e.text)}</span></li>`);
-      while (stream.children.length > 16) stream.lastElementChild.remove();
+      const e = all[emitted++], who = NODES.find(n => n[0] === e.node)?.[1] ?? "";
+      stream.insertAdjacentHTML("afterbegin", `<li class="${e.node === "You" ? "you" : ""}"><span class="num">T+${e.t.toFixed(1)}</span><b>${esc(condName(e.w))} <i>${esc(e.w.id)}</i></b><span></span><span><em>${esc(e.node)}${who && who !== "code" ? " · " + esc(who) : ""}</em> ${esc(e.text)}</span></li>`);
+      while (stream.children.length > 14) stream.lastElementChild.remove();
     }
   };
-  pane.querySelector("[data-list]").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) { sel = +b.dataset.w; draw(); } });
+  $("[data-list]").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) { sel = +b.dataset.w; draw(); } });
+  let lastDraw = 0, prev = performance.now();
   const tick = now => {
     if (isDead()) return;
     const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
-    if (playing) {
-      if (c < H) c = Math.min(H, c + dt * SPEEDS[speed]);
-      else if ((hold += dt) > 5) { c = 0; hold = 0; emitted = 0; stream.replaceChildren(); }
-    }
+    if (playing) { if (c < H) c = Math.min(H, c + dt * SPEEDS[speed]); else if ((hold += dt) > 6) restart(); }
     if (now - lastDraw > 66) { lastDraw = now; draw(); }
     requestAnimationFrame(tick);
   };
@@ -404,20 +427,20 @@ async function renderOverview(pane, ctx, isDead) {
 function kpis(schedSrc, ev) {
   const rows = schedSrc ? parseCSV(schedSrc) : [];
   const shipped = ev?.shipped || "nca_realft3";
-  const s = rows.find(r => r.model === shipped && r.thresholds.startsWith("<= 0.1")) || rows.find(r => r.thresholds.startsWith("<= 0.1"));
+  const s = rows.find(r => r.model === shipped && r.thresholds.startsWith("<= 0.1"));
   const rel = ev?.reliability?.[0];
   const tile = (big, label, tip) => `<div class="kpi" tabindex="0" data-tip="${esc(tip)}"><b class="num">${big}</b><span>${label}</span></div>`;
-  if (!s) return `<div class="cr-kpis">${NA}: eval/results/scheduler.csv</div>`;
-  return `<div class="cr-kpis"><span class="kpi-src">Held-out evaluation<br>${s.n} series · ${rel?.n_wounds ?? "–"} wounds</span>
+  if (!s) return `<div class="cr-kpis">${NA}: eval/results/scheduler.csv (${esc(shipped)})</div>`;
+  return `<div class="cr-kpis"><span class="kpi-src">Held-out evaluation · simulation<br>${s.n} series · ${rel?.n_wounds ?? "–"} wounds · NCA</span>
     ${tile(pct(+s.share_called), "Early-call rate", `Series with a call (P(90% closed by ${H} h) ≤ 0.1 or ≥ 0.9) at any check up to 9.5 h: ${s.called_early} of ${s.n}. Source: eval/results/scheduler.csv`)}
-    ${tile((+s.hours_saved_mean).toFixed(1) + " h", "Imaging saved / series", `Mean over all ${s.n} series of ${H} h minus the stop time (0 when no call). Source: eval/results/scheduler.csv`)}
-    ${tile(pct(+s.accuracy_of_calls), `Call accuracy · baseline ${pct(+s.base_rate_not_closed)}`, `${s.called_early - s.wrong_calls} of ${s.called_early} calls right (${s.wrong_calls} wounds called "won't close" did close). Baseline: always "won't close", right for ${pct(+s.base_rate_not_closed)} of all series.`)}
-    ${rel ? tile(pct(rel.coverage), "90% band coverage", `Share of later observed frames inside the 90% band, forecast at ${rel.cut} h, ${rel.model_label}. 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}. Source: web/ops/evidence.json`) : ""}
+    ${tile(pct(+s.accuracy_of_calls), `Call accuracy · baseline ${pct(+s.base_rate_not_closed)}`, `${s.called_early - s.wrong_calls} of ${s.called_early} calls right; ${s.wrong_calls} wounds called "won't close" did close. Baseline: always "won't close", right for ${pct(+s.base_rate_not_closed)} of all series.`)}
+    ${tile((+s.hours_saved_mean).toFixed(1) + " h", "Imaging saved / series", `Mean over all ${s.n} series of ${H} h minus the stop time (0 when no call). Simulation on recorded data. Source: eval/results/scheduler.csv`)}
+    ${rel ? tile(pct(rel.coverage), "90% band coverage", `Share of later frames inside the 90% band, ${rel.model_label}, forecast at ${rel.cut} h. 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}. Source: web/ops/evidence.json`) : ""}
   </div>`;
 }
 
 function audit(runs, logs, advSrc) {
-  const ends = logs.map(l => l?.find(x => x.kind === "run_end")).filter(Boolean);
+  const ends = logs.filter((l, i) => l && !runs[i].branch).map(l => l.find(x => x.kind === "run_end")).filter(Boolean);
   const tr = ends.reduce((a, e) => a + (e.numbers_traced || 0), 0), un = ends.reduce((a, e) => a + (e.numbers_untraced || 0), 0);
   const adv = advSrc ? parseCSV(advSrc) : [];
   const met = adv.filter(r => r.met === "met").length;
@@ -425,8 +448,8 @@ function audit(runs, logs, advSrc) {
   const avg = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
   const b = (ok, txt, tip) => `<span class="ab ${ok ? "" : "warn"}" tabindex="0" data-tip="${esc(tip)}">${ok ? "✓" : "▲"} ${txt}</span>`;
   return `<div class="ov-audit">
-    ${ends.length ? b(un === 0, `${tr}/${tr + un} numbers traced`, "Every number the agent wrote matched a tool output; the code Critic removes any that don't") : ""}
-    ${adv.length ? b(met === adv.length, `${met}/${adv.length} attacks handled`, "Adversarial set (stub models): prompt injection, bad frames, oversized uploads, out-of-scope requests") : ""}
+    ${ends.length ? b(un === 0, `${tr}/${tr + un} numbers traced · recorded runs`, "Every number the agent wrote matched a tool output; the code Critic removes any that don't") : ""}
+    ${adv.length ? b(met === adv.length, `${met}/${adv.length} attacks handled (stub models)`, "Adversarial set run with stub models: prompt injection, bad frames, oversized uploads, out-of-scope requests") : ""}
     ${avg != null ? `<span class="ab" tabindex="0" data-tip="Mean model cost per recorded run">$${avg.toFixed(2)} per run</span>` : ""}
     <span class="ab dim" tabindex="0" data-tip="Stops always wait for a person; code sets the allowed decisions">Stops need your approval</span>
   </div>`;
