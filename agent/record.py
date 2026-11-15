@@ -26,7 +26,10 @@ VIDEO_PROTOCOL = ("MCF10A cells were grown to confluence in 24-well plates and t
 VIDEO_UPLOAD = {"frames": [os.path.join(SAMPLES, f"sample_frame{k}.png") for k in (1, 2, 3)],
                 "interval_h": 1.0, "scale": 0.908, "name": "video_upload", "held_out_wound": "exp1_pos2033",
                 "protocol_text": VIDEO_PROTOCOL}
-WOUNDS = ["exp1_partII_C61_P1", "exp1_partI_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2"]  # stop early, stall, stop later, imaged to end
+# Picked to show each decision type. With the nca_realft3 replay forecaster and the offline replay model: stop early
+# (1.9 h, both branches; the reject branch stops at 3.8 h), stall (flag at 1.9 h; it did stall), stop later (3.8 h; a
+# wrong call, it closed by 19 h), imaged to the end (it closed)
+WOUNDS = ["exp1_partII_C61_P1", "exp1_partI_C61_P2", "exp1_partII_C61_P2", "exp1_partII_CC_P2"]
 
 
 def leaks(text):

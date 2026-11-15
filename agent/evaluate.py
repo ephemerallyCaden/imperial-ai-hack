@@ -1,7 +1,8 @@
 """Agent replay evaluation (design.md 9b "Agent evaluation", issue #83). Simulation, no real model calls.
 
 Every held-out WHAD wound in eval/forecasts/whad/loo_all is replayed at the checks 1.9/3.8/5.7/9.5 h (forecasts exist
-only there, as in eval/scheduler.py) under three policies:
+only there, as in eval/scheduler.py) under three policies. Every policy sees the agent's forecast per wound and check
+(agent.run.loo_forecast: nca_realft3, edge_speed only where the NCA forecast is missing or unusable):
   fixed    image to the 19 h horizon; never stop early
   rules    stop when the stall flag fires (p_stall >= the eval/flags.py threshold); otherwise continue
   agent    agent.run.run_wound with the offline replay model (STITCH_PROVIDER=stub, agent.run.replay_stub)
@@ -51,22 +52,28 @@ SCHEDULER_CSV = os.path.join(config.REPO, "eval", "results", "scheduler.csv")
 
 # ---------------------------------------------------------------- wounds and truth
 
-def load_wounds(src=run.LOO_DIR, checks=CHECKS):
-    """-> {wound_id: {"wound", "closed", "t", "checks": {cut: {"p_close", "p_stall", "stall_flag", "stall_true"}}}}.
-    Same wounds as eval/scheduler.py (its EXCLUDE list dropped)."""
+def load_wounds(checks=CHECKS):
+    """-> {wound_id: {"wound", "closed", "t", "checks": {cut: {"p_close", "p_stall", "stall_flag", "stall_true",
+    "model"}}}}. Same wounds as eval/scheduler.py (its EXCLUDE list dropped). Each wound and check uses the forecast the
+    agent would use (run.loo_forecast), so the rules and agent policies see the same forecasts."""
     U = tools._data_upload()
     exclude = set(getattr(U.FB, "EXCLUDE", ()))
     out = {}
     for c in checks:
-        p = os.path.join(src, f"edge_speed_{c:g}h.json")
-        if not os.path.exists(p):
-            continue
+        ids = []
+        for m in (run.LOO_MODEL, run.LOO_FALLBACK):
+            try:
+                ids += [f["wound_id"] for f in run._loo_doc(c, m)["forecasts"]]
+            except OSError:
+                pass
         th = U.stall_threshold(c)
-        with open(p) as fh:
-            fcs = json.load(fh)["forecasts"]
-        for f in fcs:
-            if f["wound_id"] in exclude:
+        for wid in dict.fromkeys(ids):
+            if wid in exclude:
                 continue
+            one, info = run.loo_forecast(c, wid)
+            if one is None:
+                continue
+            f = one["forecasts"][0]
             t, a = np.array(f["observed"]["t_hours"], float), np.array(f["observed"]["area"], float)
             hit = np.nonzero(a <= 0.1)[0]
             w = out.setdefault(f["wound_id"], {"wound": f.get("wound", f["wound_id"]), "t": t.tolist(), "checks": {},
@@ -74,7 +81,7 @@ def load_wounds(src=run.LOO_DIR, checks=CHECKS):
             ps = f.get("p_stall")
             w["checks"][c] = {"p_close": f.get("p_close_by_T"), "p_stall": ps,
                               "stall_flag": bool(ps is not None and th is not None and ps >= th),
-                              "stall_true": bool(a[-1] >= 0.9 * a[t <= c + 1e-9][-1])}
+                              "stall_true": bool(a[-1] >= 0.9 * a[t <= c + 1e-9][-1]), "model": info["model"]}
     return out
 
 
@@ -239,7 +246,7 @@ def cross_check(wounds, agent_out):
     ref = None
     if os.path.exists(SCHEDULER_CSV):
         for row in csv.DictReader(open(SCHEDULER_CSV)):
-            if row["model"] == "edge_speed" and row["thresholds"] == f"<= {config.P_UNLIKELY} or >= {config.P_LIKELY}":
+            if row["model"] == run.LOO_MODEL and row["thresholds"] == f"<= {config.P_UNLIKELY} or >= {config.P_LIKELY}":
                 ref = row
     pre_empted = sorted(s_unl - a_unl)
     return {
@@ -254,6 +261,7 @@ def cross_check(wounds, agent_out):
         "pre_empted_by_stall": [(k, agent_out[k]["stop_kind"], agent_out[k]["stop_h"], sched[k][0])
                                 for k in pre_empted],
         "pre_empted_wrong": sum(wounds[k]["closed"] for k in pre_empted),
+        "forecast_fallbacks": sum(c["model"] != run.LOO_MODEL for w in wounds.values() for c in w["checks"].values()),
     }
 
 
@@ -333,6 +341,10 @@ def write_md(path, rows, xc, runs_dir, real=None, real_dir=None):
           "likely to close\" stop the plate at that check; \"ask a human to review\" means imaging continues.",
           f"- Checks only at {', '.join(f'{c:g}' for c in CHECKS)} h (forecasts exist only there). A wound with no "
           f"forecast at a later check (4 wounds have fewer than 4 checks) and no stop is imaged to {END:g} h.",
+          f"- Forecasts: every policy uses the agent's held-out forecast per wound and check, the `{run.LOO_MODEL}` "
+          f"leave-one-wound-out files (calibrated 90% band), with `{run.LOO_FALLBACK}` only where that forecast is "
+          f"missing or unusable ({xc['forecast_fallbacks']} wound-checks here). Truth (closed by 19 h, stall) comes from the "
+          "observed curves, which are the same in every forecast file.",
           f"- Costs are relative units: 1 image = {config.COST_IMAGE}, 1 plate-hour = {config.COST_PLATE_HOUR}, "
           f"sensitivity at {' and '.join(str(k) for k in config.COST_PLATE_HOUR_SENSITIVITY)}. Total cost = frames used "
           "x 1 + plate-hours used x rate. Frames: WHAD images once an hour from 0 h, so a stop at 1.9 h has used 2 frames.",
@@ -352,9 +364,10 @@ def write_md(path, rows, xc, runs_dir, real=None, real_dir=None):
           "## Limitations", "",
           "- The stall threshold (`eval/results/flag_thresholds.json`) is tuned on all WHAD wounds, so the stall flag "
           "used here is not strictly leave-one-out (eval/flags.py reports the leave-one-wound-out precision/recall). "
-          "The forecasts themselves are leave-one-wound-out (loo_all).",
+          "It is also tuned on edge speed's p_stall; here it is applied to the replay forecaster's p_stall (same "
+          "definition). The forecasts themselves are leave-one-wound-out (loo_all).",
           "- Plate-hours saved is a simulation on recorded series, not a lab result. 55 wounds from one dataset.",
-          "", "## Cross-check against eval/results/scheduler.csv (edge_speed, <= 0.1 or >= 0.9)", "",
+          "", f"## Cross-check against eval/results/scheduler.csv ({run.LOO_MODEL}, <= 0.1 or >= 0.9)", "",
           f"- scheduler.csv: {_fmt(xc['scheduler_csv_calls_wont_close'])} \"won't close\" calls, "
           f"{_fmt(xc['scheduler_csv_wrong_calls'])} wrong. Same rule recomputed here: "
           f"{xc['scheduler_rule_unlikely_calls']} calls, {xc['scheduler_rule_wrong']} wrong.",

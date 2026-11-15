@@ -10,8 +10,8 @@ T = [float(h) for h in range(20)]   # WHAD: one frame per hour, 0..19 h
 
 def _w(closed, stall_true=False, stall_flag=False, p_close=0.5, checks=config.CHECKS_H):
     return {"wound": "x", "t": T, "closed": closed,
-            "checks": {c: {"p_close": p_close, "p_stall": None, "stall_flag": stall_flag, "stall_true": stall_true}
-                       for c in checks}}
+            "checks": {c: {"p_close": p_close, "p_stall": None, "stall_flag": stall_flag, "stall_true": stall_true,
+                           "model": run.LOO_MODEL} for c in checks}}
 
 
 def _o(stop_h=None, kind=None):
@@ -75,13 +75,14 @@ def test_scheduler_rule_ignores_stall():
 # ---------------------------------------------------------------- real held-out WHAD data
 
 def _need_data():
-    if not os.path.exists(os.path.join(run.LOO_DIR, "edge_speed_1.9h.json")):
+    if not os.path.exists(run._loo_path(1.9)):
         pytest.skip("no loo_all forecasts")
 
 
 def test_simple_rules_equal_manual_count():
     _need_data()
     ws = E.load_wounds()
+    assert all(c["model"] == run.LOO_MODEL for w in ws.values() for c in w["checks"].values())   # same as the agent
     th = {c: E.tools._data_upload().stall_threshold(c) for c in config.CHECKS_H}
     saved, stops = 0.0, 0
     for w in ws.values():   # manual: first check where p_stall >= threshold
@@ -99,10 +100,10 @@ def test_agent_on_one_wound_matches_rules(tmp_path, monkeypatch):
     monkeypatch.setenv("STITCH_PROVIDER", "stub")
     llm.set_stub(run.replay_stub)
     try:
-        o = E.agent_policy(run_ids := "exp1_partI_C61_P1", str(tmp_path))   # stall flag fires at 1.9 h
+        o = E.agent_policy(run_ids := "exp1_partI_C61_P2", str(tmp_path))   # stall flag fires at 1.9 h
         assert o["stop_kind"] == "stall" and o["stop_h"] == 1.9 and o["untraced"] == 0
         assert os.path.exists(tmp_path / f"eval83-{run_ids}.jsonl")
-        o = E.agent_policy("exp1_partII_C61_P1", str(tmp_path))            # P(close) 0.094 at 1.9 h
+        o = E.agent_policy("exp1_partII_C61_P1", str(tmp_path))            # P(close) 0.057 at 1.9 h (nca_realft3)
         assert o["stop_kind"] == "unlikely" and o["stop_h"] == 1.9
     finally:
         llm.set_stub(None)
@@ -127,7 +128,7 @@ def test_scoreboard_says_replay_model(tmp_path):
     rows = [{"policy": p, **E.score(ws, {"a": _o()}, rate)} for rate in E.RATES for p in E.POLICIES]
     xc = {"scheduler_csv_calls_wont_close": None, "scheduler_csv_wrong_calls": None, "scheduler_rule_unlikely_calls": 0,
           "scheduler_rule_wrong": 0, "agent_unlikely_calls": 0, "agent_unlikely_wrong": 0, "same_wound_same_check": 0,
-          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0}
+          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0, "forecast_fallbacks": 0}
     p = tmp_path / "s.md"
     E.write_md(str(p), rows, xc, str(tmp_path))
     md = p.read_text()
@@ -195,7 +196,7 @@ def test_scoreboard_real_row_and_skip_note(tmp_path):
     rows = [{"policy": p, **E.score(ws, {"a": _o()}, rate)} for rate in E.RATES for p in E.POLICIES]
     xc = {"scheduler_csv_calls_wont_close": None, "scheduler_csv_wrong_calls": None, "scheduler_rule_unlikely_calls": 0,
           "scheduler_rule_wrong": 0, "agent_unlikely_calls": 0, "agent_unlikely_wrong": 0, "same_wound_same_check": 0,
-          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0}
+          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0, "forecast_fallbacks": 0}
     p = tmp_path / "s.md"
     E.write_md(str(p), rows, xc, str(tmp_path), None, str(tmp_path / "practice"))
     md = p.read_text()

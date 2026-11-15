@@ -11,30 +11,31 @@ Held-out WHAD wounds: 55. Stall at some check: 14. Did not reach 90% closure by 
 | Policy | Plate-hours saved | Wrong stall stop | Wrong closure call | Missed stall | Missed non-closer | Non-closer imaged to the end | Frames used | % numbers traced | Cost per run | Model tokens per run | Model cost per run (USD) | Same pick as replay model |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Fixed schedule (image to 19 h) | 0 | 0 | 0 | 14 | 41 | 41 | 1090 | n/a | 114.818 | n/a | n/a | n/a |
-| Simple rules (stop on stall flag) | 338.2 | 10 | 0 | 2 | 41 | 20 | 737 | n/a | 77.655 | n/a | n/a | n/a |
-| Forecast policy (code; replay model, no LLM) | 761.9 | 8 | 4 | 0 | 17 | 0 | 293 | 100 | 31.064 | 0 | n/a | n/a |
-| Real model (Claude, n=4 practice runs) | 47.5 | 0 | 1 | 0 | 1 | 0 | 30 | 100 | 43.125 | 20270.5 | 0.0516 | 8 / 8 checks |
+| Simple rules (stop on stall flag) | 330.6 | 10 | 0 | 2 | 41 | 20 | 745 | n/a | 78.491 | n/a | n/a | n/a |
+| Forecast policy (code; replay model, no LLM) | 741 | 9 | 4 | 0 | 15 | 0 | 315 | 100 | 33.364 | 0 | n/a | n/a |
+| Real model (Claude, n=4 recorded runs) | 49.4 | 0 | 1 | 0 | 1 | 0 | 28 | 100 | 40.25 | 30743.8 | 0.1724 | 7 / 7 checks |
 
-**Real model row: a small sample.** 4 recorded run(s) from `agent/runs/practice` (WHAD wound runs only; `.reject` branches and upload runs are left out), not the 55 held-out wounds above, so its totals are not comparable with the other rows. These are practice runs; the final re-record on the submission account (`python -m agent.record --out agent/runs`) will replace them. Error counts use the same truth as the other rows; every column uses the 4 of 4 runs that have truth, and each run log counts once (repeat sessions on one wound are separate runs; 4 distinct wound(s)). "Same pick as replay model" counts the checks where the real model was asked and its own proposal was used (forced stall or refusal checks and fallbacks are left out) and compares the model's proposed decision with what the replay model would have chosen from the same allowed list. Model cost is the sum of `cost_usd` over the run's model calls.
+**Real model row: a small sample.** 4 recorded run(s) from `agent/runs` (WHAD wound runs only; `.reject` branches and upload runs are left out), not the 55 held-out wounds above, so its totals are not comparable with the other rows. Error counts use the same truth as the other rows; every column uses the 4 of 4 runs that have truth, and each run log counts once (repeat sessions on one wound are separate runs; 4 distinct wound(s)). "Same pick as replay model" counts the checks where the real model was asked and its own proposal was used (forced stall or refusal checks and fallbacks are left out) and compares the model's proposed decision with what the replay model would have chosen from the same allowed list. Model cost is the sum of `cost_usd` over the run's model calls.
 
-Stops by kind (stall / unlikely / likely): fixed 0 / 0 / 0; rules 21 / 0 / 0; agent 17 / 28 / 0
+Stops by kind (stall / unlikely / likely): fixed 0 / 0 / 0; rules 21 / 0 / 0; agent 15 / 30 / 0
 
 ## Finding: the stall flag is often wrong
 
-Stall-stop error rate (wrong stall stops / stall stops, simulated human approves every stall stop): rules 10 / 21 = 48%; agent 8 / 17 = 47%. A wrong stall stop ends imaging on a wound that went on to keep closing (more than 10% further after the check). The flag only asks a human; a human who looks at the frames can reject it, but in this replay every stall stop is approved, so these errors count in full.
+Stall-stop error rate (wrong stall stops / stall stops, simulated human approves every stall stop): rules 10 / 21 = 48%; agent 9 / 15 = 60%. A wrong stall stop ends imaging on a wound that went on to keep closing (more than 10% further after the check). The flag only asks a human; a human who looks at the frames can reject it, but in this replay every stall stop is approved, so these errors count in full.
 
 ## Cost sensitivity (total cost over all wounds, cost per run in brackets)
 
 | Policy | plate-hour = 5 | plate-hour = 2 | plate-hour = 20 |
 |---|---|---|---|
 | Fixed schedule (image to 19 h) | 6315 (114.818) | 3180 (57.818) | 21990 (399.818) |
-| Simple rules (stop on stall flag) | 4271 (77.655) | 2150.6 (39.102) | 14873 (270.418) |
-| Forecast policy (code; replay model, no LLM) | 1708.5 (31.064) | 859.2 (15.622) | 5955 (108.273) |
+| Simple rules (stop on stall flag) | 4317 (78.491) | 2173.8 (39.524) | 15033 (273.327) |
+| Forecast policy (code; replay model, no LLM) | 1835 (33.364) | 923 (16.782) | 6395 (116.273) |
 
 ## Assumptions
 
 - A simulated human approves every proposal. Approved "stall flagged, ask a human" and "stop, unlikely / likely to close" stop the plate at that check; "ask a human to review" means imaging continues.
 - Checks only at 1.9, 3.8, 5.7, 9.5 h (forecasts exist only there). A wound with no forecast at a later check (4 wounds have fewer than 4 checks) and no stop is imaged to 19 h.
+- Forecasts: every policy uses the agent's held-out forecast per wound and check, the `nca_realft3` leave-one-wound-out files (calibrated 90% band), with `edge_speed` only where that forecast is missing or unusable (0 wound-checks here). Truth (closed by 19 h, stall) comes from the observed curves, which are the same in every forecast file.
 - Costs are relative units: 1 image = 1, 1 plate-hour = 5, sensitivity at 2 and 20. Total cost = frames used x 1 + plate-hours used x rate. Frames: WHAD images once an hour from 0 h, so a stop at 1.9 h has used 2 frames.
 - "Missed stall" = stall truth true at some check the wound was imaged at and the plate never stopped.
 - "Missed non-closer" = did not reach 90% closure by 19 h and never got a closure call ("unlikely to close"); a stall stop of a non-closer still counts as missed there. "Non-closer imaged to the end" = did not reach 90% closure by 19 h and was never stopped for any reason (stall or closure call), so the plate was imaged to the horizon for nothing. A stall stop of a non-closer is missed in the first column but not in the second.
@@ -43,27 +44,25 @@ Stall-stop error rate (wrong stall stops / stall stops, simulated human approves
 
 ## Limitations
 
-- The stall threshold (`eval/results/flag_thresholds.json`) is tuned on all WHAD wounds, so the stall flag used here is not strictly leave-one-out (eval/flags.py reports the leave-one-wound-out precision/recall). The forecasts themselves are leave-one-wound-out (loo_all).
+- The stall threshold (`eval/results/flag_thresholds.json`) is tuned on all WHAD wounds, so the stall flag used here is not strictly leave-one-out (eval/flags.py reports the leave-one-wound-out precision/recall). It is also tuned on edge speed's p_stall; here it is applied to the replay forecaster's p_stall (same definition). The forecasts themselves are leave-one-wound-out (loo_all).
 - Plate-hours saved is a simulation on recorded series, not a lab result. 55 wounds from one dataset.
 
-## Cross-check against eval/results/scheduler.csv (edge_speed, <= 0.1 or >= 0.9)
+## Cross-check against eval/results/scheduler.csv (nca_realft3, <= 0.1 or >= 0.9)
 
 - scheduler.csv: 45 "won't close" calls, 4 wrong. Same rule recomputed here: 45 calls, 4 wrong.
-- Agent: 28 "unlikely to close" calls, 4 wrong; 28 of them on the same wound at the same check as the scheduler; 0 calls the scheduler did not make.
-- Difference: 17 scheduler calls are pre-empted in the agent because the stall flag fired at the same or an earlier check (a fired stall flag forces "stall flagged, ask a human", which the simulated human approves as a stall stop). 0 of these were wrong scheduler calls (the wound did close).
+- Agent: 30 "unlikely to close" calls, 4 wrong; 30 of them on the same wound at the same check as the scheduler; 0 calls the scheduler did not make.
+- Difference: 15 scheduler calls are pre-empted in the agent because the stall flag fired at the same or an earlier check (a fired stall flag forces "stall flagged, ask a human", which the simulated human approves as a stall stop). 0 of these were wrong scheduler calls (the wound did close).
 
 | Wound | Agent stop | Agent stop h | Scheduler call h |
 |---|---|---|---|
-| exp1_partI_C61_P1 | stall | 1.9 | 1.9 |
 | exp1_partI_C61_P2 | stall | 1.9 | 1.9 |
 | exp1_partI_CC_P2 | stall | 1.9 | 1.9 |
+| exp1_partI_CC_P3 | stall | 1.9 | 1.9 |
 | exp1_partI_N61_P2 | stall | 1.9 | 1.9 |
 | exp1_partI_N61_P3 | stall | 1.9 | 1.9 |
 | exp1_partI_NC_P3 | stall | 1.9 | 1.9 |
 | exp2_partII_C61_P4 | stall | 1.9 | 1.9 |
 | exp2_partI_C61_P1 | stall | 1.9 | 1.9 |
-| exp2_partI_C61_P2 | stall | 1.9 | 1.9 |
-| exp2_partI_C61_P3 | stall | 1.9 | 1.9 |
 | exp2_partI_C61_P4 | stall | 1.9 | 1.9 |
 | exp2_partI_CC_P1 | stall | 1.9 | 1.9 |
 | exp2_partI_CC_P2 | stall | 1.9 | 1.9 |

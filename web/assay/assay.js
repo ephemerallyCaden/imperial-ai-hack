@@ -17,7 +17,7 @@ import { mountHeldout } from "./heldout.js";
 // (sim/js/assay_nca_case.py + make_nca_playback.mjs, docs/p2-handoff.md). Items without their own file show
 // FIELD_FALLBACK's field and say so: the samples and the pos2033 upload run are its frames t00-t02 (data/upload.py).
 const NCA_FILE = w => `web/public/sim/nca_follow_${w}.json`;
-const NCA_WOUNDS = ["exp1_partII_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2", "exp1_partI_C61_P1"];
+const NCA_WOUNDS = ["exp1_partII_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2", "exp1_partI_C61_P1", "exp1_partI_C61_P2"];
 const FIELD_FALLBACK = "exp1_partII_CC_P2", DEFAULT_WOUND = "exp1_partII_C61_P2";
 const AREA_TOL = 0.04;   // shown NCA frame vs target area (fraction of start): beyond this the mismatch is stated
 const SAMPLES = [

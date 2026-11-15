@@ -47,7 +47,7 @@ Use cases (diabetic wounds, infection, cancer, fibrosis, drug screens) are motiv
 - Adversarial table: "Stub models, no real model calls"
 - End card: "Research use only, not for diagnosis or treatment"
 
-Say "a neural cellular automaton forecasts" only over the upload/sample run or the terminal shot; held-out runs in Assay show the edge-speed forecast.
+Say "a neural cellular automaton forecasts" only over runs whose forecast is the NCA: the upload/sample run, the terminal shot, and held-out runs recorded after the replays switched to `nca_realft3` (agent/README.md, "Forecaster on held-out replays"). Check the Ops run log: the forecast line of each check names the model. The shipped held-out runs (20261115-070622) all use `nca_realft3`; the earlier 20261115-034737 set (edge speed) was removed.
 
 ## Order of work (Sun 15 Nov)
 1. 08:00-09:00: write the rest of the script (~190 words after the opening); read it aloud with a timer.

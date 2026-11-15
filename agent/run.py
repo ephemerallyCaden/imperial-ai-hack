@@ -5,7 +5,11 @@
 
 `wound` is one of:
   - a WHAD wound id (wound_id such as "exp1_partII_C61_P1", or its "wound" name): the held-out forecast at each check is
-    read from eval/forecasts/whad/loo_all/edge_speed_<cut>h.json
+    read from eval/forecasts/whad/loo_all/nca_realft3_<cut>h.json (LOO_MODEL: the shipped real-data NCA with P1's
+    leave-one-wound-out conformal band; the *_raw files are its uncalibrated member quantiles and are never used). Per
+    wound and cut-off, edge_speed_<cut>h.json (LOO_FALLBACK) is used only when the NCA forecast is missing or unusable
+    (loo_forecast); the forecast_lookup input names the model and file used, and a fallback adds a `warning` record
+    with the reason
   - an upload result from tools.qc_forecast (one forecast doc, or {"refused": true, "reasons": [...]}): one check at
     its own cut-off
   - a list of forecast docs, one per check (each with cutoff_hours and forecasts)
@@ -58,6 +62,7 @@ CLI: python -m agent.run --wound <id> --run-id <id>
 import argparse
 import copy
 import json
+import math
 import os
 import re
 import time
@@ -68,6 +73,8 @@ from agent import config, critic, llm, policy, prompts, reporter, tools
 from agent.runlog import RunLog, fingerprint, short_error
 
 LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
+LOO_MODEL = "nca_realft3"     # held-out replay forecaster: calibrated LOO files (not nca_realft3_raw: no calibration)
+LOO_FALLBACK = "edge_speed"   # per wound and cut-off, only when the LOO_MODEL forecast is missing or unusable
 HANDOVER = {policy.ASK_HUMAN_REFUSED}   # ends the run with no stop
 STOP_KIND = {policy.ASK_HUMAN_STALL: "stall", policy.STOP_UNLIKELY: "unlikely", policy.STOP_LIKELY: "likely"}
 META_KEYS = ("wound_id", "wound", "condition", "part", "name", "notes", "metadata", "protocol_text", "dataset",
@@ -85,9 +92,14 @@ TRUNC = "...[truncated]"
 _LOO_CACHE = {}
 
 
-def _loo_doc(cut):
-    """Parsed LOO forecast file for this cut-off, read once per process (callers must not mutate it; _one copies)."""
-    path = os.path.join(LOO_DIR, f"edge_speed_{cut}h.json")
+def _loo_path(cut, model=LOO_MODEL):
+    return os.path.join(LOO_DIR, f"{model}_{cut}h.json")
+
+
+def _loo_doc(cut, model=LOO_MODEL):
+    """Parsed LOO forecast file for this model and cut-off, read once per process (callers must not mutate it; _one
+    copies)."""
+    path = _loo_path(cut, model)
     key = (path, os.path.getmtime(path))
     if key not in _LOO_CACHE:
         with open(path) as fh:
@@ -105,6 +117,44 @@ def _one(doc, wound_id):
     out = copy.deepcopy({k: v for k, v in doc.items() if k != "forecasts"})
     out["forecasts"] = [copy.deepcopy(fcs[0])]
     return out
+
+
+def _unusable(doc):
+    """Why a one-wound LOO doc cannot drive a decision, or None: it must pass the forecast contract
+    (contracts/validate.py problems(): schema, quantile lengths and order, P(90% closed by 19 h) in [0, 1]), its band
+    must be the calibrated 90% band, and its area quantiles finite (the schema lets NaN through)."""
+    bad = tools._load("stitch_contract_validate", os.path.join("contracts", "validate.py")).problems(doc)
+    if bad:
+        return f"fails the forecast contract ({bad[0]})"
+    if not calibrated_band(doc):
+        return "band is not a calibrated 90% band"
+    f = doc["forecasts"][0]
+    if not all(math.isfinite(x) for k in ("area_q05", "area_q50", "area_q95") for x in f[k]):
+        return "area quantiles not finite"
+    return None
+
+
+def loo_forecast(cut, wound_id):
+    """Held-out forecast for one wound at one cut-off -> (doc narrowed to the wound, or None; info). LOO_MODEL first;
+    LOO_FALLBACK only when that file, wound or forecast is missing or unusable. info: {"model", "source"} plus
+    "fallback": {"from", "reason"} after a fallback; {"model": None, "reasons": [...]} when neither is usable."""
+    reasons = []
+    for model in (LOO_MODEL, LOO_FALLBACK):
+        path = _loo_path(cut, model)
+        try:
+            full = _loo_doc(cut, model)
+        except (OSError, ValueError) as e:   # missing file or bad JSON
+            doc, bad = None, f"file unreadable ({short_error(e)})"
+        else:
+            doc = _one(full, wound_id)
+            bad = "not in the file" if doc is None else _unusable(doc)
+        if bad is None:
+            info = {"model": model, "source": os.path.relpath(path, config.REPO)}
+            if reasons:
+                info["fallback"] = {"from": LOO_MODEL, "reason": reasons[0]}
+            return doc, info
+        reasons.append(f"{model} forecast for {wound_id} at {cut} h: {bad}")
+    return None, {"model": None, "reasons": reasons}
 
 
 EXCLUDABLE = {t["name"] for t in tools.TOOLS if "exclude_wound" in t["input_schema"]["properties"]}
@@ -136,10 +186,7 @@ class _Source:
             raise ValueError("wound must be a WHAD wound id, an upload result, frames or a list of forecast docs")
         if self.kind == "whad_loo":   # resolve the WHAD wound name (the key exclude_wound matches) up front
             for c in self.checks:
-                try:
-                    one = _one(_loo_doc(c), self.wound_id)
-                except (OSError, ValueError):
-                    continue
+                one, _ = loo_forecast(c, self.wound_id)
                 if one:
                     self.wound_id = one["forecasts"][0].get("wound_id", self.wound_id)
                     self.held_out = one["forecasts"][0].get("wound")
@@ -165,15 +212,16 @@ class _Source:
             if "exclude_wound" in f:
                 inp["exclude_wound"] = f["exclude_wound"]   # overridden by code on held-out replays
             return "qc_forecast", inp, lambda i: _narrow(tools.run_tool("qc_forecast", i))
-        if self.kind == "whad_loo":
-            inp = {"source": os.path.relpath(os.path.join(LOO_DIR, f"edge_speed_{cut}h.json"), config.REPO),
-                   "wound_id": self.wound_id, "cutoff_hours": cut,
-                   "exclude_wound": self.held_out, "fold": "loo_all (forecast made with this wound held out)"}
-
-            def fn(_):
-                doc = _one(_loo_doc(cut), self.wound_id)
-                return doc if doc else {"error": f"no forecast for {self.wound_id} at {cut} h"}
-            return "forecast_lookup", inp, fn
+        if self.kind == "whad_loo":   # the model and file used are in the input; a fallback also carries its reason
+            doc, info = loo_forecast(cut, self.wound_id)
+            inp = {"source": info.get("source"), "model": info["model"], "wound_id": self.wound_id,
+                   "cutoff_hours": cut, "exclude_wound": self.held_out,
+                   "fold": "loo_all (forecast made with this wound held out)"}
+            if "fallback" in info:
+                inp["fallback"] = info["fallback"]
+            why = "; ".join(info.get("reasons", []))
+            return "forecast_lookup", inp, lambda _: doc if doc else \
+                {"error": f"no forecast for {self.wound_id} at {cut} h ({why})"}
         doc = self.docs.get(float(cut))
         inp = {"source": self.kind, "cutoff_hours": cut, "precomputed": True}
         return ("qc_forecast" if self.kind == "upload" else "forecast_lookup"), inp, \
@@ -367,6 +415,11 @@ class _Run:
         nxt = checks[k + 1] if k + 1 < len(checks) else None
         self.last_cut = cut
         name, inp, fn = self.src.step(cut)
+        fb = inp.get("fallback")
+        if fb:   # never a silent fallback: the reason is in the input and in a warning the UI shows
+            self.log.log("warning", cut_h=cut, tool=name, model=inp["model"], fallback_from=fb["from"],
+                         reason=fb["reason"], message=f"{fb['from']} forecast not used ({fb['reason']}); "
+                                                      f"{inp['model']} forecast used for this check")
         doc = self._tool(name, inp, lambda i: _with_summary(fn(i)))
         if doc.get("error"):
             raise _Stop("no_forecast")
@@ -552,7 +605,7 @@ SIM_MODELS = ("sim_ensemble", "nca_ensemble")   # sim/upload.py bands: never a c
 
 def calibrated_band(doc):
     """True when the forecast's band is the calibrated data/upload.py band (any model data/upload.py returns:
-    nca_realft3, edge_speed, whad_population_prior; or the LOO edge_speed files) with level 0.9. Simulator / NCA
+    nca_realft3, edge_speed, whad_population_prior; or the LOO nca_realft3 / edge_speed files) with level 0.9. Simulator / NCA
     ensemble bands from sim/upload.py (tools.simulate marks them calibrated: false) are never calibrated."""
     if not isinstance(doc, dict) or doc.get("refused") or doc.get("error"):
         return False

@@ -187,7 +187,7 @@ def _schedule(U, fc, cut):
 
 
 def flags_schedule(forecast_doc):
-    """Forecast doc (from qc_forecast, or an eval/forecasts/whad/loo_all/edge_speed_*.json file; dict or path) ->
+    """Forecast doc (from qc_forecast, or an eval/forecasts/whad/loo_all/<model>_<cut>h.json file; dict or path) ->
     {"cutoff_hours", "results": [{"wound_id", "stall": {...}, "schedule": {...}}]}. A refused doc passes through.
     Out-of-band is an observation only and measure-again is not shipped (R16), so neither is returned."""
     if isinstance(forecast_doc, str):

@@ -16,7 +16,7 @@ set -a; . ./.env; set +a            # STITCH_PROVIDER, STITCH_MODEL and the key 
 python -m agent.record --out agent/runs
 ```
 
-It records `exp1_partII_C61_P1` first with both approval branches (approve and reject), then `exp1_partI_C61_P1`, `exp1_partII_C61_P2`, `exp1_partII_CC_P2` and a real-frame upload run (`agent/record.py`, `WOUNDS` and `VIDEO_UPLOAD`). It prints a JSON summary with the cost and fails if any file leaks a path, username or key. Check `"dirty": {}` before you commit the runs.
+It records `exp1_partII_C61_P1` first with both approval branches (approve and reject), then `exp1_partI_C61_P2` (stall flag), `exp1_partII_C61_P2`, `exp1_partII_CC_P2` and a real-frame upload run (`agent/record.py`, `WOUNDS` and `VIDEO_UPLOAD`). It prints a JSON summary with the cost and fails if any file leaks a path, username or key. Check `"dirty": {}` before you commit the runs.
 
 After it finishes:
 - Film the first wound (`exp1_partII_C61_P1`). It is the one with an approval point.
