@@ -130,7 +130,9 @@ def main():
         det_name = "nca_deterministic" if a.name == "nca_ensemble" else f"{a.name}_deterministic"  # v1 name kept
         BASELINES[a.name] = make("median"); BASELINES[det_name] = make("det")
         for split, (test, pool) in FB.splits("whad", S).items():
-            test = {k for k in test if k in traj}; pool = {k for k in pool if k in traj}
+            if missing := sorted(test - traj.keys()):  # never silently shrink P1's test set
+                raise RuntimeError(f"{split} cut {cut:g}: no NCA trajectory for P1 test series {missing}")
+            pool = {k for k in pool if k in traj}
             d = f"{a.out}/whad/{split}"; os.makedirs(d, exist_ok=True)
             for model in (a.name,) + (() if a.no_det else (det_name,)):
                 doc = FB.forecast_file("whad", split, model, cut, S, test, pool, G, G_long, T)
