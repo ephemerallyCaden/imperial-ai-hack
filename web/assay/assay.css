@@ -19,7 +19,7 @@
 .as-hud-tr { top: var(--s3); right: var(--s3); }
 .as-hud-bl { bottom: var(--s3); left: var(--s3); flex-direction: column; pointer-events: none; }
 .as-hud-br { bottom: var(--s3); right: var(--s3); min-width: 220px; display: block; border: 1px solid var(--hair); }
-.as-hud[hidden], .as-notice[hidden], .as-cover[hidden], .as-tip[hidden] { display: none; }
+.as-main[hidden], .as-heldout[hidden], .as-timeline[hidden], .as-hud[hidden], .as-notice[hidden], .as-cover[hidden], .as-tip[hidden] { display: none; }
 .as-readout { font-size: var(--fs-body); color: var(--ink); background: var(--panel); padding: 4px 8px; border: 1px solid var(--hair); }
 .as-simnote { background: var(--panel); padding: 2px 8px; }
 .as-views .st-btn { text-transform: uppercase; }
@@ -29,6 +29,12 @@
 .as-legend3d span { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; width: 10px; height: 10px; outline: 1px solid var(--hair); }
 .sw-wound { background: var(--cell-wound); } .sw-intact { background: var(--cell-intact); } .sw-edge { background: var(--cell-edge); } .sw-fresh { background: var(--cell-new); }
+/* age heatmap legend (mockup age-leg): state entries dimmed under the overlay, 200 px gradient of the stops */
+.as-legend3d.is-heat .as-st { opacity: .35; }
+.as-ageleg { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; }
+.as-ageleg[hidden] { display: none; }
+.as-agebar { display: block; width: 200px; height: 8px; margin: 2px 0 0; }
+.as-ageends { display: flex; justify-content: space-between; width: 200px; }
 .as-tip { position: absolute; z-index: 3; white-space: nowrap; }
 .as-cover { position: absolute; inset: 0; z-index: 4; background: var(--bg); display: grid; place-content: center; text-align: center; color: var(--dim); }
 .as-notice { position: absolute; z-index: 5; top: 56px; left: 50%; transform: translateX(-50%); width: min(460px, 90%); padding: var(--s4); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
@@ -210,3 +216,8 @@
 .as-upform .as-input { height: 40px; font-size: 15px; }
 .as-upform .st-btn, .as-notice .st-btn { height: 44px; padding: 0 18px; }
 .as-notice::backdrop { background: rgba(0,0,0,.5); }
+/* live drawing panel (live.js) and the photo box dialog (photo.js) */
+.as-live .st-seg .st-btn { text-transform: none; }
+.as-photo { width: 100%; height: auto; display: block; background: var(--bg); cursor: crosshair; touch-action: none; margin: var(--s2) 0; }
+.as-heldout { overflow: auto; min-height: 0; padding: 0 var(--s4); }
+.as-honesty[hidden], .as-qc[hidden], .as-divnote[hidden], .as-hud-tl[hidden] { display: none !important; }
