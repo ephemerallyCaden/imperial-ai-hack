@@ -4,14 +4,16 @@ Research use only, not for diagnosis or treatment. Design: `docs/design.md` sect
 
 ## What it does
 
-At each imaging check (1.9, 3.8, 5.7 and 9.5 h) the agent:
+For an upload of frames that comes with protocol (Methods) text, code first calls the `intake` tool once (see Intake
+below). Then, at each imaging check (1.9, 3.8, 5.7 and 9.5 h; one check at the last frame for an upload), the agent:
 
 1. runs the fixed steps in code: QC and the calibrated forecast (`data/upload.py`), then the stall flag and schedule advice;
 2. works out in code which decisions are allowed (`policy.py`);
 3. asks the model to pick one allowed decision and explain it in plain English;
 4. checks the pick against policy, then passes the explanation through the scope guard and the Critic;
 5. asks a human to approve anything that cannot be undone (stopping a plate);
-6. writes every step to a run log.
+6. writes every step to a run log;
+7. at the end of the run, the Reporter writes a plain-English report (`reporter.py`), logged before `run_end`.
 
 ## Where the gain comes from
 
@@ -30,6 +32,64 @@ fixed seeds, about 1 s) and ranks them by fit error to the observed curve up to 
 logged as a `tool_call` (with `trigger`), so the Critic can trace its fit errors. The model sees the ranking and may
 mention it; it never changes the decision. Accuracy on the simulated known-cause wounds is in
 `results/investigator.md` (`python -m agent.investigator`). The start is a synthetic band, not the wound's own mask.
+
+## Intake (protocol text -> settings)
+
+`agent/intake.py` `extract(protocol_text)` (also the `intake` tool) sends the exact training prompt from
+`data/adaption/prompt.py` to a model, validates the reply against `data/adaption/schema.json`, then code checks units
+(interval in hours, scale in um/px, sane ranges, non-hourly and non-WHAD-scale notes), maps the condition to CC or C61
+and checks scope (MCF10A plus mitomycin, 2D monolayer, transmitted light). Returns `fields`, `feeds_code` (interval,
+scale, condition), `informational`, `unit_notes`, `scope_ok`, `scope_notes`, `backend`, `fallback_reason` and the
+(truncated) `source_text` so the UI can show the extraction next to the source.
+
+- Backend: `STITCH_INTAKE_BACKEND=adapter|llm|stub`; default adapter when `STITCH_INTAKE_ADAPTER` is an existing folder
+  or `.tgz`, else llm (`call_model`). Adapter = transformers + peft on the base in `adapter_config.json`
+  (`STITCH_INTAKE_BASE` overrides, `STITCH_INTAKE_OFFLINE=1` uses the local cache only), greedy decoding. A `.tgz` is
+  checked (regular files and folders only: links, devices, absolute and `..` paths are refused), unpacked once into a
+  per-user cache (`STITCH_INTAKE_CACHE`, default `~/.cache/stitch`, 0700, refused if another user owns it) and looked
+  up by path + mtime + size, so it is hashed once per process. Log messages carry the exception type and a short
+  message with paths cut to basenames; a local base path is logged by its folder name only.
+- Prompt style (OPEN ITEM for P2): `STITCH_INTAKE_PROMPT_STYLE=chat` (default: the tokenizer's chat template, one user
+  turn, thinking off) or `raw` (the training prompt as is). The Adaption docs do not say how AutoScientist formats
+  `prompt`/`completion` rows for `training_method="instruction"` (they only say it "Maps `prompt` and `completion` for
+  SFT"), so we do not know which style matches training. The style is an explicit setting: it is in every Intake
+  result (`prompt_style`, so in the run log), printed by `--eval`, and `--eval --backend base` runs the base model with
+  the same style, so the fine-tune vs base comparison is like for like. `chat` with a tokenizer that has no chat
+  template is an error, never a silent switch to `raw`. P2: ask Adaption (support or Discord) and score both styles.
+- Fallback: adapter or stub -> llm -> "could not extract" (`ok: false`); each skipped step is in `fallback_reason`.
+- In the loop (`run.py`): only for frame uploads whose wound dict has `protocol_text`, one `intake` tool call before
+  the first check, logged as a `tool_call`. Intake output is not Critic evidence (its fields come from protocol text,
+  so "imaged for 37.3 h" in a protocol must not trace): only the `interval_h` / `scale` values Intake filled in for the
+  run count (`run.critic_outputs`, also used by the Reporter). A missing `interval_h` or `scale` is filled from
+  `feeds_code` (code-checked values only), a missing `condition` from its CC / C61 code (the Investigator's simulator
+  uses it). Intake's hosted-model calls (llm backend) are logged as `model_call` records (`purpose: intake`, usage,
+  `cost_usd`) and count against `TOKEN_BUDGET`; so is the Reporter's call (`purpose: report`), so the cost sums in
+  `agent.record`, `agent.evaluate` and `index.json` include them. A given value that differs from Intake by more than 2% is kept and a `warning` is logged. An
+  `intake_applied` record lists each value and where it came from. If `scope_ok` is false, the out-of-scope notes are
+  added to every decision's evidence and to the Reporter caveats; the decision never changes because of Intake. If
+  Intake fails or returns `ok: false`, a `warning` is logged and the given values are used; a still-missing interval
+  or scale is refused by QC ("data refused, ask a human"). `agent.record`'s video upload carries a short Methods
+  paragraph (MCF10A, mitomycin C, hourly, 0.908 um/px) so the demo shows Intake.
+- Scope: "mitomycin" counts only when it is not negated in the same clause ("not used", "no", "without", "omitted",
+  "wasn't added"); a negated mention makes `scope_ok` false.
+- Eval: `python -m agent.intake --eval [--backend adapter|base|llm|stub] [--preds out.jsonl]` scores one backend (no
+  fallback) on `data/adaption/test_real.jsonl` with `score.py` and prints the prompt style. It calls the configured model, so it is not run in tests.
+
+## Reporter (end of run)
+
+`reporter.summarise(records, steps_left, tokens_left)` runs once per run log (branch logs too), just before `run_end`.
+Its inputs are code-extracted facts from the log only: each check's decision (label, evidence, source, human answer),
+the end (reason, stop time, plate-hours saved), flags, refusal reasons and Investigator hypotheses. Model explanations,
+wound names, notes and protocol text are never in the fact block. The block is compact (strings cut to 200 characters,
+oldest checks dropped past 3000 characters) and sent inside `<run_facts>` delimiters as data. One `call_model()` call
+with the strict `write_report` tool returns `headline` (one sentence), `summary` (3 to 5 sentences), `next_step` (one
+sentence) and `caveats`. Each field goes through the scope guard (a hit replaces that field with the template's, or
+drops that caveat) and then the Critic (sources: the run's tool outputs, the code-computed end facts such as
+plate-hours saved, and the allowlist). With no model, no step or token budget left (the call counts against
+`MAX_STEPS` and `TOKEN_BUDGET`), a failed call, a refusal or an invalid reply, a deterministic template from the same
+facts is used (`source: template`). Code always adds the fixed caveats: research use only; simulated cells are
+labelled; Investigator results are hypotheses, not causes (when present); "likely to close" is untested (when it
+appears). It also works on a finished log read back with `runlog.read`.
 
 ## What it does not do
 
@@ -56,16 +116,19 @@ mention it; it never changes the decision. Accuracy on the simulated known-cause
 | `config.py` | Constants with units (horizon, checks, thresholds, cost units, step and token limits) and the Critic allowlist |
 | `llm.py` | `call_model()`, the only place that talks to a model; stub, Anthropic or Bedrock, picked from env |
 | `runlog.py` | Append-only JSONL writer to `agent/runs/<run_id>.jsonl` |
-| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`, `investigate`: thin wrappers over the existing code; errors come back as `{error}` |
+| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`, `investigate`, `intake`: thin wrappers over the existing code; errors come back as `{error}` |
 | `policy.py` | `allowed(state)` and `check(proposal, state)` |
 | `critic.py` | `trace(text, tool_outputs)`: returns cleaned text plus traced and untraced counts |
 | `prompts.py` | System prompt, the `propose_decision` tool and the delimited data block |
 | `run.py` | The hand-written loop and the CLI; `replay_stub` is the offline model |
+| `reporter.py` | `summarise(records)`: the end-of-run report from run-log facts; one model call, scope guard and Critic on every field, template fallback |
 | `evaluate.py` | Replay scoreboard for the three policies |
 
+| `intake.py` | Intake (#90, 9b): protocol text -> interval, scale, condition with the fine-tune's prompt and schema; unit and scope checks in code |
 | `investigator.py` | Investigator lite (#87): reruns the simulator from alternative starts and ranks them by fit to the observed curve; hypotheses, not causes |
 
-Flow: tools -> policy -> model pick -> policy check -> Critic -> approval -> run log.
+Flow: (upload with protocol text: Intake) -> tools -> policy -> model pick -> policy check -> Critic -> approval ->
+Reporter -> run log.
 
 ## Commands
 
@@ -125,6 +188,7 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 | `decision` | each check | `decision`, `label`, `allowed`, `state`, `source` (`forced`, `llm` or `fallback`), `fallback_reason`, `explanation`, `irreversible`, `untested` |
 | `approval` | at a stop or stall | `decision`, `approved`, `note` |
 | `human_review` | "ask a human to review" | `decision`, `note` |
+| `report` | once per log, just before `run_end` | `headline`, `summary`, `next_step`, `caveats`, `source` (`llm` or `template`), `fallback_reason`, `facts`, `critic` (`removed`, `traced`, `untraced`), `scope`, `model`, `model_called`, `usage`; `step` when the model was called |
 | `run_end` | last line | `reason`, `decision`, `stopped`, `stop_h`, `stop_kind`, `plate_hours_saved`, `steps`, `tokens`, `numbers_traced`, `numbers_untraced`, `branch_run_ids` |
 
 `run_end.reason` is one of `stopped`, `schedule_complete`, `handed_to_human`, `max_steps`, `token_budget`,

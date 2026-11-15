@@ -39,3 +39,19 @@ def test_json_escaped_windows_home_is_caught(monkeypatch):
     monkeypatch.setattr(os.path, "expanduser", lambda p: "C:\\Users\\rand" if p == "~" else p)
     line = json.dumps({"path": "C:\\Users\\rand\\stitch\\x.png"})
     assert "home folder" in record.leaks(line)
+
+
+def test_index_is_leak_checked_and_has_cost(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv("USER", "nobodyhere")
+    recs = [{"kind": "run_start", "run_id": "a", "wound": {"kind": "frames"}},
+            {"kind": "model_call", "purpose": "intake", "cost_usd": 0.02},
+            {"kind": "model_call", "cost_usd": 0.01}, {"kind": "model_call", "purpose": "report", "cost_usd": None},
+            {"kind": "report", "headline": "clean"}, {"kind": "run_end"}]
+    (tmp_path / "a.jsonl").write_text("\n".join(json.dumps(r) for r in recs) + "\n")
+    assert record.write_clean_index(str(tmp_path)) == []
+    idx = json.loads((tmp_path / "index.json").read_text())
+    assert idx["runs"][0]["cost_usd"] == 0.03
+    recs[4]["headline"] = "saved under /home/someone/runs"
+    (tmp_path / "a.jsonl").write_text("\n".join(json.dumps(r) for r in recs) + "\n")
+    assert record.write_clean_index(str(tmp_path)) == ["/home/"]
