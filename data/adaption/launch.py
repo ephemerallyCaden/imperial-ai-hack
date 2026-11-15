@@ -61,14 +61,14 @@ MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else No
 print("chosen model", MODEL, flush=True)
 if "--cancel" in sys.argv:  # --cancel [RUN_ID]; default: the run in run_ids.json, which is then moved aside
     i = sys.argv.index("--cancel")
-    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 else json.load(open(IDS))["run_id"]
+    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else json.load(open(IDS))["run_id"]
     print("cancel", rid, c.autoscientist.cancel(rid))
     if os.path.exists(IDS) and json.load(open(IDS))["run_id"] == rid:
         os.replace(IDS, IDS.replace(".json", f".cancelled-{rid[:8]}.json"))
     sys.exit(0)
 if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.json
     i = sys.argv.index("--status")
-    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 else json.load(open(IDS))["run_id"]
+    rid = sys.argv[i + 1] if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else json.load(open(IDS))["run_id"]
     r = c.autoscientist.get(rid)
     print(rid, r.model)
     print(r.status, "iterations", r.iterations_completed, "/", r.max_iterations, "best_win_rate", r.best_win_rate,
