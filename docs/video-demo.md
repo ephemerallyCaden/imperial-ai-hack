@@ -26,7 +26,7 @@ Alternative hook lines (pick one):
 
 | Tempting line | Problem | Say instead |
 |---|---|---|
-| "Our NCA predicts how wounds heal" | It failed our own gate at 3.8 h (29% worse than edge speed). The shipped forecaster is calibrated edge speed (R18). | NCA = the live draw-tool emulator; "ties or beats every baseline by 9.5 h". |
+| "Our NCA predicts how wounds heal" | Only the NCA fine-tuned on real WHAD frames passes the gate (R29): 0.0397 vs edge speed 0.0386 at 3.8 h (+3%), better at 1.9 h and 9.5 h. The simulator-only NCA fails (+30%). The shipped forecaster is the real-data NCA, with calibrated edge speed as the fallback. | "a forecaster fine-tuned on real wound videos, calibrated on unseen wounds"; the simulator-only NCA drives the draw tool. |
 | "The NCA reproduces the simulator" | Criterion #24 not met (area error 0.042 vs the sim's own spread 0.014). | "learned to approximate those rules" |
 | "Spots anomalies / triages" | Only the stall flag ships (AUC 0.85, precision 0.57, recall 0.62 at 3.8 h). Out-of-band doesn't predict anything; measure-again isn't shipped. | "flags wells likely to stall" |
 | "Shows whether cells move less or multiply less" | Design non-goal; closure curves can't separate the two; WHAD is mitomycin-treated. | "the simulator keeps movement and division separate, so the next experiment is telling which one a treatment changes" |

@@ -19,7 +19,7 @@ Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is 
 - `python -I data/build_curves.py` to build `data/processed/*.csv` from raw data
 - `python eval/run_baselines.py [embryo|zaritsky ...]` to score the baselines (results in `eval/results/`)
 - `python contracts/validate.py contracts/example_forecast.json` to check forecast JSON against `contracts/forecast.schema.json` (exit 1 on failure); `web/data/*.json` use this format too (refusal files in web/data/samples are the exception)
-- Viewer dev: `python3 -m http.server 8000 --directory web` once `web/index.html` exists; design mockups were removed (archived at git tag `archive/mockups-2026-11-15`)
+- Viewer dev: `python3 -m http.server 8010 --bind 127.0.0.1` from the repo root, then open http://127.0.0.1:8010/web/index.html (the app reads agent/ and eval/ files, so do not serve web/ alone); design mockups were removed (archived at git tag `archive/mockups-2026-11-15`)
 - Lint: none configured; check syntax with `python -m compileall -q data eval contracts sim nca`
 - `python -m pytest -q tests/` to run tests (P1 pipeline: contract, scorer, segmenter, upload refusals, folds; ~40 s)
 - P2 sim (sim/, docs/sim.md): `python sim/calibrate.py` (fits), `python sim/forecast.py` (sim_ensemble gate files), `python sim/upload.py` (masks -> forecast JSON)
