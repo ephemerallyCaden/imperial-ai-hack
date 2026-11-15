@@ -49,6 +49,8 @@ Frames -> texture segmenter (wound = low-texture region) -> wound area curve -> 
 "Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes. Our cleanest version beats every model at the earliest cut-off (1.9 h: 0.0530 vs 0.0562 for edge speed) and at 9.5 h, and is within a few percent in between. What made it work: training on real frames, giving it the same early parameter estimates it gets at forecast time, and averaging three training runs. Adding a second dataset (Zaritsky) made it worse, so we didn't."
 _Earlier answer (simulator-only NCA):_
 "Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0495 vs 0.0385), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
+**Which model does the product use?** "The real-data NCA. When a scientist uploads frames, we fit the wound's speed parameters from those frames, roll out the NCA 50 times and calibrate the band with its own errors on held-out wounds. If anything fails, it falls back to the simple edge-speed model and says so in the output."
+
 **Why not just trust the NCA's own spread?** "Uncalibrated, its 90% band covers 14% of what happens (the simulator's 21%): member spread is too small. The same conformal step brings both to 93%."
 
 **Is anything live?**
