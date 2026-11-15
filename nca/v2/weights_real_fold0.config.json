@@ -1,0 +1,22 @@
+{
+ "version": "v2",
+ "tm_min": 0.05,
+ "tm_max": 500.0,
+ "bias_min": 0.25,
+ "bias_max": 0.9,
+ "division": 1.0,
+ "follow": true,
+ "data": {
+  "follow": true,
+  "tm_min": 0.05,
+  "tm_max": 500.0,
+  "early_t": 1.9
+ },
+ "finetune": {
+  "recipe": "nca/finetune_real.py (P1)",
+  "fold": "0",
+  "steps": 800,
+  "select": "last",
+  "fits": "sim/fits/whad_fits_follow.json"
+ }
+}
