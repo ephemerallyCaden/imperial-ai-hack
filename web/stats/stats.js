@@ -4,7 +4,7 @@ import { renderEvidence } from "../ops/evidence.js";
 import { mountReplay } from "./replay.js";
 import { ROOT } from "../lib/data.js";
 
-export async function mount(el) {
+export async function mount(el, ctx) {
   const links = ["../ops/ops.css", "./stats.css"].map(h => Object.assign(document.createElement("link"), { rel: "stylesheet", href: new URL(h, import.meta.url).href }));
   links.forEach(l => document.head.appendChild(l));
   const host = Object.assign(document.createElement("div"), { className: "stats" });
@@ -13,7 +13,7 @@ export async function mount(el) {
   host.append(live, ev);
   el.replaceChildren(host);
   let stop = () => {};
-  try { stop = await mountReplay(live, { root: ROOT }); } catch (e) { console.error(e); live.innerHTML = `<div class="error">${e.message}</div>`; }
+  try { stop = await mountReplay(live, { root: ROOT, ctx }); } catch (e) { console.error(e); live.innerHTML = `<div class="error">${e.message}</div>`; }
   try { await renderEvidence(ev); } catch (e) { console.error(e); ev.innerHTML = `<div class="error">${e.message}</div>`; }
   return () => { stop(); links.forEach(l => l.remove()); el.replaceChildren(); };
 }
