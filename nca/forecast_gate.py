@@ -1,7 +1,7 @@
 """Gate forecasts (#25/#26): NCA on P1's WHAD series, splits, cut-offs and conformal calibration.
 
 python nca/forecast_gate.py [--fits sim/fits/whad_fits.json] [--self-fit]  -> eval/forecasts/whad/{split}/{model}_{cut}h.json
-v2 (follower rule): python nca/forecast_gate.py --weights nca/v2/weights.pt --name nca_follow --no-det --fits <follower fits>
+v2 (follower rule): python nca/forecast_gate.py --weights nca/v2/weights.pt --name nca_follow   (follower fits picked by the rule; also writes nca_follow_deterministic)
 Series, splits (loo_all, loo_manual, CC_to_C61), cut-offs (1.9/3.8/5.7/9.5 h), forecast grid, T = 19 h and the
 calibration all come from P1's eval/forecast_baselines.py (imported, not reimplemented). The NCA only supplies the
 point trajectory that P1's leave-one-wound-out conformal step wraps, exactly as for the statistical baselines:
@@ -130,7 +130,9 @@ def main():
         det_name = "nca_deterministic" if a.name == "nca_ensemble" else f"{a.name}_deterministic"  # v1 name kept
         BASELINES[a.name] = make("median"); BASELINES[det_name] = make("det")
         for split, (test, pool) in FB.splits("whad", S).items():
-            test = {k for k in test if k in traj}; pool = {k for k in pool if k in traj}
+            if missing := sorted(test - traj.keys()):  # never silently shrink P1's test set
+                raise RuntimeError(f"{split} cut {cut:g}: no NCA trajectory for P1 test series {missing}")
+            pool = {k for k in pool if k in traj}
             d = f"{a.out}/whad/{split}"; os.makedirs(d, exist_ok=True)
             for model in (a.name,) + (() if a.no_det else (det_name,)):
                 doc = FB.forecast_file("whad", split, model, cut, S, test, pool, G, G_long, T)
