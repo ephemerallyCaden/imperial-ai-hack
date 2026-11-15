@@ -183,6 +183,7 @@ def cache(monkeypatch, tmp_path):
     return root
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions and ownership")
 def test_tgz_unpacked_safely(tmp_path, cache, monkeypatch):
     tgz = _tgz(tmp_path / "best.tgz", [("run/best/adapter_config.json", "file")])
     d = intake._adapter_dir(tgz)
@@ -196,6 +197,7 @@ def test_tgz_unpacked_safely(tmp_path, cache, monkeypatch):
         intake._adapter_dir(str(tmp_path / "empty"))
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions and ownership")
 @pytest.mark.parametrize("members, why", [
     ([("../evil/adapter_config.json", "file")], "'..' path"),
     ([("/abs/adapter_config.json", "file")], "absolute"),
@@ -209,6 +211,7 @@ def test_tgz_traversal_and_links_refused(tmp_path, cache, members, why):
     assert not (tmp_path / "evil").exists() and not any(n.startswith("intake_adapter_") for n in os.listdir(cache))
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions and ownership")
 def test_tgz_refused_member_falls_back_with_basename_only(tmp_path, cache, monkeypatch):
     tgz = _tgz(tmp_path / "bad.tgz", [("adapter_config.json", "file"), ("link", "symlink")])
     monkeypatch.setenv("STITCH_INTAKE_BACKEND", "adapter")
@@ -219,6 +222,7 @@ def test_tgz_refused_member_falls_back_with_basename_only(tmp_path, cache, monke
     assert str(tmp_path) not in json.dumps(r)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions and ownership")
 def test_cache_owned_by_others_or_shared_refused(tmp_path, cache, monkeypatch):
     cache.mkdir(mode=0o700)
     os.chmod(cache, 0o777)

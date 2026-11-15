@@ -83,7 +83,7 @@ def score_mod():
 
 def schema():
     if "schema" not in _mods:
-        with open(os.path.join(ADAPTION, "schema.json")) as f:
+        with open(os.path.join(ADAPTION, "schema.json"), encoding="utf-8") as f:
             _mods["schema"] = json.load(f)
     return _mods["schema"]
 
@@ -272,7 +272,7 @@ def _model_name(base):
 def _base_id(adir=None):
     cfg = {}
     if adir:
-        with open(os.path.join(adir, "adapter_config.json")) as f:
+        with open(os.path.join(adir, "adapter_config.json"), encoding="utf-8") as f:
             cfg = json.load(f)
     return os.environ.get("STITCH_INTAKE_BASE", "").strip() or cfg.get("base_model_name_or_path") or DEFAULT_BASE
 
@@ -554,7 +554,8 @@ def extract(protocol_text):
 def run_eval(preds_path=None, gold_path=None, backend=None):
     gold_path = gold_path or os.path.join(ADAPTION, "test_real.jsonl")
     sm = score_mod()
-    gold = sm.load(gold_path)
+    with open(gold_path, encoding="utf-8") as f:   # not sm.load: it opens with the locale encoding (cp1252 on Windows)
+        gold = [json.loads(l) for l in f if l.strip()]
     backend = backend or _env_backend()
     local = backend in ("adapter", "base")
     style = prompt_style() if local else None   # fail before any model load on a bad setting
@@ -566,7 +567,7 @@ def run_eval(preds_path=None, gold_path=None, backend=None):
             reply = f"ERROR {short_error(e)}"
         preds.append({"id": r["id"], "completion": reply})
     if preds_path:
-        with open(preds_path, "w") as f:
+        with open(preds_path, "w", encoding="utf-8") as f:
             f.writelines(json.dumps(p) + "\n" for p in preds)
     name = f"{backend}:{model or 'unknown'}"
     how = f"prompt style {style} (STITCH_INTAKE_PROMPT_STYLE; open item, see agent/intake.py)" if local \
@@ -588,7 +589,7 @@ def main(argv=None):
     if a.eval:
         run_eval(a.preds, backend=a.backend)
     elif a.text:
-        t = open(a.text).read() if os.path.isfile(a.text) else a.text
+        t = open(a.text, encoding="utf-8").read() if os.path.isfile(a.text) else a.text
         print(json.dumps(extract(t), indent=2))
     else:
         ap.error("give --eval or --text")
