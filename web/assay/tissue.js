@@ -2,7 +2,8 @@
 // design/prototypes/glass-dish/look.js: toon rig + material, cool hue shift, skin age ramp): hex columns, colour = state
 // and cell age, height = state as in the mockup (wound 0.08 floor, leading edge <= 0.6, new tissue 0.7 -> 1, intact ~1).
 // Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
-// setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes; colour = simulated cell age, not a measurement.
+// setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes, grown from the field centre on and shrunk
+// back to it off; colour = simulated cell age, not a measurement.
 // The field is MODELLED, never tracked cells: a precomputed v2 NCA density playback (web/public/sim/nca_follow_*.json,
 // density only; setPlayback swaps it without rebuilding the scene), and the frame shown is the playback frame whose
 // wound area best matches the area curve at time t. Live drawing (web/assay/live.js) feeds
@@ -11,12 +12,11 @@
 // mockup's density), independent of the model grid. Each hex samples its source density field bilinearly at its centre
 // (playback and live: the coarse NCA density). A hex is a sample, not one cell.
 // Performance: two InstancedMeshes (colour + matte grey); per frame only the height entry of each instance matrix is
-// written in place, colours only when the field changes, nothing is allocated in the frame loop.
+// written in place, colours only when the field changes or the heat front moves, nothing is allocated in the frame loop.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { densityFrame } from "../public/sim/js/playback.js";
 import { outline as areaOutline, displayOutline } from "../public/sim/js/smooth.js";
-import { edgeSpeed, stallSpeed } from "../edge/edge_speed.js";
 import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from "../vendor-design/look.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
@@ -29,7 +29,6 @@ const PAL = { intact: hexNum(tok("--cell-intact", "#C68B6E")), edge: hexNum(tok(
 const SCENE_BG = hexNum(tok("--scene-bg", "#120A09"));
 const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11 };                // tokens.css --ghost-* (linear)
 export const STATE_LABEL = { wound: "Wound", intact: "Intact", edge: "Leading edge", fresh: "New tissue" };
-const STALL = { stalled: 0xFF2D2D, moving: 0xE8ECEF, dim: 0.18 };   // edge-stall overlay: edges slower than stall pace red
 const STATES = ["wound", "intact", "edge", "fresh"];     // state codes 0..3
 const HY = Math.sqrt(3) / 2, S = 0.5;                    // S = world units per lattice site
 // height of density 1: the mockup's column proportions (look.js HMAX per 0.5 world units of hex spacing) at this hex spacing
@@ -210,24 +209,18 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   }
 
   let sel = null, cur = null, moving = true, heat = false;   // heat: age heatmap overlay on non-wound hexes (look.js heatColour)
-  // ---------- edge-stall overlay: front speed from the real wound's area change (prev = the frame matching the area dt
-  // hours earlier); the hex grid is read as a rectangle (10 µm hexes), edges below the stall pace (eval/flags.py rule) red ----------
-  let stall = null, stallOpts = null;
-  const HEX_UM = SITE_UM * DX;
-  function computeStall() {
-    if (!stallOpts || !cur?.wound) { stall = null; return; }
-    const m0 = frameData(frameForArea(stallOpts.prevArea), f0.wound).wound, m1 = cur.wound;
-    const e = edgeSpeed(m0, m1, NY, NX, stallOpts.dtHours, HEX_UM);
-    const front = new Float32Array(COUNT).fill(NaN); for (const p of e.sites) front[p.i] = p.v;
-    let wn = 0; for (let k = 0; k < COUNT; k++) wn += m1[k];
-    const pace = stallSpeed(wn * HEX_UM * HEX_UM * HY, e.sites.length * HEX_UM, stallOpts.cutH, stallOpts.horizonH);
-    const v = new Float32Array(COUNT).fill(NaN); let edges = 0, slow = 0;
-    for (let k = 0; k < COUNT; k++) {
-      if (m1[k]) continue; let b = Infinity;
-      for (let q = 6 * k; q < 6 * k + 6; q++) { const m = nb[q]; if (m >= 0 && !Number.isNaN(front[m])) b = Math.min(b, front[m]); }
-      if (b < Infinity) { v[k] = b; edges++; if (pace != null && b < pace) slow++; }
-    }
-    stall = { v, pace, stalledFrac: edges ? slow / edges : 0 };
+  // heat front: radius R (sites) from the field centre; hex k shows lerp(cell colour, heat colour, smoothstep((R - dist_k) / HEAT_W)),
+  // R eases out to HEAT_R1 (every hex heat) on and back to 0 off, 700 ms for a full sweep; a toggle mid-way reverses from R
+  const dist = new Float32Array(COUNT); let rMax = 0;
+  for (let k = 0; k < COUNT; k++) { dist[k] = Math.hypot(hu[k] - FW / 2, hv[k] - FH / 2); if (dist[k] > rMax) rMax = dist[k]; }
+  const HEAT_W = 0.06 * rMax, HEAT_R1 = rMax + 1.01 * HEAT_W, HEAT_MS = 700;
+  let heatR = 0, hr0 = 0, hr1 = 0, ht0 = 0, hDur = 1, heatAnim = false;
+  const lastMix = new Float64Array(COUNT), colH = new THREE.Color();   // heat mix each colour was written for
+  function stepHeat() {
+    const u = reduced ? 1 : Math.min(1, (performance.now() - ht0) / hDur);
+    heatR = u >= 1 ? hr1 : hr0 + (hr1 - hr0) * (1 - (1 - u) ** 3);   // ease-out cubic
+    if (u >= 1) heatAnim = false;
+    if (cur) writeColours();
   }
   const liveFd = { dens: new Float32Array(COUNT), wound: new Uint8Array(COUNT), state: new Uint8Array(COUNT) };   // reused per live step
   // full write: instance placement + membership (colour mesh inside the selection, grey mesh outside) + colours
@@ -242,19 +235,21 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     dull.visible = !!sel; cols.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
     writeColours();
   }
-  // colours (look.js cellColour, or heatColour under the age heatmap), only for hexes whose state or age changed since
-  // they were last written (setHeat clears lastAge so every hex is rewritten once)
+  // colours (look.js cellColour, blended toward heatColour by the heat front; wound hexes keep their colour), only for
+  // hexes whose state, age or heat mix changed since they were last written
   function writeColours() {
-    const st = cur.state;
+    const st = cur.state, iw = 1 / HEAT_W; let n = 0;
     for (let k = 0; k < COUNT; k++) {
-      const s = st[k], a = age[k]; if (s === lastS[k] && a === lastAge[k]) continue;
-      lastS[k] = s; lastAge[k] = a;
+      const s = st[k], a = age[k];
+      let m = s === 0 ? 0 : (heatR - dist[k]) * iw; m = m <= 0 ? 0 : m >= 1 ? 1 : m * m * (3 - 2 * m);
+      if (s === lastS[k] && a === lastAge[k] && m === lastMix[k]) continue;
+      lastS[k] = s; lastAge[k] = a; lastMix[k] = m; n++;
       const o = 3 * k, g = GREY[s] * (s === 1 ? 0.85 + 0.3 * rnd[k] : 1);
-      if (stall) { const v = stall.v[k]; if (!Number.isNaN(v)) col.setHex(stall.pace != null && v < stall.pace ? STALL.stalled : STALL.moving); else { cellColour(col, STATES[s], a, rnd[k], ramp); col.multiplyScalar(STALL.dim); } }
-      else if (heat && s !== 0) heatColour(col, a, ramp); else cellColour(col, STATES[s], a, rnd[k], ramp);
+      if (m === 1) heatColour(col, a, ramp);
+      else { cellColour(col, STATES[s], a, rnd[k], ramp); if (m > 0) col.lerp(heatColour(colH, a, ramp), m); }
       cc[o] = col.r; cc[o + 1] = col.g; cc[o + 2] = col.b; dc[o] = dc[o + 1] = dc[o + 2] = g;
     }
-    cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
+    if (n) cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
   }
   // mockup heights by state: wound floor, leading edge at most 0.6 (lower where the density is), healed tissue 0.7 -> 1
   // over its first 25 steps, then intact x (0.92 + 0.16 rnd)
@@ -434,6 +429,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   bornUpTo(0); show(f0, bornPb, 0, SPAN_PB); writeAll();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
+    if (heatAnim) stepHeat();
     if (moving) { ease(reduced ? 1 : dt); if (sel && !moving) emitSel(); }
     if (fly) { fly.t = reduced ? 1 : Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
     controls.update(); renderer.render(scene, camera);
@@ -446,18 +442,14 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     setPlayback(p) {
       if (p === pb) return;
       load(p); bornUpTo(0); show(f0, bornPb, 0, SPAN_PB); drawOutline(f0.outline);
-      if (stallOpts) { computeStall(); lastAge.fill(NaN); writeColours(); }
     },
     playback: () => pb,
     showArea(area) {
       const f = frameForArea(area); if (cur && f === cur.f) return cur;
       bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline);
-      if (stallOpts) { computeStall(); lastAge.fill(NaN); writeColours(); }
       return cur;
     },
-    // edge-stall overlay: opts = { prevArea, dtHours, cutH, horizonH } or null (off) -> { pace, stalledFrac } | null
-    setStall(opts) { stallOpts = opts; computeStall(); lastAge.fill(NaN); if (cur) writeColours(); return stall && { pace: stall.pace, stalledFrac: stall.stalledFrac }; },
-    isStall: () => !!stallOpts, zoomLevel, setZoom,
+    zoomLevel, setZoom,
     // live field { data, w, h, perSite, norm?, level, step? } sampled onto the hexes; `fresh` (Uint8Array per hex) is kept
     // by the caller: pass the same array each time and it accumulates every hex that was ever wound (clear it on reset).
     // step (optional): the NCA step of this state, for speed-independent cell ages; default = states received so far
@@ -481,8 +473,12 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
     onFrame(cb) { onFrameCb = cb; },
-    // age heatmap overlay: recolours only (no change to heights, playback or the live run)
-    setHeat(on) { heat = !!on; lastAge.fill(NaN); if (cur) writeColours(); }, isHeat: () => heat,
+    // age heatmap overlay: recolours only (no change to heights, playback or the live run); animated by the heat front
+    setHeat(on) {
+      heat = !!on; const r1 = heat ? HEAT_R1 : 0; if (heatAnim ? r1 === hr1 : r1 === heatR) return;
+      hr0 = heatR; hr1 = r1; ht0 = performance.now(); hDur = Math.max(1, HEAT_MS * Math.abs(hr1 - hr0) / HEAT_R1); heatAnim = true;
+    },
+    isHeat: () => heat,
     snapshot: () => canvas.toDataURL("image/png"),
     dispose() {
       renderer.setAnimationLoop(null); ro.disconnect(); controls.dispose();
