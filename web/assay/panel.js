@@ -33,7 +33,8 @@ export function decisionCard(s) {
       <div class="st-kicker">Decision card · code schedule advice</div>
       <h3>${esc(sch ? `${SCHEDULE_LABEL[sch.action] || sch.action}${sch.next_image_hours != null ? ` (${sch.next_image_hours} h)` : ""}` : "No schedule advice in this file")}</h3>
       ${sch ? `<p>${esc(sch.evidence)}</p>` : ""}
-      <p class="as-note">No agent run is recorded for this sample, so there is no proposal to approve. The schedule advice comes from data/upload.py.</p>
+      <p class="as-note">${sourceKind === "upload" ? "Your upload was processed in this browser; no agent ran, so there is no proposal to approve. The schedule advice uses data/upload.py's rules (port in web/upload)."
+        : "No agent run is recorded for this sample, so there is no proposal to approve. The schedule advice comes from data/upload.py."}</p>
       <div class="as-btns"><button class="st-btn" disabled>${ICON.check}Approve</button><button class="st-btn" disabled>${ICON.x}Reject</button><button class="st-btn" data-act="why">${ICON.help}Why?</button></div>
     </section>`;
   }
@@ -84,7 +85,7 @@ export function decisionCard(s) {
 }
 
 // ---------- refused layout (panel_refused) ----------
-export function refusedPanel(doc, check) {
+export function refusedPanel(doc, check, source = "upload.py") {
   const d = check?.decision;
   return `<section class="st-card st-card--forced as-card">
       <div class="st-kicker">Decision card · forced by code</div>
@@ -93,7 +94,7 @@ export function refusedPanel(doc, check) {
       <div class="as-btns"><button class="st-btn st-btn--primary" data-act="upload">${ICON.upload}Replace image…</button><button class="st-btn" data-act="sample">${ICON.flask}Try a sample</button></div>
     </section>
     <section class="st-panel--solid as-box">
-      <div class="st-kicker">Why it was refused (from upload.py)</div>
+      <div class="st-kicker">Why it was refused (from ${esc(source)})</div>
       <ul class="as-list">${(doc.reasons || []).map(r => `<li>${esc(r)}</li>`).join("")}</ul>
       <p class="as-caption">Reasons are listed verbatim from the refusal file (refused: true, reasons: […]).</p>
     </section>
