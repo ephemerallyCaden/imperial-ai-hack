@@ -59,7 +59,7 @@ export async function mount(el, ctx) {
               <input class="as-zoomr" type="range" min="0" max="1" step="0.01" value="0" aria-label="Zoom">
               <button class="as-ibtn" data-act="zoom-out" aria-label="Zoom out (−)" title="Zoom out · −">−</button>
             </div>
-            <button class="as-ibtn" data-act="orbit" aria-pressed="true" aria-label="Idle orbit (I)" title="Idle orbit · I"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/><circle cx="12" cy="12" r="1.6"/></svg></button>
+            <button class="as-ibtn" data-act="orbit" aria-pressed="true" aria-label="Idle orbit (I)" title="Idle orbit: on · I"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/><circle cx="12" cy="12" r="1.6"/></svg></button>
             <button data-act="select" hidden></button><button data-act="clear" hidden></button>
           </div>
           <div class="as-hud as-hud-bl">
@@ -210,6 +210,7 @@ export async function mount(el, ctx) {
 
   async function select(id) {
     const it = S.items.find(i => i.id === id); if (!it) return;
+    tissue?.resumeIdleOrbit();   // a wound switch: the idle orbit (if on) turns again, whatever the view was held for
     const v = VIEWS[it.kind] || null;
     if (special && special !== v) { special.leave(); $(".as-timeline").hidden = false; }
     special = v;
@@ -526,12 +527,13 @@ export async function mount(el, ctx) {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
   }
-  // idle orbit (button, I, View menu): tissue.js turns the camera slowly about its target after a few seconds without input on the
-  // 3D view; on by default, the choice kept for the session; no button under prefers-reduced-motion (it never runs then)
-  const ORBIT_KEY = "assay.idleOrbit";
+  // idle orbit (button, I, View menu): tissue.js turns the camera slowly about its target, stopping for 20 s after a drag, wheel
+  // or zoom on the 3D view; on by default (pressed = on), the choice kept for the session (key renamed so an "off" saved before
+  // the orbit started at once is dropped); no button under prefers-reduced-motion (it never runs then)
+  const ORBIT_KEY = "assay.idleOrbit.v2";
   function setOrbit(on) {
     if (!tissue) return;
-    tissue.setIdleOrbit(on); $('[data-act="orbit"]').setAttribute("aria-pressed", on);
+    tissue.setIdleOrbit(on); const b = $('[data-act="orbit"]'); b.setAttribute("aria-pressed", on); b.title = `Idle orbit: ${on ? "on" : "off"} · I`;
     try { sessionStorage.setItem(ORBIT_KEY, on ? "1" : "0"); } catch { /* storage blocked: the default applies next time */ }
   }
   const rootCss = getComputedStyle(document.documentElement), cv = (n, h) => rootCss.getPropertyValue(n).trim() || h;

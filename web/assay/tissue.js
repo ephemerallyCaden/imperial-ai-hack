@@ -307,8 +307,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   }
   function floorHit(e) { setRay(e); const p = new THREE.Vector3(); return ray.ray.intersectPlane(floor, p) ? p : null; }
   const inField = (u, v) => u >= 0 && v >= 0 && u <= FW && v <= FH;
-  function pick(e) {   // -> hex k under the pointer (top of its column), or -1
-    setRay(e);
+  function pick(e) {   // -> hex k under the pointer (top of its column), or -1; e = null: the last pointer position (ndc), seen from the camera now
+    if (e) setRay(e); else ray.setFromCamera(ndc, camera);
     if (!ray.ray.intersectPlane(floor, pB)) return -1;
     if (!ray.ray.intersectPlane(topPlane, pA)) pA.copy(pB);
     for (let s = 0; s <= 32; s++) {
@@ -397,7 +397,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (tool !== "select" || !dragStart) return; dragStart = null; setTool(null);
     setSel(sel && (sel.x1 - sel.x0 < 0.5 || sel.z1 - sel.z0 < 0.5) ? null : sel); emitSel();
   };
-  const onLeave = () => { ring.visible = false; lastK = -1; onHover && onHover(null); };
+  const onLeave = () => { ring.visible = false; lastK = -1; overE = null; onHover && onHover(null); };
   canvas.addEventListener("pointerdown", onDown); canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerup", onUp); canvas.addEventListener("pointerleave", onLeave);
   const onContext = e => e.preventDefault(); canvas.addEventListener("contextmenu", onContext);
@@ -415,25 +415,31 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     cells: () => { const e = edgePoint(); return { p: e.clone().add(V(-1.1, 1.5, 1.6)), t: e.clone().add(V(0, 0.35, 0)) }; },
   };
   let fly = null, view = "field";
-  function goTo(n) { view = n; const v = views[n](); fly = { t: 0, p0: camera.position.clone(), q0: controls.target.clone(), p1: v.p, q1: v.t }; }
+  function goTo(n) { holdUntil = 0; view = n; const v = views[n](); fly = { t: 0, p0: camera.position.clone(), q0: controls.target.clone(), p1: v.p, q1: v.t }; }   // holdUntil = 0: a view reset or preset, the idle orbit turns again once it lands
   { const v = views.field(); camera.position.copy(v.p); controls.target.copy(v.t); }
   const easeIO = x => x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // ---------- idle orbit: after IDLE_S s with no input on the 3D view the camera turns slowly about the orbit target
-  // (azimuth only, so the user's distance and tilt stay), eased in over ORBIT_EASE s. Pointer or wheel input on the canvas,
-  // a zoom or a camera fly stops it at once and restarts the wait; never while a pointer is down, a fly runs, the tab is
-  // hidden or under prefers-reduced-motion. On by default; assay.js keeps the per-session choice (setIdleOrbit). ----------
-  const IDLE_S = 6, ORBIT_W = 2 * Math.PI / 150, ORBIT_EASE = 1.5;   // rad/s: one turn per 2.5 min
-  let idleOn = true, held = false, lastInput = performance.now(), spin = 0;   // spin 0..1 = eased share of ORBIT_W
-  const wake = () => { lastInput = performance.now(); spin = 0; };
+  // ---------- idle orbit: the camera turns slowly about the orbit target (azimuth only, so the user's distance and tilt
+  // stay), eased in over ORBIT_EASE s. It turns from load, and at once after a wound switch (resumeIdleOrbit), a view reset
+  // or preset (goTo, once the fly lands) or switching it on. A press on the canvas (orbit, brush, box), a wheel, a zoom or a
+  // camera fly stops it at once, and it stays stopped until HOLD_S s after the last of those, so the view the user went to
+  // holds while they study it. Hover never stops or delays it: the hover tip and brush ring re-pick the hex under a resting
+  // pointer as the view turns. Never while a pointer is down, a fly runs, the tab is hidden or under prefers-reduced-motion.
+  // On by default; assay.js keeps the per-session choice (setIdleOrbit). ----------
+  const HOLD_S = 20, ORBIT_W = 2 * Math.PI / 150, ORBIT_EASE = 1.5;   // rad/s: one turn per 2.5 min
+  let idleOn = true, held = false, holdUntil = 0, spin = 0;   // holdUntil: performance.now() of the hold's end (0 = none); spin 0..1 = eased share of ORBIT_W
+  let overE = null, tipK = -1;   // last pointermove over the canvas (null once it leaves) and the hex the hover tip shows
+  const wake = () => { holdUntil = performance.now() + HOLD_S * 1000; spin = 0; };   // a deliberate input: stop now, then hold
+  const resume = () => { holdUntil = 0; };
   const onPress = () => { held = true; wake(); }, onRelease = () => { if (held) { held = false; wake(); } };
-  const onHoverMove = e => { if (!e.buttons) held = false; wake(); };   // a lost pointerup (e.g. alt-tab mid-drag) heals on hover
+  const onHoverMove = e => { overE = e; tipK = -2; if (!e.buttons) held = false; };   // a lost pointerup (e.g. alt-tab mid-drag) heals on hover
+  const onVisible = () => { spin = 0; };   // back in the tab: ease in again
   canvas.addEventListener("pointerdown", onPress); canvas.addEventListener("pointermove", onHoverMove); canvas.addEventListener("wheel", wake, { passive: true });
-  window.addEventListener("pointerup", onRelease); window.addEventListener("pointercancel", onRelease); document.addEventListener("visibilitychange", wake);
+  window.addEventListener("pointerup", onRelease); window.addEventListener("pointercancel", onRelease); document.addEventListener("visibilitychange", onVisible);
   function idleTurn(dt) {
-    if (fly || held || document.hidden) return wake();
-    if (performance.now() - lastInput < IDLE_S * 1000) return;
-    if (spin === 0) onLeave();   // the view starts turning under a resting pointer: drop the hover tip and brush ring
+    if (held || fly && holdUntil) wake();   // the hold counts from the release, or from where a box zoom lands
+    if (fly || document.hidden || performance.now() < holdUntil) { spin = 0; return; }
+    holdUntil = 0;
     spin = Math.min(1, spin + dt / ORBIT_EASE);
     const a = ORBIT_W * spin * spin * (3 - 2 * spin) * dt, c = Math.cos(a), s = Math.sin(a);
     const p = camera.position, t = controls.target, dx = p.x - t.x, dz = p.z - t.z;
@@ -482,6 +488,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (fly) { fly.t = reduced ? 1 : Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
     if (idleOn && !reduced) idleTurn(dt);
     controls.update(); renderer.render(scene, camera);
+    // the view turned under a resting pointer: the hover tip and brush ring follow the hex now under it (never paints)
+    if (spin && overE) { const k = brush && !painting ? paint(null) : pick(null); if (k !== tipK) { tipK = k; hover(overE, k); } }
     onFrameCb && onFrameCb();
   });
 
@@ -521,8 +529,9 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     clearSelection() { setSel(null); emitSel(); },
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
-    // idle orbit on/off (the wait restarts); canIdleOrbit is false under prefers-reduced-motion, where it never runs
-    setIdleOrbit(on) { idleOn = !!on; wake(); }, isIdleOrbit: () => idleOn, canIdleOrbit: !reduced,
+    // idle orbit on (turns at once, eased in) / off (stops at once); resumeIdleOrbit drops the hold after an input (a wound
+    // switch); canIdleOrbit is false under prefers-reduced-motion, where it never runs
+    setIdleOrbit(on) { idleOn = !!on; spin = 0; resume(); }, isIdleOrbit: () => idleOn, canIdleOrbit: !reduced, resumeIdleOrbit: resume,
     onFrame(cb) { onFrameCb = cb; },
     // age heatmap overlay: recolours only (no change to heights, playback or the live run); animated by the heat front
     setHeat(on) {
@@ -538,7 +547,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
       canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointerleave", onLeave); canvas.removeEventListener("contextmenu", onContext);
       canvas.removeEventListener("pointerdown", onPress); canvas.removeEventListener("pointermove", onHoverMove); canvas.removeEventListener("wheel", wake);
-      window.removeEventListener("pointerup", onRelease); window.removeEventListener("pointercancel", onRelease); document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("pointerup", onRelease); window.removeEventListener("pointercancel", onRelease); document.removeEventListener("visibilitychange", onVisible);
       scene.traverse(o => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
       renderer.dispose(); canvas.remove();
     },
