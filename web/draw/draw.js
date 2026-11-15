@@ -1,306 +1,292 @@
-// Draw mode: freehand a wound on a confluent monolayer, then watch P2's cell-agent engine heal it under a fitted
-// preset (web/public/sim/js/worker.js, see docs/p2-handoff.md). Simulation under preset parameters, not a forecast:
-// no band and no coverage claim is ever shown here.
-import { FIELD_W as W, FIELD_H as H, SITE_UM, PRESETS_FOLLOW, presetLabelFor, presetCaptionFor, DEFAULT_RULE } from '../public/sim/js/engine.js';
-import { createRenderer, PAL } from './renderer.js';
+// Draw mode (#106, INT-3): P2's cell-agent engine + NCA band (docs/p2-handoff.md), as one mountable module.
+//   import { mountDraw } from './draw/draw.js'; mountDraw(document.querySelector('#draw'));
+// Two views:
+//   "Draw a wound": freehand wound on the locked 32x44 WHAD lattice, follow-rule presets, NO band (simulation, not a forecast).
+//   "Real wound":   exp1_partII_C61_P2 from the 3.0 h mask: sim (agents) vs NCA (density) vs observed, plus the NCA band
+//                   computed live in the worker from the same start and fit. Labelled uncalibrated, never a 90% interval.
+// Zoom keeps the same area at every scale: one viewport (centre + zoom) is shared by the smoothed view and the raw-agent view;
+// the raw agents take over at deep zoom (handoff rendering rule).
+import { PRESETS_FOLLOW, PRESET_LABEL_FOLLOW, PRESET_CAPTION_FOLLOW, FIELD_H as H, FIELD_W as W, SITE_UM } from '../public/sim/js/engine.js';
+import { viewFrame, agentFrame, densityFrame } from '../public/sim/js/playback.js';
+import { edgeSpeed, stallSpeed, speedColour } from '../edge/edge_speed.js';
 
-const T_END = 24;                                   // hours of simulated time per run
-const STEP_H = 0.1;                                 // one "step" on the readout = 0.1 h
-const SPEEDS = [0.5, 1, 2, 4];                      // x 0.1 h of sim time per worker frame (~30 frames/s)
-const SEED = 1;
-const PRESET_NAMES = { CC: 'Normal cells · MCF10A control', C61: 'CYR61 knocked down' };
-const SIMILAR = 'the fitted conditions differ little under this model';
-const BRUSHES = { S: 1.0, M: 1.8, L: 3.0 };          // brush radius in lattice sites
-const hexCss = (c) => '#' + c.toString(16).padStart(6, '0');
-const fmt = (x, d = 3) => x.toFixed(d);
+const SIM = new URL('../public/sim/', import.meta.url);
+const T_MAX = 24, HPF = 0.1, DEEP_ZOOM = 2.5, BRUSH = 2.2;
+const css = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+const pct = (f) => (100 * f).toFixed(1) + '%';
 
-export function mount(el, ctx) {
-  const css = document.createElement('link');
-  css.rel = 'stylesheet'; css.href = new URL('./draw.css', import.meta.url).href;
-  document.head.appendChild(css);
+function el(tag, attrs = {}, ...kids) {
+  const e = tag === 'svg' ? document.createElementNS('http://www.w3.org/2000/svg', 'svg') : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'class' ? e.setAttribute('class', v) : k.startsWith('on') ? e.addEventListener(k.slice(2), v) : e.setAttribute(k, v);
+  for (const c of kids) e.append(c);
+  return e;
+}
+const btn = (label, onclick, cls = '') => el('button', { class: 'st-btn ' + cls, type: 'button', onclick }, label);
+const chip = (text, cls = 'st-chip--honesty') => el('span', { class: 'st-chip ' + cls }, text);
 
-  el.innerHTML = `
-  <div class="dr">
-    <div class="dr-bar">
-      <span class="st-kicker">Tool</span>
-      <div class="st-seg">
-        <button class="st-btn" data-tool="draw">✎ Draw wound</button>
-        <button class="st-btn" data-tool="heal" disabled>✦ Heal</button>
-      </div>
-      <div class="st-seg" aria-label="Brush size">
-        ${Object.keys(BRUSHES).map((b) => `<button class="st-btn" data-brush="${b}" title="brush ${b}">${b}</button>`).join('')}
-      </div>
-      <button class="st-btn" data-clear hidden>Clear</button>
-      <span class="st-kicker">Preset</span>
-      <div class="st-seg">${Object.keys(PRESET_NAMES).map((p) => `<button class="st-btn" data-preset="${p}">${PRESET_NAMES[p]}</button>`).join('')}</div>
-      <div class="dr-chips">
-        <span class="st-chip st-chip--honesty" data-label>${presetLabelFor(DEFAULT_RULE)}</span>
-        <span class="st-chip st-chip--honesty">Not a forecast · no band · no agent</span>
-      </div>
-    </div>
+// ---------- one field renderer: smoothed density + outline, raw agents, or a coarse density, through a shared viewport ----------
+class Field {
+  constructor(canvas) {
+    this.c = canvas; this.g = canvas.getContext('2d'); this.zoom = 1; this.cx = W / 2; this.cy = H / 2;
+    this.off = document.createElement('canvas');
+  }
+  view() { // viewport in site coords, clamped to the lattice
+    const vw = W / this.zoom, vh = H / this.zoom;
+    const x0 = Math.min(Math.max(this.cx - vw / 2, 0), W - vw), y0 = Math.min(Math.max(this.cy - vh / 2, 0), H - vh);
+    return { x0, y0, vw, vh, s: this.c.width / vw };
+  }
+  toSite(ev) { const r = this.c.getBoundingClientRect(), v = this.view(); return [v.x0 + ((ev.clientX - r.left) / r.width) * v.vw, v.y0 + ((ev.clientY - r.top) / r.height) * v.vh]; }
+  blit(gw, gh, val, smooth) { // val(i) in 0..1 = occupancy -> wound..intact colour
+    const lo = hex(css('--cell-wound') || '#0B1116'), hi = hex(css('--cell-intact') || '#1F4F5C');
+    this.off.width = gw; this.off.height = gh;
+    const og = this.off.getContext('2d'), img = og.createImageData(gw, gh);
+    for (let i = 0; i < gw * gh; i++) { const v = val(i); for (let k = 0; k < 3; k++) img.data[4 * i + k] = lo[k] + (hi[k] - lo[k]) * v; img.data[4 * i + 3] = 255; }
+    og.putImageData(img, 0, 0);
+    const v = this.view(), sx = gw / W;
+    this.g.imageSmoothingEnabled = smooth;
+    this.g.clearRect(0, 0, this.c.width, this.c.height);
+    this.g.drawImage(this.off, v.x0 * sx, v.y0 * sx, v.vw * sx, v.vh * sx, 0, 0, this.c.width, this.c.height);
+  }
+  agents(occ) { this.blit(W, H, (i) => occ[i], false); this.grid(); }
+  smooth(fine, lines, alpha) { this.blit(fine.w, fine.h, (i) => fine.data[i] / 255, true); this.lines(lines, alpha); }
+  density(rho, h, w) { this.blit(w, h, (i) => rho[i], true); }
+  grid() { // hairline site grid at deep zoom so single cells read as cells
+    const v = this.view(); if (v.s < 9) return;
+    this.g.strokeStyle = 'rgba(5,6,7,.55)'; this.g.lineWidth = 1; this.g.beginPath();
+    for (let x = Math.ceil(v.x0); x <= v.x0 + v.vw; x++) { const p = (x - v.x0) * v.s; this.g.moveTo(p, 0); this.g.lineTo(p, this.c.height); }
+    for (let y = Math.ceil(v.y0); y <= v.y0 + v.vh; y++) { const p = (y - v.y0) * v.s; this.g.moveTo(0, p); this.g.lineTo(this.c.width, p); }
+    this.g.stroke();
+  }
+  edges(sites, perSite, vMax, stallV) {   // edge-speed ring (#117): sites in fine px, perSite fine px per lattice site
+    const v = this.view(), sz = v.s / perSite;
+    this.g.save(); this.g.globalAlpha = 0.55; this.g.fillStyle = '#050607'; this.g.fillRect(0, 0, this.c.width, this.c.height); this.g.restore();
+    for (const p of sites) {
+      const [r, g, b] = speedColour(p.v, vMax), x = (p.x / perSite - v.x0) * v.s, y = (p.y / perSite - v.y0) * v.s;
+      this.g.fillStyle = `rgb(${r},${g},${b})`; this.g.fillRect(x, y, sz + 0.5, sz + 0.5);
+      if (stallV != null && p.v < stallV) {   // never colour alone: stalled sites also get the amber flag hatch
+        this.g.strokeStyle = css('--accent') || '#E0A458'; this.g.lineWidth = 1;
+        this.g.beginPath(); this.g.moveTo(x, y + sz); this.g.lineTo(x + sz, y); this.g.stroke();
+      }
+    }
+  }
+  ring(px, py, perSite, r) {               // marks the slowest segment
+    const v = this.view(), x = (px / perSite - v.x0) * v.s, y = (py / perSite - v.y0) * v.s;
+    this.g.strokeStyle = css('--accent') || '#E0A458'; this.g.lineWidth = 2; this.g.setLineDash([3, 2]);
+    this.g.beginPath(); this.g.arc(x, y, r, 0, 2 * Math.PI); this.g.stroke(); this.g.setLineDash([]);
+  }
+  lines(lines, alpha) {
+    if (!lines || !alpha) return;
+    const v = this.view(); this.g.save(); this.g.globalAlpha = alpha; this.g.strokeStyle = css('--cell-edge') || '#EE7F2D'; this.g.lineWidth = 2;
+    for (const l of lines) { this.g.beginPath(); for (let k = 0; k < l.length; k += 2) this.g[k ? 'lineTo' : 'moveTo']((l[k] - v.x0) * v.s, (l[k + 1] - v.y0) * v.s); this.g.stroke(); }
+    this.g.restore();
+  }
+}
 
-    <div class="dr-stage">
-      <div class="dr-field"></div>
-      <div class="dr-draw">
-        <div class="dr-pad">
-          <canvas></canvas>
-          <div class="dr-empty"><span class="st-kicker">Draw canvas · freehand wound on a confluent monolayer</span>
-            <span class="st-caption">drag to draw the empty region (Shift-drag erases), then press Heal to run the cell-agent engine under the preset</span></div>
-        </div>
-      </div>
-      <span class="st-chip st-chip--honesty dr-honesty">Simulated cells · not tracked cells</span>
+// ---------- small SVG line chart: wound fraction vs hours ----------
+function chart(svg, { tMax, yMax, series, cut }) {
+  const Wd = 320, Hd = 150, L = 34, R = 16, T = 8, B = 22, X = (t) => L + (t / tMax) * (Wd - L - R), Y = (v) => T + (1 - v / yMax) * (Hd - T - B);
+  const path = (xs, ys) => xs.map((t, i) => (ys[i] == null ? '' : `${i ? 'L' : 'M'}${X(t).toFixed(1)},${Y(ys[i]).toFixed(1)}`)).join('');
+  let s = `<line x1="${L}" y1="${Y(0)}" x2="${Wd - R}" y2="${Y(0)}" stroke="var(--chart-axis)"/>`;
+  for (let t = 0; t <= tMax; t += tMax > 12 ? 6 : 2) s += `<text x="${X(t)}" y="${Hd - 6}" fill="var(--dim)" font-size="9" text-anchor="middle">${t} h</text>`;
+  for (const f of [0, yMax / 2, yMax]) s += `<line x1="${L}" x2="${Wd - R}" y1="${Y(f)}" y2="${Y(f)}" stroke="var(--chart-grid)"/><text x="${L - 4}" y="${Y(f) + 3}" fill="var(--dim)" font-size="9" text-anchor="end">${pct(f)}</text>`;
+  if (cut != null) s += `<line x1="${X(cut)}" x2="${X(cut)}" y1="${T}" y2="${Y(0)}" stroke="var(--chart-cut)" stroke-dasharray="2 3"/><text x="${X(cut) + 3}" y="${T + 8}" fill="var(--dim)" font-size="9">forecast from here</text>`;
+  for (const se of series) {
+    if (se.dots) s += se.t.map((t, i) => `<circle cx="${X(t)}" cy="${Y(se.v[i])}" r="1.8" fill="${se.color}"/>`).join('');
+    s += `<path d="${path(se.t, se.v)}" fill="none" stroke="${se.color}" stroke-width="${se.width || 1.3}" ${se.dash ? `stroke-dasharray="${se.dash}"` : ''}/>`;
+  }
+  svg.setAttribute('viewBox', `0 0 ${Wd} ${Hd}`); svg.innerHTML = s;
+}
+function scaleBar(vMax, stallV) {   // gradient legend with units and the stall-pace tick
+  const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => { const [r, g, b] = speedColour(t * vMax, vMax); return `rgb(${r},${g},${b}) ${t * 100}%`; }).join(',');
+  const tick = stallV != null ? `<i style="left:${Math.min(100, (100 * stallV) / vMax)}%"></i><span style="left:${Math.min(100, (100 * stallV) / vMax)}%">stall pace ${stallV.toFixed(2)} µm/h</span>` : '';
+  return `<b style="background:linear-gradient(90deg,${stops})"></b>${tick}<em>0 (slow)</em><em style="right:0">${vMax} µm/h (fast)</em>`;
+}
+const legend = (items) => el('div', { class: 'dr-legend' }, ...items.map(([c, t, dash]) => el('span', {}, el('i', { style: `border-top:2px ${dash ? 'dashed' : 'solid'} ${c}` }), t)));
 
-      <div class="st-panel st-panel--solid dr-float dr-tl" data-mag>
-        <h4 class="st-kicker">Magnification</h4>
-        <button class="st-btn" data-view="field">1× field</button>
-        <button class="st-btn" data-view="wound">5× wound</button>
-        <button class="st-btn" data-view="colony">10× colony</button>
-        <button class="st-btn" data-view="cells">20× cells</button>
-        <span class="st-caption" data-render></span>
-      </div>
+// ---------- view 1: draw a wound ----------
+function drawView(worker) {
+  const root = el('div', { class: 'dr-view' });
+  const canvas = el('canvas', { width: 660, height: 480, class: 'dr-canvas', 'aria-label': 'Drawing canvas: drag to draw a wound' });
+  const f = new Field(canvas), mask = new Uint8Array(W * H);
+  let state = 'draw', preset = 'CC', last = null, curve = { t: [], v: [] }, drawing = false;
+  const readT = el('span', { class: 'num' }, '0.0 h'), readF = el('span', { class: 'num' }, '—'), readV = el('span', {}, 'smoothed density');
+  const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Wound area over time' });
+  const hint = el('p', { class: 'st-caption' }, 'Drag on the field to draw a wound, then press Run.');
 
-      <div class="st-panel st-panel--solid dr-float dr-tr">
-        <h4 class="st-kicker">Field readout</h4>
-        <div class="st-row"><span>step</span><span data-r="step">–</span></div>
-        <div class="st-row"><span>time</span><span data-r="t">–</span></div>
-        <div class="st-row"><span>wound fraction</span><span data-r="wf">–</span></div>
-        <div class="st-row"><span>n cells</span><span data-r="cells">–</span></div>
-        <div class="st-row"><span>wound area</span><span data-r="area">–</span></div>
-        <span class="st-caption">from the engine frames · 32×44 sites at ${SITE_UM} µm · seed ${SEED}</span>
-      </div>
+  const run = btn('Run', () => (state === 'running' ? pause() : start()), 'st-btn--primary');
+  const step = btn('Step', () => { ensure(); worker.postMessage({ type: 'step', hours: 0.5 }); });
+  const reset = btn('Reset', () => { if (state === 'draw') return; pause(); worker.postMessage({ type: 'reset' }); curve = { t: [], v: [] }; });
+  const clear = btn('Clear', () => { pause(); mask.fill(0); state = 'draw'; last = null; curve = { t: [], v: [] }; render(); });
+  const sample = btn('Sample wound', () => { pause(); mask.fill(0); const r = 9; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x + 0.5 - W / 2) ** 2 + (y + 0.5 - H / 2) ** 2 <= r * r) mask[y * W + x] = 1; state = 'draw'; last = null; curve = { t: [], v: [] }; render(); });
+  const segCC = btn('CC', () => setPreset('CC')), segC61 = btn('C61', () => setPreset('C61'));
+  const zin = btn('+', () => zoomBy(1.5), 'st-btn--icon'), zout = btn('−', () => zoomBy(1 / 1.5), 'st-btn--icon');
+  zin.setAttribute('aria-label', 'Zoom in (+)'); zout.setAttribute('aria-label', 'Zoom out (−)');
 
-      <div class="st-panel st-panel--solid dr-float dr-mr">
-        <h4 class="st-kicker">This preset assumes</h4>
-        <p data-pname></p>
-        <p class="num" data-pparams></p>
-        <span class="st-caption" data-pcaption></span>
-        <span class="st-caption">${SIMILAR[0].toUpperCase() + SIMILAR.slice(1)}. Not modelled: cell division (off), seeding density, plate edges, imaging artefacts, drugs. For a forecast on your plate, use Assay.</span>
-      </div>
+  function setPreset(p) { preset = p; segCC.setAttribute('aria-pressed', p === 'CC'); segC61.setAttribute('aria-pressed', p === 'C61'); if (state !== 'draw') worker.postMessage({ type: 'preset', preset: p }); }
+  function ensure() {
+    if (state !== 'draw') return true;
+    if (!mask.some(Boolean)) { hint.textContent = 'Draw a wound first (or press Sample wound).'; return false; }
+    curve = { t: [], v: [] }; worker.postMessage({ type: 'init', w: W, h: H, wound: mask.slice(), preset, seed: 1, rule: 'follow' }); state = 'paused'; return true;
+  }
+  function start() { if (!ensure()) return; state = 'running'; run.textContent = 'Pause'; worker.postMessage({ type: 'run', hoursPerFrame: HPF }); }
+  function pause() { if (state === 'running') { worker.postMessage({ type: 'pause' }); state = 'paused'; } run.textContent = 'Run'; }
+  function zoomBy(k) { f.zoom = Math.min(6, Math.max(1, f.zoom * k)); render(); }
 
-      <div class="st-panel st-panel--solid dr-float dr-bl dr-legend">
-        <h4 class="st-kicker">Cell states · non-colour cues</h4>
-        <p><i style="background:${hexCss(PAL.intact)}"></i>Intact — full column</p>
-        <p><i style="background:${hexCss(PAL.edge)}"></i>Leading edge — shorter column</p>
-        <p><i style="background:${hexCss(PAL.fresh)}"></i>New tissue (inside the drawn wound) — rising column</p>
-        <p><i style="background:${hexCss(PAL.wound)}"></i>Wound — floor, near-black</p>
-        <span class="st-caption">smoothed field + wound outline; raw agents at 20×</span>
-      </div>
+  function render() {
+    const deep = f.zoom >= DEEP_ZOOM;
+    readV.textContent = deep ? 'cells (raw agents)' : 'smoothed density';
+    clear.hidden = !mask.some(Boolean);
+    if (!last) { f.agents(Uint8Array.from(mask, (m) => 1 - m)); readT.textContent = '0.0 h'; readF.textContent = mask.some(Boolean) ? pct(mask.reduce((a, b) => a + b, 0) / (W * H)) : '—'; }
+    else { deep ? f.agents(last.occ) : f.smooth(last.fine, last.outline.display.lines, last.outline.display.opacity); readT.textContent = last.t_hours.toFixed(1) + ' h'; readF.textContent = pct(last.wound_frac); }
+    chart(svg, { tMax: T_MAX, yMax: Math.max(0.05, curve.v[0] || 0.2), series: [{ t: curve.t, v: curve.v, color: 'var(--chart-observed)', width: 1.7 }] });
+  }
+  worker.addEventListener('message', ({ data: m }) => {
+    if (m.type !== 'frame' || state === 'draw') return;
+    last = m; curve.t.push(m.t_hours); curve.v.push(m.wound_frac);
+    if (m.t_hours >= T_MAX - 1e-9 || m.wound_frac === 0) pause();
+    render();
+  });
 
-      <div class="st-panel st-panel--solid dr-float dr-br" data-hint>
-        <h4 class="st-kicker">First-time hint</h4>
-        <p>Draw any shape, then press Heal. This shows how cells following the rules fitted to the chosen condition would close it, in theory. It makes no forecast claim. Clear appears once a wound is drawn.</p>
-        <button class="st-btn" data-hint-close>Got it</button>
-      </div>
-    </div>
+  const paint = (ev) => { // brush in site coords; only while still drawing
+    if (state !== 'draw') { hint.textContent = 'Press Clear to draw a new wound.'; return; }
+    const [sx, sy] = f.toSite(ev);
+    for (let y = Math.floor(sy - BRUSH); y <= sy + BRUSH; y++) for (let x = Math.floor(sx - BRUSH); x <= sx + BRUSH; x++)
+      if (x >= 0 && y >= 0 && x < W && y < H && (x + 0.5 - sx) ** 2 + (y + 0.5 - sy) ** 2 <= BRUSH * BRUSH) mask[y * W + x] = 1;
+    hint.textContent = 'Press Run to let the simulated cells close it.'; render();
+  };
+  canvas.addEventListener('pointerdown', (e) => { drawing = true; canvas.setPointerCapture(e.pointerId); paint(e); });
+  canvas.addEventListener('pointermove', (e) => drawing && paint(e));
+  canvas.addEventListener('pointerup', () => (drawing = false));
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); [f.cx, f.cy] = f.toSite(e); zoomBy(e.deltaY < 0 ? 1.25 : 0.8); }, { passive: false });
+  root.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === ' ') { e.preventDefault(); state === 'running' ? pause() : start(); }
+    else if (e.key === 'ArrowRight') step.click(); else if (e.key === '+' || e.key === '=') zoomBy(1.5); else if (e.key === '-') zoomBy(1 / 1.5);
+    else if (e.key === 'Escape' && !clear.hidden) clear.click(); else if (e.key === 'r') reset.click();
+  });
 
-    <div class="dr-transport">
-      <div class="st-seg">
-        <button class="st-btn st-btn--icon" data-act="step-back" aria-label="Step back" title="Step back (←)"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-9 7 9 7z"/></svg></button>
-        <button class="st-btn st-btn--icon st-btn--primary" data-act="play" aria-label="Play" title="Play / pause (Space)"><svg viewBox="0 0 24 24" data-icon><path d="M7 5l12 7-12 7z"/></svg></button>
-        <button class="st-btn st-btn--icon" data-act="step-forward" aria-label="Step forward" title="Step forward (→)"><svg viewBox="0 0 24 24"><path d="M18 5v14M6 5l9 7-9 7z"/></svg></button>
-      </div>
-      <div class="st-seg">${SPEEDS.map((s) => `<button class="st-btn" data-speed="${s}">${s}×</button>`).join('')}</div>
-      <span class="dr-status num" data-status></span>
-      <div class="dr-progress"><div></div></div>
-    </div>
-  </div>`;
+  const p = PRESETS_FOLLOW;
+  root.append(
+    el('div', { class: 'dr-stage' }, canvas, el('div', { class: 'dr-zoom' }, zout, zin)),
+    el('aside', { class: 'dr-side st-panel--solid' },
+      el('div', { class: 'st-kicker' }, 'Preset'), el('div', { class: 'st-seg' }, segCC, segC61),
+      el('p', { class: 'st-caption' }, `Tm: CC ${p.CC.Tm.toFixed(1)} h, C61 ${p.C61.Tm.toFixed(1)} h. The fitted conditions differ little under this model.`),
+      el('div', { class: 'dr-tools' }, run, step, reset, sample, clear),
+      el('div', { class: 'st-row' }, el('span', {}, 'Time'), readT),
+      el('div', { class: 'st-row' }, el('span', {}, 'Wound area'), readF),
+      el('div', { class: 'st-row' }, el('span', {}, 'View'), readV),
+      svg, legend([['var(--chart-observed)', 'simulated wound area (no band: a drawn wound is a simulation, not a forecast)']]),
+      hint,
+      el('div', { class: 'dr-chips' }, chip(PRESET_LABEL_FOLLOW), chip('simulated cells, not tracked cells')),
+      el('p', { class: 'st-caption' }, PRESET_CAPTION_FOLLOW + `. One site = one cell = ${SITE_UM} µm; field ${W}×${H} sites (the WHAD field).`)));
+  setPreset('CC'); root.tabIndex = 0; render();
+  return root;
+}
 
-  const $ = (s) => el.querySelector(s), $$ = (s) => [...el.querySelectorAll(s)];
-  const pad = $('.dr-pad'), padCanvas = pad.querySelector('canvas'), drawLayer = $('.dr-draw');
+// ---------- view 2: a real WHAD wound, sim vs NCA vs observed, with the live NCA band ----------
+function realView(worker) {
+  const root = el('div', { class: 'dr-view' });
+  const cs = el('canvas', { width: 440, height: 320, class: 'dr-canvas', 'aria-label': 'Cell-agent simulation of the real wound' });
+  const cn = el('canvas', { width: 440, height: 320, class: 'dr-canvas', 'aria-label': 'NCA emulator rollout of the real wound' });
+  const fs = new Field(cs), fn = new Field(cn);
+  const slider = el('input', { type: 'range', min: 3, max: 19, step: 0.1, value: 3, 'aria-label': 'Time (hours)' });
+  const readT = el('span', { class: 'num' }, '3.0 h'), readS = el('span', { class: 'num' }), readN = el('span', { class: 'num' }), readO = el('span', { class: 'num' });
+  const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Observed, simulated and NCA wound area for exp1_partII_C61_P2' });
+  const status = el('p', { class: 'st-caption' }, 'Loading the wound…');
+  let sim, nca, band = null, timer = null, edgeOn = false, stallV = null;
+  const play = btn('Play', () => (timer ? stop() : go()), 'st-btn--primary');
+  const edgeBtn = btn('Edge speed', () => { edgeOn = !edgeOn; edgeBtn.setAttribute('aria-pressed', edgeOn); edgeBox.hidden = !edgeOn; render(); });
+  edgeBtn.setAttribute('aria-pressed', 'false'); edgeBtn.title = 'Edge speed heatmap (H)';
+  const readE = el('span', { class: 'num' }, '—'), readSlow = el('span', { class: 'num' }, '—');
+  const scale = el('div', { class: 'dr-scale' }), edgeBox = el('div', {},
+    el('div', { class: 'st-row' }, el('span', {}, 'Mean edge speed'), readE),
+    el('div', { class: 'st-row' }, el('span', {}, 'Slowest segment'), readSlow), scale,
+    el('p', { class: 'st-caption' }, 'Edge speed: how far the front moved over the last 2 h along its normal (distance transform, no cell tracking), smoothed over ±3 px of front, on simulation frames. Slow = hot; hatched = slower than the stall pace, the existing stall rule (closing under 10% more of the 3.8 h area by 19 h) as a speed. Check on this wound (5-9 h): mean speed × perimeter = 0.91 × the area loss rate.'),
+    el('div', { class: 'dr-chips' }, chip('uncalibrated (simulation frames)')));
+  edgeBox.hidden = true;
+  const V_MAX = 20;   // µm/h at the cool end of the scale (mean front speed on this wound is 4-8 µm/h)
+  const near = (ts, t) => ts.reduce((b, x, i) => (Math.abs(x - t) < Math.abs(ts[b] - t) ? i : b), 0);
 
-  // ---------- state ----------
-  const mask = new Uint8Array(W * H);               // 1 = drawn wound
-  const st = { tool: 'draw', preset: 'CC', speed: 1, brush: 'M', running: false, history: [], at: -1, startFrac: 0, done: false };
-  let renderer = null, alive = true;
+  function go() { play.textContent = 'Pause'; if (+slider.value >= 19) slider.value = 3; timer = setInterval(() => { slider.value = Math.min(19, +slider.value + 0.1); render(); if (+slider.value >= 19) stop(); }, 60); }
+  function stop() { clearInterval(timer); timer = null; play.textContent = 'Play'; }
+  function render() {
+    if (!sim) return;
+    const t = +slider.value, i = near(sim.t_hours, t), j = near(nca.t_hours, t), ob = sim.meta.observed, k = near(ob.t_hours, t);
+    const v = viewFrame(sim, i);
+    fs.zoom >= DEEP_ZOOM ? fs.agents(agentFrame(sim, i)) : fs.smooth(v.fine, v.outline.display.lines, v.outline.display.opacity);
+    fn.density(densityFrame(nca, j), nca.density.h, nca.density.w);
+    if (edgeOn) {
+      const back = near(sim.t_hours, t - 2), mk = (f) => { const { fine, outline } = viewFrame(sim, f), m = new Uint8Array(fine.h * fine.w);
+        for (let q = 0; q < m.length; q++) m[q] = outline.level != null && fine.data[q] / 255 < outline.level ? 1 : 0; return { m, fine }; };
+      const a = mk(back), b = mk(i), um = SITE_UM / b.fine.scale;
+      if (stallV == null) { const c = mk(near(sim.t_hours, nca.meta.cutoff_hours)), e0 = edgeSpeed(c.m, c.m, c.fine.h, c.fine.w, 1, um);
+        stallV = stallSpeed(e0.areaUm2, e0.perimeterUm, nca.meta.cutoff_hours, 19); scale.innerHTML = scaleBar(V_MAX, stallV); }
+      if (back < i) {
+        const e = edgeSpeed(a.m, b.m, b.fine.h, b.fine.w, sim.t_hours[i] - sim.t_hours[back], um);
+        fs.edges(e.sites, b.fine.scale, V_MAX, stallV);
+        if (e.slowest) fs.ring(e.slowest.x, e.slowest.y, b.fine.scale, 14);
+        readE.textContent = e.meanUmH == null ? 'no edge' : e.meanUmH.toFixed(1) + ' µm/h';
+        readSlow.textContent = e.slowest ? e.slowest.v.toFixed(1) + ' µm/h' : '—';
+      } else { readE.textContent = readSlow.textContent = '— (first frame)'; }
+    }
+    readT.textContent = t.toFixed(1) + ' h'; readS.textContent = pct(sim.wound_frac[i]); readN.textContent = pct(nca.wound_frac[j]);
+    readO.textContent = Math.abs(ob.t_hours[k] - t) < 0.06 ? pct(ob.wound_frac[k]) : '— (imaged hourly)';
+    const series = [];
+    if (band) { series.push({ t: band.t, v: band.q05, color: 'var(--chart-member)', width: 0.9, dash: '2 2' }, { t: band.t, v: band.q95, color: 'var(--chart-member)', width: 0.9, dash: '2 2' }); }
+    series.push({ t: sim.t_hours, v: sim.wound_frac, color: 'var(--dim)', width: 1 },
+      { t: nca.t_hours, v: nca.wound_frac, color: 'var(--chart-median)', dash: '4 3' },
+      { t: ob.t_hours, v: ob.wound_frac, color: 'var(--chart-observed)', width: 1.7, dots: true },
+      { t: [t, t], v: [0, Math.max(...ob.wound_frac)], color: 'var(--hair)', width: 1 });
+    chart(svg, { tMax: 20, yMax: Math.max(...ob.wound_frac) * 1.05, series, cut: nca.meta.cutoff_hours });
+  }
+  const zs = (k) => { fs.zoom = fn.zoom = Math.min(6, Math.max(1, fs.zoom * k)); render(); };
+  for (const c of [cs, cn]) c.addEventListener('wheel', (e) => { e.preventDefault(); const f = c === cs ? fs : fn; const [x, y] = f.toSite(e); fs.cx = fn.cx = x; fs.cy = fn.cy = y; zs(e.deltaY < 0 ? 1.25 : 0.8); }, { passive: false });
+  slider.addEventListener('input', () => { stop(); render(); });
+  root.tabIndex = 0;
+  root.addEventListener('keydown', (e) => { if (e.key === 'h' || e.key === 'H') edgeBtn.click(); else if (e.key === ' ') { e.preventDefault(); play.click(); } });
 
-  // ---------- worker ----------
+  Promise.all(['whad_partII_C61_P2_sim38_follow.json', 'whad_partII_C61_P2_nca_follow.json'].map((n) => fetch(new URL(n, SIM)).then((r) => r.json())))
+    .then(([s, n]) => {
+      sim = s; nca = n; render();
+      status.textContent = 'Computing the NCA band in the browser (20 members)…';
+      const onBand = ({ data: m }) => {
+        if (m.type === 'nca-ready') worker.postMessage({ type: 'band', Tm: n.meta.Tm, bias: n.meta.bias, hours: 16, members: 20, seed: 1, start: { occ: agentFrame(s, 0), h: s.H, w: s.W } });
+        else if (m.type === 'band') { band = { t: m.t_hours.map((x) => x + s.t_hours[0]), q05: m.q05, q95: m.q95 }; status.textContent = 'NCA band: 20-member emulator spread, computed live from the 3.0 h mask and the 3.8 h fit.'; worker.removeEventListener('message', onBand); render(); }
+        else if (m.type === 'band-error') { const b = n.meta.band; band = { t: b.t_hours, q05: b.q05, q95: b.q95 }; status.textContent = `Live band failed (${m.error}); showing the precomputed ${b.members}-member band.`; worker.removeEventListener('message', onBand); render(); }
+      };
+      worker.addEventListener('message', onBand);
+      worker.postMessage({ type: 'nca-load' }); // default: v2 follower emulator, matches the follow fits
+    })
+    .catch((e) => (status.textContent = 'Could not load the playback files: ' + e.message));
+
+  root.append(
+    el('div', { class: 'dr-pair' },
+      el('figure', {}, cs, el('figcaption', { class: 'st-kicker' }, 'Cell agents (simulation)')),
+      el('figure', {}, cn, el('figcaption', { class: 'st-kicker' }, 'NCA emulator (density)'))),
+    el('aside', { class: 'dr-side st-panel--solid' },
+      el('div', { class: 'st-kicker' }, 'Held-out WHAD wound · exp1_partII_C61_P2'),
+      el('div', { class: 'dr-tools' }, play, edgeBtn, slider),
+      el('div', { class: 'st-row' }, el('span', {}, 'Time'), readT),
+      el('div', { class: 'st-row' }, el('span', {}, 'Observed'), readO),
+      el('div', { class: 'st-row' }, el('span', {}, 'Simulation'), readS),
+      el('div', { class: 'st-row' }, el('span', {}, 'NCA'), readN),
+      edgeBox,
+      svg,
+      legend([['var(--chart-observed)', 'observed'], ['var(--dim)', 'cell-agent simulation'], ['var(--chart-median)', 'NCA rollout', 1], ['var(--chart-member)', 'NCA ensemble spread (uncalibrated)', 1]]),
+      status,
+      el('div', { class: 'dr-chips' }, chip('uncalibrated (simulator/NCA spread)'), chip('simulated cells, not tracked cells')),
+      el('p', { class: 'st-caption' }, 'Both start from the observed mask at 3.0 h and use the fit from frames up to 3.8 h (follow rule). One wound only, so do not generalise. The spread is not a 90% interval; the calibrated band is in Assay mode.')));
+  return root;
+}
+
+export function mountDraw(host) {
   const worker = new Worker(new URL('../public/sim/js/worker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = ({ data: m }) => {
-    if (m.type !== 'frame') return;
-    const follow = st.at === st.history.length - 1;
-    st.history.push(m);
-    if (st.history.length === 1) st.startFrac = m.wound_frac;
-    if (follow) show(st.history.length - 1);
-    if (st.running && (m.t_hours >= T_END - 1e-6 || m.wound_frac <= 0)) { pause(); st.done = true; status(); }
-  };
-  const hpf = () => STEP_H * st.speed;
-
-  function heal() {
-    if (!mask.some(Boolean)) return;
-    setTool('heal');
-    st.history = []; st.at = -1; st.done = false;
-    renderer?.setWound0(mask);
-    worker.postMessage({ type: 'init', w: W, h: H, wound: mask.slice(), preset: st.preset, seed: SEED, rule: DEFAULT_RULE });
-    play();
-  }
-  function play() {
-    if (st.tool === 'draw') return heal();
-    if (!st.history.length) return heal();
-    if (st.done) { st.history = []; st.at = -1; st.done = false; worker.postMessage({ type: 'reset' }); }
-    else if (st.at < st.history.length - 1) show(st.history.length - 1);
-    st.running = true; worker.postMessage({ type: 'run', hoursPerFrame: hpf() }); status();
-  }
-  function pause() { st.running = false; worker.postMessage({ type: 'pause' }); status(); }
-  function stepBack() { if (st.tool !== 'heal' || st.at <= 0) return; if (st.running) pause(); show(st.at - 1); }
-  function stepForward() {
-    if (st.tool !== 'heal' || !st.history.length) return;
-    if (st.running) pause();
-    if (st.at < st.history.length - 1) show(st.at + 1);
-    else if (!st.done && st.history.at(-1).t_hours < T_END - 1e-6) worker.postMessage({ type: 'step', hours: hpf() });
-  }
-
-  // ---------- frame display ----------
-  function show(i) {
-    st.at = i; const f = st.history[i]; if (!f) return;
-    renderer?.update(f);
-    const nCells = f.occ.reduce((s, v) => s + v, 0);
-    $('[data-r="step"]').textContent = `${Math.round(f.t_hours / STEP_H)} / ${Math.round(T_END / STEP_H)}`;
-    $('[data-r="t"]').textContent = `t = ${fmt(f.t_hours, 1)} h`;
-    $('[data-r="wf"]').textContent = `${fmt(f.wound_frac)} (start ${fmt(st.startFrac)})`;
-    $('[data-r="cells"]').textContent = `${nCells.toLocaleString()} of ${(W * H).toLocaleString()} sites`;
-    $('[data-r="area"]').textContent = `${Math.round((f.wound_frac * W * H * SITE_UM * SITE_UM) / 1000)}k µm²`;
-    if (f.label) $('[data-label]').textContent = f.label;
-    $('.dr-progress > div').style.width = `${Math.min(100, (f.t_hours / T_END) * 100)}%`;
-    presetPanel(f.caption);
-    status();
-  }
-  function status() {
-    const f = st.history[st.at], icon = $('[data-icon]');
-    icon.innerHTML = st.running ? '<path d="M8 5v14M16 5v14"/>' : '<path d="M7 5l12 7-12 7z"/>';
-    $('[data-act="play"]').setAttribute('aria-label', st.running ? 'Pause' : 'Play');
-    if (st.tool === 'draw' || !f) {
-      const drawn = mask.reduce((s, v) => s + v, 0) / (W * H);
-      $('[data-status]').innerHTML = drawn ? `drawn wound fraction <b>${fmt(drawn)}</b> · press Heal or Space` : 'draw a wound to begin';
-      return;
-    }
-    const steps = Math.round(T_END / STEP_H);
-    $('[data-status]').innerHTML = `step <b>${Math.round(f.t_hours / STEP_H)}</b> of ${steps} · simulated time <b>t = ${fmt(f.t_hours, 1)} h</b>` +
-      ` · wound fraction <b>${fmt(f.wound_frac)}</b>${st.done ? ' · run finished, Space replays' : ''}` +
-      (st.at < st.history.length - 1 ? ' · reviewing earlier frame' : '');
-  }
-  function presetPanel(caption) {
-    const p = PRESETS_FOLLOW[st.preset];
-    $('[data-pname]').textContent = PRESET_NAMES[st.preset];
-    $('[data-pparams]').textContent = `Tm ${fmt(p.Tm)} h · bias ${fmt(p.bias)} (${DEFAULT_RULE} rule) · median of 7 WHAD part II fits`;
-    $('[data-pcaption]').textContent = caption ?? presetCaptionFor(DEFAULT_RULE) ?? '';
-  }
-
-  // ---------- tools ----------
-  function setTool(t) {
-    st.tool = t;
-    if (t === 'draw' && st.running) pause();
-    drawLayer.hidden = t !== 'draw';
-    $('[data-mag]').hidden = t !== 'heal';
-    $$('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === t));
-    $('.dr-progress > div').style.width = t === 'draw' ? '0%' : $('.dr-progress > div').style.width;
-    if (t === 'draw') paintPad();
-    status();
-  }
-  function maskChanged() {
-    const any = mask.some(Boolean);
-    $('[data-tool="heal"]').disabled = !any;
-    $('[data-clear]').hidden = !any;
-    pad.querySelector('.dr-empty').hidden = any;
-    paintPad(); status();
-  }
-
-  // ---------- drawing pad (32x44 lattice, scaled up visually) ----------
-  let cell = 10, hover = null;
-  function sizePad() {
-    const box = drawLayer.getBoundingClientRect();
-    cell = Math.max(4, Math.floor(Math.min((box.width * 0.62) / W, (box.height * 0.8) / H)));
-    const dpr = Math.min(devicePixelRatio, 2);
-    padCanvas.width = W * cell * dpr; padCanvas.height = H * cell * dpr;
-    padCanvas.style.width = `${W * cell}px`; padCanvas.style.height = `${H * cell}px`;
-    padCanvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-    paintPad();
-  }
-  function paintPad() {
-    const g = padCanvas.getContext('2d');
-    g.fillStyle = hexCss(PAL.wound); g.fillRect(0, 0, W * cell, H * cell);
-    g.fillStyle = hexCss(PAL.intact);
-    for (let i = 0; i < W * H; i++) if (!mask[i]) g.fillRect((i % W) * cell, ((i / W) | 0) * cell, cell - 1, cell - 1);
-    if (hover) {
-      g.strokeStyle = '#E0A458'; g.lineWidth = 1;
-      g.beginPath(); g.arc(hover.x * cell, hover.y * cell, BRUSHES[st.brush] * cell, 0, Math.PI * 2); g.stroke();
-    }
-  }
-  function stamp(px, py, val) {
-    const r = BRUSHES[st.brush];
-    for (let y = Math.floor(py - r); y <= Math.ceil(py + r); y++) for (let x = Math.floor(px - r); x <= Math.ceil(px + r); x++)
-      if (x >= 0 && x < W && y >= 0 && y < H && (x + 0.5 - px) ** 2 + (y + 0.5 - py) ** 2 <= r * r) mask[y * W + x] = val;
-  }
-  const toSite = (e) => { const b = padCanvas.getBoundingClientRect(); return { x: (e.clientX - b.left) / cell, y: (e.clientY - b.top) / cell }; };
-  let last = null, erase = false;
-  pad.addEventListener('pointerdown', (e) => {
-    pad.setPointerCapture(e.pointerId); erase = e.shiftKey || e.button === 2;
-    last = toSite(e); stamp(last.x, last.y, erase ? 0 : 1); maskChanged();
-  });
-  pad.addEventListener('pointermove', (e) => {
-    hover = toSite(e);
-    if (last) {                                     // fill along the segment so fast strokes stay continuous
-      const n = Math.max(1, Math.ceil(Math.hypot(hover.x - last.x, hover.y - last.y) / 0.4));
-      for (let k = 1; k <= n; k++) stamp(last.x + ((hover.x - last.x) * k) / n, last.y + ((hover.y - last.y) * k) / n, erase ? 0 : 1);
-      last = hover; maskChanged();
-    } else paintPad();
-  });
-  const endStroke = () => { last = null; };
-  pad.addEventListener('pointerup', endStroke);
-  pad.addEventListener('pointercancel', endStroke);
-  pad.addEventListener('pointerleave', () => { hover = null; paintPad(); });
-  pad.addEventListener('contextmenu', (e) => e.preventDefault());
-  const ro = new ResizeObserver(sizePad); ro.observe(drawLayer);
-
-  // ---------- controls ----------
-  $$('[data-tool]').forEach((b) => b.addEventListener('click', () => (b.dataset.tool === 'heal' ? heal() : setTool('draw'))));
-  $('[data-clear]').addEventListener('click', () => { mask.fill(0); setTool('draw'); maskChanged(); });
-  const pick = (attr, v) => $$(`[${attr}]`).forEach((b) => b.setAttribute('aria-pressed', b.getAttribute(attr) === String(v)));
-  $$('[data-brush]').forEach((b) => b.addEventListener('click', () => { st.brush = b.dataset.brush; pick('data-brush', st.brush); }));
-  $$('[data-preset]').forEach((b) => b.addEventListener('click', () => {
-    st.preset = b.dataset.preset; pick('data-preset', st.preset);
-    worker.postMessage({ type: 'preset', preset: st.preset });   // live switch; ignored by the worker before init
-    presetPanel(st.history[st.at]?.caption);
-  }));
-  $$('[data-speed]').forEach((b) => b.addEventListener('click', () => {
-    st.speed = +b.dataset.speed; pick('data-speed', st.speed);
-    if (st.running) worker.postMessage({ type: 'run', hoursPerFrame: hpf() });   // updates hpf of the running loop
-  }));
-  const ACTS = { play: () => (st.running ? pause() : play()), 'step-back': stepBack, 'step-forward': stepForward,
-    'zoom-in': () => renderer?.zoom(1), 'zoom-out': () => renderer?.zoom(-1), 'reset-camera': () => renderer?.resetCamera() };
-  $$('[data-act]').forEach((b) => b.addEventListener('click', () => ACTS[b.dataset.act]()));
-  $$('[data-view]').forEach((b) => b.addEventListener('click', () => { renderer?.view(b.dataset.view); pick('data-view', b.dataset.view); }));
-  const hint = $('[data-hint]');
-  if (localStorage.getItem('stitch.draw.hint') === 'seen') hint.hidden = true;
-  $('[data-hint-close]').addEventListener('click', () => { hint.hidden = true; localStorage.setItem('stitch.draw.hint', 'seen'); });
-
-  const onKey = (e) => { const a = ACTS[e.detail?.action]; if (a) a(); };
-  const onAction = (e) => {
-    const a = e.detail?.action || '';
-    if (a === 'reset-camera') renderer?.resetCamera();
-    else if (a.startsWith('camera:')) renderer?.view(a.slice(7) === 'cells' ? 'cells' : a.slice(7));
-  };
-  ctx.bus.addEventListener('key', onKey);
-  ctx.bus.addEventListener('action', onAction);
-
-  pick('data-brush', st.brush); pick('data-preset', st.preset); pick('data-speed', st.speed); pick('data-view', 'field');
-  presetPanel(); setTool('draw'); maskChanged();
-
-  createRenderer($('.dr-field'), { w: W, h: H }).then((r) => {
-    if (!alive) return r.dispose();
-    renderer = r;
-    $('[data-render]').textContent = r.kind === 'webgl' ? '3D field · drag to orbit' : '2D field (WebGL unavailable)';
-    renderer.setWound0(mask);
-    if (st.history[st.at]) renderer.update(st.history[st.at]);
-  });
-
-  return function unmount() {
-    alive = false;
-    worker.terminate();
-    ro.disconnect();
-    ctx.bus.removeEventListener('key', onKey);
-    ctx.bus.removeEventListener('action', onAction);
-    renderer?.dispose();
-    css.remove();
-    el.replaceChildren();
-  };
+  const views = { draw: drawView(worker), real: realView(worker) };
+  const tabs = el('div', { class: 'st-tabs', role: 'tablist' });
+  const body = el('div', { class: 'dr-body' });
+  const show = (k) => { for (const b of tabs.children) b.setAttribute('aria-selected', b.dataset.k === k); body.replaceChildren(views[k]); views[k].focus?.(); };
+  for (const [k, label] of [['draw', 'Draw a wound'], ['real', 'Real wound: sim vs NCA']]) { const b = el('button', { role: 'tab', type: 'button', onclick: () => show(k) }, label); b.dataset.k = k; tabs.append(b); }
+  host.classList.add('dr-root'); host.replaceChildren(tabs, body); show('draw');
+  return { worker, show };
 }

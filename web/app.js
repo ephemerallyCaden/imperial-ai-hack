@@ -4,7 +4,7 @@ import * as data from "./lib/data.js";
 
 const bus = new EventTarget();
 const ctx = { bus, data, emit: (type, detail) => bus.dispatchEvent(new CustomEvent(type, { detail })) };
-const MODES = { assay: () => import("./assay/assay.js"), ops: () => import("./ops/ops.js"), draw: () => import("./draw/draw.js") };
+const MODES = { assay: () => import("./assay/assay.js"), ops: () => import("./ops/ops.js"), draw: () => import("./draw/mode.js") };
 const root = document.getElementById("mode-root");
 let unmount = null, current = null;
 
