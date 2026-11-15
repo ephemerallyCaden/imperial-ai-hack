@@ -231,13 +231,14 @@ area is more than 0.04 of the start away from every NCA frame.
 
 | Picker item | Field | Parameters |
 |---|---|---|
-| Held-out runs (and the C61_P1 reject branch) for exp1_partII_C61_P1, partII_C61_P2, partII_CC_P2, partI_C61_P1 | the wound's own file, started from its own frame 0 | follow fit `fits[wound]["1.9"]` (frames <= 1.9 h, the first check) |
+| Held-out runs (and the C61_P1 reject branch) for exp1_partII_C61_P1, partII_C61_P2, partII_CC_P2, partI_C61_P2 (the stall wound in the nca_realft3 re-record), partI_C61_P1 (the stall wound in the 20261115-034737 runs) | the wound's own file, started from its own frame 0 | follow fit `fits[wound]["1.9"]` (frames <= 1.9 h, the first check) |
 | Upload run exp1_pos2033, the 3 samples | `nca_follow_exp1_partII_CC_P2.json`, labelled "field shape not from this item" (the frames are that wound's t00-t02, data/upload.py) | that wound's fit |
 | Runtime uploads | the same CC_P2 file, labelled "field shape not from this item" (no NCA field is made for uploads) | that wound's fit |
 | Refused samples | none (covered, as before) | — |
 
 - **Frames:** deterministic rollout (no noise), one frame per 0.5 h substep, until healed (every coarse cell >= 0.95),
-  stalled or 200 h (`nca.js` `rolloutUntilHealed`). All four heal: 19.5 / 15.5 / 13 / 146.5 h (partI_C61_P1 is slow,
+  stalled or 200 h (`nca.js` `rolloutUntilHealed`). partI_C61_P2 (Tm 170.6 h) never heals: it runs to the 200 h cap and
+  its open area only falls from 0.287 to 0.228 of the field (it stalled). The other four heal: 19.5 / 15.5 / 13 / 146.5 h (partI_C61_P1 is slow,
   Tm 17.3 h, 140 KB). Start = frame 0 of the tracked `data/processed/nca_real_whad.npz` (density + R), so no raw data is needed.
 - **Reach:** on the 6 recorded runs the closest NCA frame is within 0.03 of the P1 area at every 0.1 h of every check.
 - **Regenerate** (per wound): `python3 -I sim/js/assay_nca_case.py <wound> /tmp/case.json`, then

@@ -8,7 +8,7 @@ from agent import config, critic, investigator, llm, policy, prompts, run, tools
 from agent.runlog import read
 
 STALL_MANY = "exp1_partI_C61_P2"      # stall flag fires at every check
-OOB = "exp2_partII_NC_P2"             # no stall; out of band at 3.8 h (and later)
+OOB = "exp2_partII_NC_P2"             # no stall; out of band at 9.5 h (nca_realft3 bands)
 CALM = "exp1_partII_C61_P1"           # never off track
 
 
@@ -87,8 +87,8 @@ def test_out_of_band_triggers_once_and_decision_unchanged(tmp_path, monkeypatch)
     llm.set_stub(_stub(quote_inv=True))
     out, recs = _go(tmp_path, OOB, run_id="with", approve=lambda d: False)
     inv = _inv(recs)
-    assert len(inv) == 1 and inv[0]["trigger"] == "out_of_band" and inv[0]["input"]["check_h"] == 3.8
-    assert max(inv[0]["input"]["observed"]["t_hours"]) <= 3.8
+    assert len(inv) == 1 and inv[0]["trigger"] == "out_of_band" and inv[0]["input"]["check_h"] == 9.5
+    assert max(inv[0]["input"]["observed"]["t_hours"]) <= 9.5
     assert out["steps"] <= config.MAX_STEPS and out["reason"] == "schedule_complete"
     # the model saw the hypotheses; the Critic traced the fit error and removed the made-up number
     mc = [r for r in recs if r["kind"] == "model_call"]

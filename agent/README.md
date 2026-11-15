@@ -7,7 +7,8 @@ Research use only, not for diagnosis or treatment. Design: `docs/design.md` sect
 For an upload of frames that comes with protocol (Methods) text, code first calls the `intake` tool once (see Intake
 below). Then, at each imaging check (1.9, 3.8, 5.7 and 9.5 h; one check at the last frame for an upload), the agent:
 
-1. runs the fixed steps in code: QC and the calibrated forecast (`data/upload.py`), then the stall flag and schedule advice;
+1. runs the fixed steps in code: QC and the calibrated forecast (`data/upload.py`; a held-out WHAD replay reads the
+   leave-one-wound-out forecast file instead, see below), then the stall flag and schedule advice;
 2. works out in code which decisions are allowed (`policy.py`);
 3. asks the model to pick one allowed decision and explain it in plain English;
 4. checks the pick against policy, then passes the explanation through the scope guard and the Critic;
@@ -22,6 +23,23 @@ of closing and the stall flag; the policy code sets the stop thresholds and forc
 "data refused, ask a human". The LLM only chooses among the options the code allows and explains its choice in plain
 English. Every number it writes is checked by the Critic. That is why the scoreboard calls the replay row "Forecast
 policy (code; replay model, no LLM)", and why the real-model row reports how often Claude picked the same option.
+
+## Forecaster on held-out replays
+
+Uploads go through `data/upload.py`: the real-data NCA v3 (`nca_realft3`), with edge speed as its automatic fallback.
+A held-out WHAD replay (`--wound <id>`) uses the same forecaster from its leave-one-wound-out files,
+`eval/forecasts/whad/loo_all/nca_realft3_<cut>h.json` (`run.LOO_MODEL`): each series is rolled out by fold models that
+never trained on that wound, and the band is P1's leave-one-wound-out conformal band (level 0.9). The
+`nca_realft3_raw_<cut>h.json` files are the raw 50-member quantiles with no calibration (they cover far less than 90%;
+`data/upload_nca.py` only uses their residuals to build the upload band), so a replay never reads them.
+
+Per wound and cut-off, `edge_speed_<cut>h.json` (`run.LOO_FALLBACK`) is used only when the NCA file is unreadable,
+does not have the wound, or its forecast is unusable (band not a calibrated 90% band, missing or non-finite area
+quantiles, no P(90% closed by 19 h)); `run.loo_forecast` makes that choice. The fallback is never silent: every
+`forecast_lookup` input names the `model` and `source` file used, and a fallback adds `fallback` (`from`, `reason`)
+to that input plus a `warning` record. With neither usable the run ends with `no_forecast`. On the current files all
+55 held-out series have a usable NCA forecast at every cut-off they have, so no replay falls back. Runs recorded
+before this change show `edge_speed` in that field.
 
 ## Investigator (hypotheses, not causes)
 
@@ -140,7 +158,8 @@ Run from the repo root with the project venv (`.venv/bin/python`). None of these
   Add `--reject` to have the simulated human reject every stop, `--both-branches` to also record the rejected branch
   (`<run-id>.reject.jsonl`), `--runs-dir DIR` to write elsewhere. `--wound` also takes a path to an upload result JSON.
 - Evaluation: `python -m agent.evaluate` writes `agent/results/scoreboard.csv` and `scoreboard.md` (assumptions are in
-  the `.md`). Its run logs go to a temp folder, not `agent/runs/`. It also adds a real-model row read from recorded
+  the `.md`). Every policy (fixed, rules, agent) uses the same per-wound, per-check forecast as the replay
+  (`run.loo_forecast`), so the rows compare like with like. Its run logs go to a temp folder, not `agent/runs/`. It also adds a real-model row read from recorded
   logs in `--real-runs DIR` (default `agent/runs/practice`; WHAD wound runs only, no `.reject` or upload runs). The row
   is skipped with a note if the folder has none. It reads logs only; it never calls a model.
 
@@ -168,7 +187,13 @@ To record the demo set in one go (four WHAD wounds, the first with both branches
 check no file holds a username, path, account id or key:
 
 - `python -m agent.record --out agent/runs/practice` for practice runs (git-ignored)
-- `python -m agent.record --out agent/runs` for the final re-record on the submission account (these are committed)
+- `python -m agent.record --out agent/runs` for the final re-record on the submission account (these are committed).
+  It adds a new timestamped set; `index.json` and the scoreboard's real-model row read every log in the folder, so
+  `git rm` the set it replaces first.
+- The four recorded WHAD wounds (`record.WOUNDS`) were picked to show each decision type: stop early, stall, stop
+  later, imaged to the end. The third, `exp1_partII_C61_P2`, is a wrong "unlikely to close" call (it closed by 19 h).
+  They are a demo, not a sample: the scoreboard replays every held-out WHAD series in `loo_all` (55 series from 28
+  wounds, as `eval/scheduler.py`), and only its real-model row is limited to the recorded runs.
 
 `python -m agent.evaluate --real-runs agent/runs` then scores the final runs instead of the practice ones.
 
@@ -179,10 +204,10 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 | kind | When | Main fields |
 |---|---|---|
 | `run_start` | first line | `wound`, `checks_h`, `max_steps`, `token_budget`, `model_provider`, `model_id`; branch logs add `parent_run_id`, `branch_seq`, `branch_cut_h` |
-| `tool_call` | each fixed step | `step`, `tool`, `input`, `input_fp` (sha256), `output`, `elapsed_s`; `investigate` adds `trigger` (`stall_flag` or `out_of_band`) |
+| `tool_call` | each fixed step | `step`, `tool`, `input`, `input_fp` (sha256), `output`, `elapsed_s`; `investigate` adds `trigger` (`stall_flag` or `out_of_band`); a replay's `forecast_lookup` input has `model` and `source`, plus `fallback` (`from`, `reason`) after a fallback |
 | `model_call` | each model call | `model`, `usage`, `tokens_total`, `text`, `tool_calls`, `data`, `input_fp`; or `error` |
 | `model_skipped` | call would go over the token budget | `reason`, `estimated_tokens`, `tokens_left` |
-| `warning` | a tool returned nothing usable | `tool`, `message` |
+| `warning` | a tool returned nothing usable, or a replay forecast fell back to edge speed | `tool`, `message`; a fallback adds `cut_h`, `model`, `fallback_from`, `reason` |
 | `scope` | explanation had clinical / molecule terms | `decision`, `matched` (`kind`, `term`), `text_in`, `text_out`, `reason` |
 | `critic` | each check | `text_in`, `text_out`, `removed`, `traced`, `untraced`, `calibrated_band` |
 | `decision` | each check | `decision`, `label`, `allowed`, `state`, `source` (`forced`, `llm` or `fallback`), `fallback_reason`, `explanation`, `irreversible`, `untested` |
@@ -200,7 +225,8 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
   "stop, unlikely" when allowed, else "image again". Real-model numbers come only from recorded runs, and the
   real-model row is a small sample of practice runs until the final re-record replaces them.
 - The stall threshold (`eval/results/flag_thresholds.json`) is tuned on all WHAD wounds, so the stall flag in the replay
-  is not strictly leave-one-out. The forecasts are.
+  is not strictly leave-one-out. The forecasts are. It is also tuned on edge speed's `p_stall`; the NCA's `p_stall`
+  (same definition, from its own calibrated ensemble) is compared against the same thresholds, in replay and on uploads.
 - The stall flag is often wrong: about half of stall stops in the replay are on wounds that kept closing (see
   `scoreboard.md`). In replay the simulated human approves every one.
 - "Stop, likely to close" has never fired on a held-out WHAD wound. It is labelled "untested".
