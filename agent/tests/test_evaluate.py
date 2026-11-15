@@ -145,7 +145,9 @@ def _log(path, wound_id, decisions, end, costs=(), model_id="claude-opus-5-5"):
     import json
     recs = [{"kind": "run_start", "wound": {"kind": "whad_loo", "wound_id": wound_id}, "model_id": model_id}]
     recs += [{"kind": "model_call", "cost_usd": c} for c in costs]
-    recs += [{"kind": "decision", "decision": d, "source": src, "allowed": _allowed(*al)} for d, src, al in decisions]
+    recs += [{"kind": "decision", "decision": d, "source": src, "allowed": _allowed(*al),
+              "proposed": dec[3] if len(dec) > 3 else (d if src == "llm" else None)}
+             for dec in decisions for d, src, al in [dec[:3]]]
     recs.append({"kind": "run_end", **end})
     path.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
 
@@ -206,3 +208,64 @@ def test_scoreboard_real_row_and_skip_note(tmp_path):
     md = p.read_text()
     assert "| Real model (Claude, n=3 practice runs) |" in md and "2 / 3 checks" in md
     assert "small sample" in md and "replace them" in md
+
+
+# ---------------------------------------------------------------- PR #101 review (items 6, 7, 8; evaluate() state)
+
+_END = {"stopped": True, "stop_h": 1.9, "stop_kind": "unlikely", "plate_hours_saved": 17.1,
+        "numbers_traced": 1, "numbers_untraced": 0, "tokens": {"total": 10}}
+
+
+def test_real_row_skips_log_without_run_end(tmp_path):
+    import json
+    _log(tmp_path / "s-exp1_a.jsonl", "a", [("stop_unlikely", "llm", ("image_again", "stop_unlikely"))], _END)
+    cut = tmp_path / "t-exp1_b.jsonl"   # Ctrl-C during recording: no run_end
+    cut.write_text(json.dumps({"kind": "run_start", "wound": {"wound_id": "b"}, "model_id": "claude-x"}) + "\n")
+    assert E.read_real_run(str(cut)) is None
+    r = E.real_model_row({"a": _w(False), "b": _w(False)}, str(tmp_path))
+    assert r["n_wounds"] == 1 and r["n_with_truth"] == 1 and r["n_skipped_no_run_end"] == 1
+    only_cut = tmp_path / "only"
+    only_cut.mkdir()
+    (only_cut / "t-exp1_b.jsonl").write_text(cut.read_text())
+    assert E.real_model_row({"b": _w(False)}, str(only_cut)) is None
+
+
+def test_real_row_counts_each_session_once(tmp_path):
+    al = ("image_again", "stop_unlikely")
+    _log(tmp_path / "s1-exp1_a.jsonl", "a", [("stop_unlikely", "llm", al)], _END)        # wrong call: a closed
+    _log(tmp_path / "s2-exp1_a.jsonl", "a", [("image_again", "llm", al)],
+         {"stopped": False, "plate_hours_saved": 0.0, "numbers_traced": 2, "numbers_untraced": 0, "tokens": {"total": 5}})
+    _log(tmp_path / "s3-exp1_z.jsonl", "z", [("stop_unlikely", "llm", al)], _END)        # no truth for z
+    r = E.real_model_row({"a": _w(True)}, str(tmp_path))
+    assert r["n_wounds"] == 3 and r["n_with_truth"] == 2 and r["n_distinct_wounds"] == 1
+    assert r["wrong_closure_call"] == 1 and r["unlikely_calls"] == 1                   # both sessions scored
+    assert r["plate_hours_saved"] == pytest.approx(17.1)                                # same 2 runs as the counters
+    assert r["frames_used"] == 2 + 20 and r["model_checks"] == 2                        # z is left out of every total
+
+
+def test_agree_uses_proposed_and_skips_fallback(tmp_path):
+    al = ("continue", "image_again", "stop_unlikely")
+    _log(tmp_path / "s-exp1_a.jsonl", "a",
+         [("image_again", "llm", al, "stop_unlikely"),     # model proposed the replay pick; final decision differs
+          ("image_again", "fallback", al, "stop_likely"),  # policy rejected the proposal: not the model's pick
+          ("continue", "llm", al, "continue")], _END)       # replay would pick stop_unlikely
+    r = E.read_real_run(str(tmp_path / "s-exp1_a.jsonl"))
+    assert (r["agree"], r["model_checks"]) == (1, 2)
+
+
+def test_evaluate_restores_provider_and_stub(monkeypatch, tmp_path):
+    monkeypatch.setenv("STITCH_PROVIDER", "anthropic")
+    mine = lambda m, s, t: {}   # noqa: E731
+    llm.set_stub(mine)
+    monkeypatch.setattr(E, "load_wounds", lambda: {"a": _w(False)})
+    monkeypatch.setattr(E, "agent_policy", lambda k, d: (_ for _ in ()).throw(RuntimeError("boom")))
+    try:
+        with pytest.raises(RuntimeError):
+            E.evaluate(runs_dir=str(tmp_path), write=False, real_runs=None)
+        assert os.environ["STITCH_PROVIDER"] == "anthropic" and llm._stub_handler is mine
+        monkeypatch.delenv("STITCH_PROVIDER")
+        monkeypatch.setattr(E, "agent_policy", lambda k, d: E._outcome())
+        E.evaluate(runs_dir=str(tmp_path), write=False, real_runs=None)
+        assert "STITCH_PROVIDER" not in os.environ and llm._stub_handler is mine
+    finally:
+        llm.set_stub(None)

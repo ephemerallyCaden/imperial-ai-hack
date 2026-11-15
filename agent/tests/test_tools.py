@@ -27,15 +27,20 @@ def qc2(tmp_path_factory):
 
 
 def test_qc_forecast_sample(qc2):
-    assert not qc2.get("refused") and qc2["model"] == "edge_speed" and qc2["level"] == 0.9
+    assert not qc2.get("refused") and qc2["model"] in ("nca_realft3", "edge_speed") and qc2["level"] == 0.9
     f = qc2["forecasts"][0]
     assert all(lo <= hi for lo, hi in zip(f["area_q05"], f["area_q95"]))
     assert qc2["schedule"]["action"] in ("call", "image_again")
     assert os.path.exists(qc2["forecast_path"]) and os.path.exists(qc2["masks_npz_path"])
     json.dumps(qc2, allow_nan=False)
-    # matches the precomputed sample (same frames, same held-out wound)
-    ref = json.load(open(os.path.join(SAMPLES, "sample_2frame.json")))["forecasts"][0]
-    assert f["area_q50"] == ref["area_q50"] and f["p_close_by_T"] == ref["p_close_by_T"]
+    # matches the precomputed sample (same frames, same held-out wound) when the same forecaster ran: the sample is
+    # the real-data NCA (#102); without torch data/upload.py falls back to edge speed and says so in the notes
+    ref_doc = json.load(open(os.path.join(SAMPLES, "sample_2frame.json")))
+    if qc2["model"] == ref_doc["model"]:
+        ref = ref_doc["forecasts"][0]
+        assert f["area_q50"] == ref["area_q50"] and f["p_close_by_T"] == ref["p_close_by_T"]
+    else:
+        assert qc2["model"] == "edge_speed" and "NCA unavailable" in qc2.get("notes", "")
 
 
 @pytest.mark.parametrize("bad, why", [("bad_blank.png", "blank"), ("bad_blurred.png", "out of focus")])

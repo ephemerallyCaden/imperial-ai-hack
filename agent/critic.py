@@ -161,8 +161,8 @@ def _traced(value, prec, unit, leaves, prob_sentence):
         kinds = {"count", "other"} if prec == ("dec", 0) else {"frac", "count", "other"}
     else:
         kinds = {"other"}                          # x, um, any other letter unit
-    for x, k in leaves:
-        if k in kinds and (_rounds_to(x, value, prec) or (unit == "%" and _rounds_to(x * 100.0, value, prec))):
+    for x, k in leaves:   # a "%" number traces to a fraction only as value x 100, never its raw value ("1%" != 1.0)
+        if k in kinds and _rounds_to(x * 100.0 if unit == "%" else x, value, prec):
             return True
     for c, cu in ALLOWLIST:
         if cu == unit and _rounds_to(float(c), value, prec):

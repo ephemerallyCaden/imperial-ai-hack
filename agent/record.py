@@ -18,17 +18,23 @@ from agent import config, run
 
 SAMPLES = os.path.join(config.REPO, "web", "data", "samples")
 VIDEO_UPLOAD = {"frames": [os.path.join(SAMPLES, f"sample_frame{k}.png") for k in (1, 2, 3)],
-                "interval_h": 1.0, "scale": 0.454, "name": "video_upload", "held_out_wound": "exp1_pos2033"}
+                "interval_h": 1.0, "scale": 0.908, "name": "video_upload", "held_out_wound": "exp1_pos2033"}
 WOUNDS = ["exp1_partII_C61_P1", "exp1_partI_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2"]  # stop early, stall, stop later, imaged to end
 
 
 def leaks(text):
-    """Strings that must never appear in a committed run file."""
+    """Strings that must never appear in a committed run file. The home path and $USER are matched literally
+    (re.escape: a Windows home such as C:\\Users\\x is not a pattern); $USER only as a whole word."""
     pats = [r"/home/", r"/Users/", r"\b\d{12}\b", "arn:" + "aws", "sk-" + "ant-", r"session_id", "isen" + "gard",
-            r"@amazon\.", os.path.expanduser("~"), os.environ.get("USER", "") or "\x00"]
+            r"@amazon\."]
+    hits = [p for p in pats if re.search(p, text, re.I)]
     home = os.path.expanduser("~")
-    hits = [p for p in pats[:-2] if re.search(p, text, re.I)]
-    return hits + [s for s in pats[-2:] if s and s != "\x00" and s in text] + (["home folder"] if home in text else [])
+    if home and home not in ("~", os.sep) and re.search(re.escape(home), text, re.I):
+        hits.append("home folder")
+    user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
+    if user and re.search(r"(?<![A-Za-z0-9_])" + re.escape(user) + r"(?![A-Za-z0-9_])", text):
+        hits.append("username")
+    return hits
 
 
 def check_clean(path):

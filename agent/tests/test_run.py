@@ -224,7 +224,7 @@ def test_frames_replay_forces_exclude_wound(tmp_path):
     _, recs = _go(tmp_path, wound, approve=lambda d: False)
     qc = [r for r in _kind(recs, "tool_call") if r["tool"] == "qc_forecast"]
     assert len(qc) == 1 and qc[0]["input"]["exclude_wound"] == "exp1_pos2033"
-    assert not qc[0]["output"].get("error") and qc[0]["output"]["model"] == "edge_speed"
+    assert not qc[0]["output"].get("error") and qc[0]["output"]["model"] in ("nca_realft3", "edge_speed")
 
 
 def test_cli_offline(tmp_path, monkeypatch, capsys):
@@ -448,3 +448,41 @@ def test_horizon_summary_scalars_still_trace(tmp_path):
     text = f"The 90% band for area at 19.0 h runs from 0.0 to {q95}."
     assert critic.trace(text, [run.critic_sources(o) for o in [r["output"] for r in _kind(recs, "tool_call")]]
                         )["untraced"] == 0
+
+
+# ---------------------------------------------------------------- PR #101 review
+
+@pytest.mark.parametrize("model,level,calibrated,want", [
+    ("nca_realft3", 0.9, None, True), ("edge_speed", 0.9, None, True), ("whad_population_prior", 0.9, None, True),
+    ("nca_realft3", 0.5, None, False), ("sim_ensemble", 0.9, None, False), ("nca_ensemble", None, False, False),
+    ("edge_speed", 0.9, False, False)])
+def test_calibrated_band_any_data_upload_model(model, level, calibrated, want):
+    doc = {"model": model, "level": level, "forecasts": [{}]}
+    if calibrated is not None:
+        doc["calibrated"] = calibrated
+    assert run.calibrated_band(doc) is want
+    assert run.calibrated_band({**doc, "refused": True}) is False
+
+
+@pytest.mark.parametrize("model,extra,kept", [("nca_realft3", {}, True), ("whad_population_prior", {}, True),
+                                              ("nca_realft3", {"calibrated": False}, False)])
+def test_upload_band_keeps_90_percent(tmp_path, model, extra, kept):
+    """#102: uploads use nca_realft3 (one frame: whad_population_prior); the Critic must keep "90%" for their band."""
+    doc = run._one(run._loo_doc(config.CHECKS_H[0]), NORMAL)
+    doc.update(model=model, **extra)
+    llm.set_stub(_schedule_stub(extra=" The 90% band is from the forecast."))
+    _, recs = _go(tmp_path, doc, approve=lambda d: False)
+    cr = _kind(recs, "critic")[0]
+    assert cr["calibrated_band"] is kept
+    assert ("90%" in cr["removed"]) is not kept
+
+
+def test_loo_doc_cached_and_not_mutated_by_one():
+    c = config.CHECKS_H[0]
+    a = run._loo_doc(c)
+    assert run._loo_doc(c) is a
+    one = run._one(a, NORMAL)
+    one["forecasts"][0]["area_q50"] = None
+    one["model"] = "changed"
+    assert run._one(run._loo_doc(c), NORMAL)["forecasts"][0]["area_q50"] is not None
+    assert run._loo_doc(c)["model"] == "edge_speed"

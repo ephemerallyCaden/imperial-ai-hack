@@ -70,8 +70,17 @@ TRUNC = "...[truncated]"
 
 # ---------------------------------------------------------------- wound sources
 
+_LOO_CACHE = {}
+
+
 def _loo_doc(cut):
-    return json.load(open(os.path.join(LOO_DIR, f"edge_speed_{cut}h.json")))
+    """Parsed LOO forecast file for this cut-off, read once per process (callers must not mutate it; _one copies)."""
+    path = os.path.join(LOO_DIR, f"edge_speed_{cut}h.json")
+    key = (path, os.path.getmtime(path))
+    if key not in _LOO_CACHE:
+        with open(path) as fh:
+            _LOO_CACHE[key] = json.load(fh)
+    return _LOO_CACHE[key]
 
 
 def _one(doc, wound_id):
@@ -81,8 +90,8 @@ def _one(doc, wound_id):
         fcs = [f for f in fcs if wound_id in (f.get("wound_id"), f.get("wound"))]
     if not fcs:
         return None
-    out = {k: v for k, v in doc.items() if k != "forecasts"}
-    out["forecasts"] = [fcs[0]]
+    out = copy.deepcopy({k: v for k, v in doc.items() if k != "forecasts"})
+    out["forecasts"] = [copy.deepcopy(fcs[0])]
     return out
 
 
@@ -334,7 +343,7 @@ class _Run:
                          reason="out of scope (keyword filter): clinical, treatment or molecule-design text replaced "
                                 "by a neutral template")
             expl = guarded
-        calibrated = bool(doc.get("model") == "edge_speed" and doc.get("level") == config.BAND_LEVEL) and not refused
+        calibrated = calibrated_band(doc)
         cr = critic.trace(expl, self._outputs(), calibrated_band=calibrated)
         self.traced += cr["traced"]; self.untraced += cr["untraced"]
         self.log.log("critic", cut_h=cut, calibrated_band=calibrated, removed=cr["removed"], traced=cr["traced"],
@@ -438,6 +447,21 @@ def off_track(doc, prev_doc, cut, state):
     except (KeyError, IndexError, TypeError, ValueError):
         return None
     return "out_of_band" if all(out) else None
+
+
+SIM_MODELS = ("sim_ensemble", "nca_ensemble")   # sim/upload.py bands: never a calibrated 90% band
+
+
+def calibrated_band(doc):
+    """True when the forecast's band is the calibrated data/upload.py band (any model data/upload.py returns:
+    nca_realft3, edge_speed, whad_population_prior; or the LOO edge_speed files) with level 0.9. Simulator / NCA
+    ensemble bands from sim/upload.py (tools.simulate marks them calibrated: false) are never calibrated."""
+    if not isinstance(doc, dict) or doc.get("refused") or doc.get("error"):
+        return False
+    if doc.get("model") in SIM_MODELS or doc.get("calibrated") is False:
+        return False
+    lvl = doc.get("level")
+    return isinstance(lvl, (int, float)) and not isinstance(lvl, bool) and abs(float(lvl) - config.BAND_LEVEL) < 1e-9
 
 
 def _with_summary(doc):
@@ -582,7 +606,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     wound = a.wound
     if wound.endswith(".json") and os.path.isfile(wound):
-        wound = json.load(open(wound))
+        with open(wound) as fh:
+            wound = json.load(fh)
     if llm._provider() == "stub" and llm._stub_handler is None:
         llm.set_stub(replay_stub)
     out = run_wound(a.run_id, wound, checks=a.checks, approve=(lambda d: not a.reject),

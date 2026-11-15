@@ -62,7 +62,9 @@ def load_wounds(src=run.LOO_DIR, checks=CHECKS):
         if not os.path.exists(p):
             continue
         th = U.stall_threshold(c)
-        for f in json.load(open(p))["forecasts"]:
+        with open(p) as fh:
+            fcs = json.load(fh)["forecasts"]
+        for f in fcs:
             if f["wound_id"] in exclude:
                 continue
             t, a = np.array(f["observed"]["t_hours"], float), np.array(f["observed"]["area"], float)
@@ -117,20 +119,24 @@ def replay_pick(allowed_ids):
 
 
 def read_real_run(path):
-    """One recorded run -> {wound_id, model_id, outcome, cost_usd, agree, model_checks}."""
-    recs = [json.loads(l) for l in open(path) if l.strip()]
-    start = next(r for r in recs if r["kind"] == "run_start")
-    end = next(r for r in recs if r["kind"] == "run_end")
+    """One recorded run -> {wound_id, model_id, outcome, cost_usd, agree, model_checks}, or None when the log has no
+    run_end (the recording was stopped part-way, e.g. Ctrl-C)."""
+    with open(path) as fh:
+        recs = [json.loads(l) for l in fh if l.strip()]
+    start = next((r for r in recs if r.get("kind") == "run_start"), None)
+    end = next((r for r in recs if r.get("kind") == "run_end"), None)
+    if start is None or end is None:
+        return None
     agree = checks = 0
-    for d in (r for r in recs if r["kind"] == "decision" and r.get("source") != "forced"):
-        checks += 1   # forced decisions (refusal, stall) never call the model
-        agree += d["decision"] == replay_pick([a["id"] for a in d.get("allowed", [])])
+    for d in (r for r in recs if r.get("kind") == "decision" and r.get("source") not in ("forced", "fallback")):
+        checks += 1   # forced (refusal, stall) never call the model; a fallback is code's pick, not the model's
+        agree += d.get("proposed") == replay_pick([a["id"] for a in d.get("allowed", [])])
     out = _outcome(end.get("stop_h") if end.get("stopped") else None, end.get("stop_kind") if end.get("stopped") else None,
                    traced=end.get("numbers_traced", 0), untraced=end.get("numbers_untraced", 0),
                    tokens=(end.get("tokens") or {}).get("total", 0))
-    return {"wound_id": start["wound"].get("wound_id"), "model_id": start.get("model_id"), "outcome": out,
+    return {"wound_id": (start.get("wound") or {}).get("wound_id"), "model_id": start.get("model_id"), "outcome": out,
             "plate_hours_saved": end.get("plate_hours_saved") or 0.0, "agree": agree, "model_checks": checks,
-            "cost_usd": sum(r.get("cost_usd") or 0 for r in recs if r["kind"] == "model_call")}
+            "cost_usd": sum(r.get("cost_usd") or 0 for r in recs if r.get("kind") == "model_call")}
 
 
 def real_label(runs_dir, n, model_ids):
@@ -140,19 +146,23 @@ def real_label(runs_dir, n, model_ids):
 
 
 def real_model_row(wounds, runs_dir, rate=config.COST_PLATE_HOUR):
-    """Scoreboard row from recorded real-model runs, or None if there are none. Error counters use only runs whose
-    wound has truth in load_wounds(); plate-hours saved is summed over all runs."""
-    runs = [read_real_run(f) for f in real_run_files(runs_dir)] if runs_dir and os.path.isdir(runs_dir) else []
-    if not runs:
+    """Scoreboard row from recorded real-model runs, or None if there are none. Each run log counts once (two
+    sessions on one wound are two runs). Every total in the row (errors, plate-hours, frames, cost, agreement) uses the
+    same runs: those whose wound has truth in load_wounds(). Logs with no run_end are skipped and counted."""
+    files = real_run_files(runs_dir) if runs_dir and os.path.isdir(runs_dir) else []
+    parsed = [(f, read_real_run(f)) for f in files]
+    done = [(f, r) for f, r in parsed if r is not None]
+    if not done:
         return None
-    with_truth = {r["wound_id"]: r["outcome"] for r in runs if r["wound_id"] in wounds}
-    row = {"policy": "real", **score(wounds, with_truth, rate)}
-    agree, checks = sum(r["agree"] for r in runs), sum(r["model_checks"] for r in runs)
-    row.update(n_wounds=len(runs), n_with_truth=len(with_truth),
-               plate_hours_saved=round(sum(r["plate_hours_saved"] for r in runs), 3),
-               model_cost_usd_per_run=round(sum(r["cost_usd"] for r in runs) / len(runs), 4),
-               agree_with_replay=agree, model_checks=checks,
-               label=real_label(runs_dir, len(runs), {r["model_id"] for r in runs}))
+    truth = [(f, r) for f, r in done if r["wound_id"] in wounds]
+    row = {"policy": "real", **score({f: wounds[r["wound_id"]] for f, r in truth},
+                                     {f: r["outcome"] for f, r in truth}, rate)}
+    runs = [r for _, r in truth]
+    row.update(n_wounds=len(done), n_with_truth=len(truth), n_skipped_no_run_end=len(parsed) - len(done),
+               n_distinct_wounds=len({r["wound_id"] for r in runs}),
+               model_cost_usd_per_run=round(sum(r["cost_usd"] for r in runs) / len(runs), 4) if runs else None,
+               agree_with_replay=sum(r["agree"] for r in runs), model_checks=sum(r["model_checks"] for r in runs),
+               label=real_label(runs_dir, len(done), {r["model_id"] for _, r in done}))
     return row
 
 
@@ -252,7 +262,8 @@ def cross_check(wounds, agent_out):
 COLS = ["policy", "label", "cost_rate_plate_hour", "n_wounds", "plate_hours_saved", "wrong_stall_stop", "wrong_closure_call",
         "missed_stall", "missed_non_closer", "non_closer_to_end", "stall_stops", "stall_stop_error_rate", "unlikely_calls", "likely_calls", "frames_used",
         "plate_hours_used", "total_cost", "cost_per_run", "pct_numbers_traced", "numbers_untraced",
-        "model_tokens_per_run", "n_stall", "n_not_closed", "model_cost_usd_per_run", "agree_with_replay", "model_checks"]
+        "model_tokens_per_run", "n_stall", "n_not_closed", "model_cost_usd_per_run", "agree_with_replay", "model_checks",
+        "n_with_truth", "n_distinct_wounds", "n_skipped_no_run_end"]
 
 
 def _fmt(v):
@@ -292,10 +303,14 @@ def write_md(path, rows, xc, runs_dir, real=None, real_dir=None):
               "are not comparable with the other rows. " + ("These are practice runs; the final re-record on the "
               "submission account (`python -m agent.record --out agent/runs`) will replace them. "
               if "practice" in real["label"] else "") + "Error counts use the same truth "
-              f"as the other rows ({real['n_with_truth']} of {real['n_wounds']} runs have truth). \"Same pick as replay "
-              "model\" counts the checks where the real model was asked (forced stall or refusal checks are left out) "
-              "and chose what the replay model would have chosen from the same allowed list. Model cost is the sum of "
-              "`cost_usd` over the run's model calls."]
+              f"as the other rows; every column uses the {real['n_with_truth']} of {real['n_wounds']} runs that have "
+              "truth, and each run log counts once (repeat sessions on one wound are separate runs; "
+              f"{real['n_distinct_wounds']} distinct wound(s))." + (f" {real['n_skipped_no_run_end']} log(s) with no "
+              "`run_end` (recording stopped part-way) left out." if real.get("n_skipped_no_run_end") else "") +
+              " \"Same pick as replay model\" counts the checks where the real model was asked and its own proposal "
+              "was used (forced stall or refusal checks and fallbacks are left out) and compares the model's proposed "
+              "decision with what the replay model would have chosen from the same allowed list. Model cost is the "
+              "sum of `cost_usd` over the run's model calls."]
     else:
         L += ["", f"Real model row skipped: no recorded WHAD wound runs (`*-exp1_*.jsonl`) in `{rel}`."]
     L += ["", "Stops by kind (stall / unlikely / likely): " + "; ".join(
@@ -360,13 +375,21 @@ def write_md(path, rows, xc, runs_dir, real=None, real_dir=None):
 
 
 def evaluate(runs_dir=None, out_dir=config.RESULTS_DIR, write=True, real_runs=REAL_RUNS_DIR):
+    prev_provider, prev_stub = os.environ.get("STITCH_PROVIDER"), llm._stub_handler
     os.environ["STITCH_PROVIDER"] = "stub"          # never a real model call here
     llm.set_stub(run.replay_stub)
-    runs_dir = runs_dir or tempfile.mkdtemp(prefix="agent_eval_runs_")
-    wounds = load_wounds()
-    outs = {"fixed": {k: fixed_schedule(w) for k, w in wounds.items()},
-            "rules": {k: simple_rules(w) for k, w in wounds.items()},
-            "agent": {k: agent_policy(k, runs_dir) for k in wounds}}
+    try:
+        runs_dir = runs_dir or tempfile.mkdtemp(prefix="agent_eval_runs_")
+        wounds = load_wounds()
+        outs = {"fixed": {k: fixed_schedule(w) for k, w in wounds.items()},
+                "rules": {k: simple_rules(w) for k, w in wounds.items()},
+                "agent": {k: agent_policy(k, runs_dir) for k in wounds}}
+    finally:   # leave the caller's provider and stub as they were
+        llm.set_stub(prev_stub)
+        if prev_provider is None:
+            os.environ.pop("STITCH_PROVIDER", None)
+        else:
+            os.environ["STITCH_PROVIDER"] = prev_provider
     rows = [{"policy": p, "label": POLICY_LABELS[p], **score(wounds, outs[p], rate)} for rate in RATES for p in POLICIES]
     xc = cross_check(wounds, outs["agent"])
     real = real_model_row(wounds, real_runs)

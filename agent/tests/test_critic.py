@@ -23,8 +23,14 @@ def test_rounding_to_shown_decimals():
 def test_percent_vs_fraction():
     assert trace("46% closed", [{"closure": 0.4612}])["untraced"] == 0
     assert trace("46.1% closed", [{"closure": 0.4612}])["untraced"] == 0
-    assert trace("46% closed", [{"closure": 46.2}])["untraced"] == 0       # leaf already in percent
+    assert trace("46% closed", [{"closure": 46.2}])["untraced"] == 1       # a "%" traces to a fraction only x 100
     assert trace("0.46 closed", [{"closure": 46}])["untraced"] == 1        # bare is not a percent
+
+
+def test_percent_never_traces_raw_fraction():   # PR #101 review item 5: invented "1%" must not trace to area 1.0
+    assert trace("area is 1% of the start", [{"area": 1.0}])["untraced"] == 1
+    assert trace("area is 100% of the start", [{"area": 1.0}])["untraced"] == 0
+    assert trace("p is 0.5% here", [{"p_close": 0.5}])["untraced"] == 1
 
 
 def test_unit_must_match_allowlist():
