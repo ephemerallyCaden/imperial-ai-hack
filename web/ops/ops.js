@@ -1,6 +1,6 @@
-// Ops mode: "Agent runs" (recorded run logs, scoreboard, adversarial set, investigator accuracy) and
-// "Forecast evidence" (slot for web/ops/evidence.js, built separately). Every number shown is read from a
-// file under agent/; a missing file shows "not available". Nothing is invented here.
+// Ops mode: a live replay of the recorded agent runs (wound status, headline, pipeline, event log), the stop-early and
+// band-coverage evidence, and the older run log / scoreboard / attack / Investigator tables under "Agent details".
+// Forecast evidence has its own mode (web/stats). Every number shown is read from a repo file; nothing is invented here.
 
 import { lineChart, reliabilityChart, responsive, legend, colorOf, ensureEvidenceCss } from "./evidence.js";
 
@@ -129,27 +129,12 @@ export function mount(el, ctx) {
   document.head.appendChild(css);
 
   el.innerHTML = `<div class="ops">
-    <div class="st-seg" role="tablist" aria-label="Ops views">
-      <button class="st-btn" data-tab="runs" aria-pressed="true">Overview</button>
-      <button class="st-btn" data-tab="evidence" aria-pressed="false">Forecast evidence</button>
-    </div>
     <div data-pane="runs"></div>
-    <div data-pane="evidence" hidden></div>
     <div class="ops-tip" role="tooltip" hidden></div>
   </div>`;
   const root = el.querySelector(".ops");
-  const panes = { runs: root.querySelector('[data-pane="runs"]'), evidence: root.querySelector('[data-pane="evidence"]') };
   wireTips(root);
-  let evidenceLoaded = false;
-  root.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => {
-    const t = b.dataset.tab;
-    root.querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-pressed", x === b));
-    Object.entries(panes).forEach(([k, p]) => p.hidden = k !== t);
-    if (t === "evidence" && !evidenceLoaded) { evidenceLoaded = true; loadEvidence(panes.evidence); }
-  }));
-
-  renderOverview(panes.runs, ctx, () => dead);
-  if (new URLSearchParams(location.search).get("tab") === "evidence") root.querySelector('[data-tab="evidence"]').click();   // ?tab=evidence for screenshots
+  renderOverview(root.querySelector('[data-pane="runs"]'), ctx, () => dead);
   return () => { dead = true; css.remove(); el.replaceChildren(); };
 }
 
@@ -455,20 +440,6 @@ function audit(runs, logs, advSrc) {
   </div>`;
 }
 
-async function loadEvidence(slot) {
-  const url = new URL("./evidence.js", import.meta.url).href;
-  let exists = false;
-  try { exists = (await fetch(url, { method: "HEAD" })).ok; } catch { /* treat as missing */ }
-  if (!exists) { slot.innerHTML = `<div class="ops-placeholder">Forecast evidence page (P1) not available yet</div>`; return; }
-  try {
-    const m = await import(url);
-    slot.replaceChildren();
-    await m.renderEvidence(slot);
-  } catch (e) {
-    console.error(e);
-    slot.innerHTML = `<div class="error">Forecast evidence page failed to load: ${esc(e.message)}</div>`;
-  }
-}
 
 async function renderRuns(pane, ctx, isDead) {
   const d = ctx.data;

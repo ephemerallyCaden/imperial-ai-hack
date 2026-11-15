@@ -4,7 +4,7 @@
 // tissue.js needs three.js (import map -> unpkg); it is loaded dynamically in mount() so Assay still works offline
 import { parseRun, mergeBranch, docAsChecks, isCalibrated, HORIZON_H } from "./runlog.js";
 import { areaAt, curveX } from "./curve.js";
-import { decisionCard, refusedPanel, tabs, forecastTab, imagesTab, whyTab, esc } from "./panel.js";
+import { decisionCard, refusedPanel, charts, framesRow, decisionKind, esc, ICON } from "./panel.js";
 import { createTimeline } from "./timeline.js";
 import { greyFromFile } from "../upload/segment.js";
 import { runUpload, BROWSER_LABEL } from "../upload/forecast.js";
@@ -38,32 +38,34 @@ export async function mount(el, ctx) {
       <button class="st-btn st-btn--primary" data-act="upload"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
       <input type="file" accept="image/*" multiple hidden id="as-file">
       <input type="file" accept="image/png,image/jpeg" hidden id="as-photo">
-      <span class="as-qc"></span>
-      <span class="as-honesty"></span>
+      <span class="as-qc" hidden></span>
+      <span class="as-honesty" hidden></span>
     </div>
     <div class="as-main">
       <div class="as-centre">
         <div class="as-stage">
-          <div class="as-hud as-hud-tl"><div class="as-readout num"></div><div class="as-caption as-simnote"></div></div>
+          <div class="as-hud as-hud-tl" hidden><div class="as-readout num"></div><div class="as-caption as-simnote"></div></div>
           <div class="as-hud as-hud-tr">
-            <div class="st-seg as-views">${["field", "wound", "cells"].map(v => `<button class="st-btn" data-view="${v}">${v}</button>`).join("")}</div>
-            <button class="st-btn" data-act="draw" title="Draw a wound on the tissue · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Draw</button>
-            <button class="st-btn" data-act="select" title="Select area · S"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" stroke-dasharray="3 3"/></svg>Select area</button>
-            <button class="st-btn" data-act="clear" title="Clear selection · Esc" hidden>Clear</button>
+            <button class="as-ibtn" data-act="draw" aria-label="Draw (B)" title="Draw · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
+            <button class="as-ibtn as-stallbtn" data-act="stall" aria-pressed="false" aria-label="Edge stall heatmap (H)" title="Edge stall · H"><svg viewBox="0 0 24 24"><path d="M12 3c3 4 6 6.5 6 10.5a6 6 0 0 1-12 0C6 10 9 8 12 3z"/></svg></button>
+            <button class="as-ibtn" data-act="heat" aria-pressed="false" aria-label="Age heatmap (A)" title="Cell age · A"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+            <div class="as-zoom" role="group" aria-label="Zoom">
+              <button class="as-ibtn" data-act="zoom-in" aria-label="Zoom in (+)" title="Zoom in · +">+</button>
+              <input class="as-zoomr" type="range" min="0" max="1" step="0.01" value="0" aria-label="Zoom">
+              <button class="as-ibtn" data-act="zoom-out" aria-label="Zoom out (−)" title="Zoom out · −">−</button>
+            </div>
+            <button data-act="select" hidden></button><button data-act="clear" hidden></button>
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
-            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = state (wound floor, leading edge, new tissue rising)</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span></div>
+            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span class="as-st"><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-divnote" hidden></span>
+              <div class="as-ageleg" hidden><div class="st-kicker">Cell age</div><i class="as-agebar" style="background:${T?.HEAT_GRADIENT || "none"}"></i><div class="as-ageends"><span>new</span><span>old</span></div></div></div>
+            <div class="as-legendheat" hidden><span><i class="sw sw-stalled"></i>Stalled edge</span><span><i class="sw sw-moving"></i>Moving edge</span></div>
           </div>
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
           <div class="as-cover" hidden></div>
           <div class="as-notice st-panel--solid" hidden></div>
-        </div>
-        <div class="as-scales">
-          <div><div class="st-kicker">Scales</div><p class="as-caption">Same field, three zooms. Click to fly the camera.</p></div>
-          ${[["field", "×1 whole field", "880 × 640 µm"], ["wound", "×10 wound", "~16 cells across"], ["cells", "×40 single cells", "~4 cells across"]].map(([v, a, b]) =>
-            `<button class="as-thumb" data-view="${v}"><canvas width="150" height="90"></canvas><span>${a} · ${b}</span></button>`).join("")}
         </div>
       </div>
       <aside class="as-panel" aria-label="Decision and forecast"></aside>
@@ -75,7 +77,7 @@ export async function mount(el, ctx) {
 
   // ---------- state ----------
   const S = { items: [], item: null, main: null, branch: null, merged: null, active: "main", t: 0, playing: false, speed: 1,
-    approvals: {}, tab: "forecast", rejectNote: "", panelKey: "", msg: "", sel: null, raw: {} };
+    stall: false, stallShown: false, stallKey: "", approvals: {}, tab: "forecast", rejectNote: "", panelKey: "", msg: "", sel: null, raw: {} };
   const run = () => S.active === "branch" ? S.merged : S.main;
   const checkAt = t => { const cs = run()?.checks || []; let c = null; for (const x of cs) if (x.cut_h <= t + 1e-9) c = x; return c; };
   const branchCut = () => S.branch?.start?.branch_cut_h;
@@ -86,21 +88,21 @@ export async function mount(el, ctx) {
   const mains = index.runs.filter(r => !r.branch);
   S.items = [
     ...mains.map(r => ({ kind: "run", id: r.run_id, run: r, branch: index.runs.find(b => b.branch && b.run_id === r.run_id + ".reject") || null,
-      label: `${r.kind === "frames" ? "Upload run" : "Held-out"} · ${r.wound_id}${r.stop_kind ? ` · stop (${r.stop_kind}) at ${r.stop_h} h` : ""}` })),
+      label: `${r.wound_id.replace(/^exp1_/, "").replace(/_/g, " ")}${r.stop_kind ? ` · stop ${r.stop_h} h` : ""}` })),
     ...SAMPLES.map(s => ({ kind: "sample", id: s.id, sample: s, label: s.label })),
-    { kind: "draw", id: "draw_live", label: "Draw a wound · live NCA (simulation)" },
-    { kind: "heldout", id: "heldout_sim_nca", label: "Held-out wound: sim vs NCA vs data (exp1_partII_C61_P2)" },
+    { kind: "draw", id: "draw_live", label: "Draw · live NCA" },
+    { kind: "heldout", id: "heldout_sim_nca", label: "Sim vs NCA vs data · partII C61 P2" },
   ];
   const sel = $("#as-wound");
   const grp = (name, list) => list.length ? `<optgroup label="${esc(name)}">${list.map(i => `<option value="${esc(i.id)}">${esc(i.label)}</option>`).join("")}</optgroup>` : "";
   const fillSelect = () => {
-    sel.innerHTML = grp("Your uploads (run in this browser, nothing sent)", S.items.filter(i => i.kind === "upload"))
-      + grp("Recorded runs (held-out WHAD replays)", S.items.filter(i => i.kind === "run" && i.run.kind !== "frames"))
-      + grp("Recorded runs (upload)", S.items.filter(i => i.kind === "run" && i.run.kind === "frames"))
-      + grp("Samples (offline, no agent run)", S.items.filter(i => i.kind === "sample"))
-      + grp("Validation (held-out WHAD wound)", S.items.filter(i => i.kind === "heldout"))
-      + grp("Draw (simulation, no forecast)", S.items.filter(i => i.kind === "draw"));
-    if (!mains.length) sel.insertAdjacentHTML("beforeend", `<option disabled>No recorded runs found in agent/runs</option>`);
+    sel.innerHTML = grp("Uploads", S.items.filter(i => i.kind === "upload"))
+      + grp("Held-out runs", S.items.filter(i => i.kind === "run" && i.run.kind !== "frames"))
+      + grp("Upload runs", S.items.filter(i => i.kind === "run" && i.run.kind === "frames"))
+      + grp("Samples", S.items.filter(i => i.kind === "sample"))
+      + grp("Validation", S.items.filter(i => i.kind === "heldout"))
+      + grp("Draw", S.items.filter(i => i.kind === "draw"));
+    if (!mains.length) sel.insertAdjacentHTML("beforeend", `<option disabled>No runs</option>`);
   };
   fillSelect();
 
@@ -111,7 +113,7 @@ export async function mount(el, ctx) {
     const pb = await ctx.data.json(PLAYBACK);
     tissue = T.createTissue(stage, pb, { onSelection: showSel, onHover: showTip });
   } catch (e) {
-    console.error(e); stage.insertAdjacentHTML("afterbegin", `<div class="error">3D field of simulated cells not shown: ${esc(e.message)}. The curve, panel, samples and uploads still work.</div>`);
+    console.error(e); stage.insertAdjacentHTML("afterbegin", `<div class="error">3D view offline</div>`);
   }
 
   // ---------- timeline ----------
@@ -192,7 +194,7 @@ export async function mount(el, ctx) {
     if (special && special !== v) { special.leave(); $(".as-timeline").hidden = false; }
     special = v;
     if (v) return v.enter(it);
-    S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1;
+    S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1; S.stall = false; S.stallKey = "";
     try {
       if (it.kind === "run") {
         const recs = await ctx.data.jsonl(index.base + it.run.file);
@@ -276,36 +278,36 @@ export async function mount(el, ctx) {
       // undo the latest answer at or before t
       const cut = Math.max(...Object.keys(S.approvals).map(Number).filter(k => k <= S.t + 1e-9));
       if (isFinite(cut)) { delete S.approvals[cut]; if (cut === branchCut()) S.active = "main"; Object.keys(S.approvals).forEach(k => +k > cut && delete S.approvals[k]); seek(cut); return; }
-    } else if (a === "why") { S.tab = "why"; }
+    } else if (a === "stall") { S.stall = !S.stallShown; }
+    else if (a === "zoom-in") return tissue?.zoom(1);
+    else if (a === "zoom-out") return tissue?.zoom(-1);
     else if (a === "upload") return $("#as-file").click();
     else if (a === "sample") return select("sample_3frame");
     else if (a === "draw") return useTool("brush");
     else if (a === "select") return useTool("select");
     else if (a === "clear") return tissue?.clearSelection();
+    else if (a === "heat") return setHeat(!tissue?.isHeat());
     refresh();
   }
   el.addEventListener("click", e => {
-    const b = e.target.closest("[data-act],[data-tab],[data-view]"); if (!b || !el.contains(b)) return;
-    if (b.dataset.tab) { S.tab = b.dataset.tab; refresh(); }
+    const b = e.target.closest("[data-act],[data-view]"); if (!b || !el.contains(b)) return;
+    if (false) {}
     else if (b.dataset.view) { tissue?.goTo(b.dataset.view); markView(); }
     else act(b.dataset.act);
   });
-  el.addEventListener("input", e => { if (e.target.id === "as-reason") S.rejectNote = e.target.value; });
+  el.addEventListener("input", e => { if (e.target.classList.contains("as-zoomr")) tissue?.setZoom(+e.target.value); });
   // ---------- in-browser upload (#39): same QC + segmentation + edge-speed forecast as data/upload.py, nothing sent ----------
   let nUploads = 0;
   $("#as-file").addEventListener("change", e => {
     const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); e.target.value = "";
     if (!files.length) return;
     const used = files.slice(0, 5);
-    notice(`<div class="st-kicker">Upload · ${files.length} image${files.length === 1 ? "" : "s"} · runs in this browser, nothing is sent</div>
-      <p>${esc(BROWSER_LABEL)}</p>
-      <ol class="as-list">${used.map((f, i) => `<li>${esc(f.name)} <span class="as-dim">(t = ${i} × interval)</span></li>`).join("")}</ol>
-      ${files.length > 5 ? `<p class="as-caption">Only the first 5 images (by file name) are used.</p>` : ""}
+    notice(`<div class="st-kicker">Upload · ${used.length} image${used.length === 1 ? "" : "s"} · in browser</div>
+      <ol class="as-list">${used.map(f => `<li>${esc(f.name)}</li>`).join("")}</ol>
       <form class="as-upform">
-        <label class="as-caption">Frame interval (hours between images)<input class="as-input" name="interval" type="number" step="any" min="0" required></label>
-        <label class="as-caption">Pixel scale (µm per pixel; WHAD is 0.454, the samples are 0.908)<input class="as-input" name="scale" type="number" step="any" min="0" required></label>
-        <p class="as-caption">Both are required, as in data/upload.py. Images are taken in file-name order.</p>
-        <div class="as-btns"><button class="st-btn st-btn--primary" type="submit">Run QC and forecast</button><button class="st-btn" type="button" data-notice="close">Cancel</button></div>
+        <label class="as-caption">Interval (h)<input class="as-input" name="interval" type="number" step="any" min="0" placeholder="1" required></label>
+        <label class="as-caption">Scale (µm/px)<input class="as-input" name="scale" type="number" step="any" min="0" placeholder="0.908" required></label>
+        <div class="as-btns"><button class="st-btn st-btn--primary" type="submit">Forecast</button><button class="st-btn" type="button" data-notice="close">Cancel</button></div>
       </form>`);
     const form = $(".as-notice .as-upform");
     form.addEventListener("submit", async ev => {
@@ -313,15 +315,15 @@ export async function mount(el, ctx) {
       const interval = +form.interval.value, scale = +form.scale.value;
       if (!(interval > 0) || !(scale > 0)) return;
       form.querySelector('[type="submit"]').disabled = true;
-      form.insertAdjacentHTML("beforeend", `<p class="as-caption as-upbusy">Reading images and running QC…</p>`);
+      form.insertAdjacentHTML("beforeend", `<p class="as-caption as-upbusy">Running…</p>`);
       try {
         const [calib, frames] = await Promise.all([ctx.data.json(CALIB), Promise.all(used.map(greyFromFile))]);
         const res = runUpload(frames, interval, scale, calib);
         if (res.doc.error) {
-          return notice(`<div class="st-kicker">Upload · no forecast</div><p>${esc(res.doc.error)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+          return notice(`<div class="st-kicker">No forecast</div><p>${esc(res.doc.error)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
         }
         const id = `upload_${++nUploads}`, n = used.length;
-        const item = { kind: "upload", id, doc: res.doc, label: `Upload ${nUploads} · ${n} frame${n === 1 ? "" : "s"}${res.doc.refused ? " (refused)" : ""} · browser estimate`,
+        const item = { kind: "upload", id, doc: res.doc, label: `Upload ${nUploads} · ${n} frame${n === 1 ? "" : "s"}${res.doc.refused ? " · refused" : ""}`,
           frames: used.map((f, i) => ({ src: URL.createObjectURL(f), mask: res.masks[i] ? maskURL(res.masks[i]) : null,
             t: res.doc.forecasts?.[0]?.observed?.t_hours[i], area: res.doc.forecasts?.[0]?.observed?.area[i] })) };
         S.items.unshift(item); fillSelect();
@@ -329,7 +331,7 @@ export async function mount(el, ctx) {
         await select(id);
       } catch (err) {
         console.error(err);
-        notice(`<div class="st-kicker">Upload · could not read the images</div><p>${esc(err.message)}</p><p class="as-caption">PNG or JPEG phase-contrast frames work; TIFF does not decode in browsers.</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+        notice(`<div class="st-kicker">Could not read images · PNG / JPEG</div><p>${esc(err.message)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
       }
     });
   });
@@ -350,7 +352,7 @@ export async function mount(el, ctx) {
   function images() {
     const it = S.item;
     if (!it) return null;
-    if (it.kind === "upload") return { frames: it.frames, note: "Masks made in this browser by the classical segmenter (port of data/segment.py); no LLM looks at pixels and nothing was sent." };
+    if (it.kind === "upload") return { frames: it.frames };
     if (it.kind === "sample") {
       const s = it.sample, fc = S.main.checks[0]?.fc;
       const frames = s.frames ? s.frames.map((f, i) => ({ src: ROOT + SAMPLE_DIR + f, mask: s.masks[i] && ROOT + SAMPLE_DIR + s.masks[i] }))
@@ -362,8 +364,7 @@ export async function mount(el, ctx) {
       const qc = S.main.checks[0]?.forecastCall, paths = qc?.input?.frames || [], fc = S.main.checks[0]?.fc;
       const asSample = paths.every((p, i) => p === `${SAMPLE_DIR}sample_frame${i + 1}.png`) && paths.length >= 1 && paths.length <= 3;
       return { frames: paths.map((p, i) => ({ src: ROOT + p, mask: asSample ? ROOT + SAMPLE_DIR + `sample_${paths.length}frame_frame${i + 1}_mask.png` : null,
-          t: fc?.observed?.t_hours[i], area: fc?.observed?.area[i] })),
-        note: asSample ? `Frames from the run log's qc_forecast input. This run's own masks went to a temp file; the masks shown are sample_${paths.length}frame's, made by the same segmenter from the same frames.` : "Frames from the run log's qc_forecast input; this run's masks were written to a temp file and are not in the repo." };
+          t: fc?.observed?.t_hours[i], area: fc?.observed?.area[i] })) };
     }
     return null;
   }
@@ -372,52 +373,36 @@ export async function mount(el, ctx) {
     if (!S.item || special) return;
     const r = run(), cNow = checkAt(S.t), c = cNow || r.checks[0] || null;
     const refusedDoc = S.main.refused || (cNow?.doc?.refused ? cNow.doc : null);
-    // ----- top bar chips -----
-    const fc = c?.fc, sq = fc?.segmentation_quality;
-    let qc = "";
-    if (refusedDoc) qc = `<span class="st-chip st-chip--flag">Refused · ${esc((refusedDoc.reasons || [])[0] || "")}</span>`;
-    else if (sq) {
-      const obs = fc.observed.t_hours.filter(h => h <= c.doc.cutoff_hours + 1e-9), gap = obs.length > 1 ? obs[1] - obs[0] : null;
-      const txt = sq.status === "manual_mask" ? "QC · manual mask (WHAD replay)" : sq.status === "flagged" ? "QC flagged" : `QC ${sq.status}`;
-      qc = `<span class="st-chip ${sq.status === "flagged" ? "st-chip--flag" : ""}" title="${esc((sq.reasons || []).join("; "))}">${txt} · ${obs.length} image${obs.length === 1 ? "" : "s"}${gap ? ` · ${gap} h apart` : ""}${sq.reasons?.length ? ` · ${esc(sq.reasons[0])}` : ""}</span>`;
-    }
-    const uncFlag = !refusedDoc && (fc?.flags || []).find(f => f?.type === "uncalibrated_condition");
-    if (uncFlag) qc += `<span class="st-chip st-chip--flag" title="${esc(uncFlag.reason)}">New condition · band widened, uncalibrated</span>`;
-    $(".as-qc").innerHTML = qc;
-    const cal = c && isCalibrated(c.doc, fc);
-    $(".as-honesty").innerHTML = [S.item.kind === "run" ? "Recorded run" : S.item.kind === "upload" ? BROWSER_LABEL : "Sample data", refusedDoc ? null : "Simulated cells · not tracked cells",
-      c && !refusedDoc && !cal ? "Uncalibrated" : null, S.active === "branch" ? "Rejected branch (recorded)" : null]
-      .filter(Boolean).map(x => `<span class="st-chip st-chip--honesty">${x}</span>`).join("");
+    const fc = c?.fc;
 
     // ----- stage -----
     const cover = $(".as-cover");
     cover.hidden = !refusedDoc;
-    if (refusedDoc) cover.innerHTML = `<div class="st-kicker">Refused</div><p>No forecast, no band and no simulation are shown for refused data.</p>`;
+    if (refusedDoc) cover.innerHTML = `<span class="as-cover-icon">${ICON.refused}</span><div class="st-kicker">Refused</div>`;
+    // while a stop / stall decision waits for approval, the edge-stall overlay shows where the front is not moving
+    const autoStall = !!(cNow?.needsApproval && !S.approvals[cNow.cut_h] && ["stop", "stall"].includes(decisionKind(cNow.decision)));
+    S.stallShown = S.stall || autoStall;
     if (tissue && c && !refusedDoc) {
-      const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area), obsPhase = S.t <= c.doc.cutoff_hours + 1e-9 || !cNow;
-      $(".as-readout").textContent = `t = ${S.t.toFixed(1)} h · wound area ${Math.round(area * 100)}% of start (${obsPhase ? "observed" : "forecast median"})`;
-      const own = (S.item.run?.wound_id || "") === PLAYBACK_WOUND;
-      $(".as-simnote").textContent = `Simulated cells, not tracked cells: P2 cell-agent playback (${PLAYBACK_WOUND}, follow rule), frame at sim ${fd.t} h chosen to match this area. `
-        + (own ? "Same wound as the selected run." : `Field shape is ${PLAYBACK_WOUND}'s; only the area follows the selected wound.`);
-      if (fd.f !== S.thumbF) { S.thumbF = fd.f; drawThumbs(); }
-    } else { $(".as-readout").textContent = `t = ${S.t.toFixed(1)} h`; $(".as-simnote").textContent = ""; }
+      const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area), dt = Math.min(1, S.t);
+      const prev = S.stallShown && dt > 0.05 ? areaAt(fc, c.doc.cutoff_hours, S.t - dt) : null;
+      const key = prev == null ? "" : `${fd.f}|${prev.toFixed(3)}`;
+      if (key !== S.stallKey) { S.stallKey = key; tissue.setStall(prev == null ? null : { prevArea: prev, dtHours: dt, cutH: S.t, horizonH: HORIZON_H }); }
+    }
+    $(".as-stallbtn").setAttribute("aria-pressed", !!S.stallShown);
+    $(".as-legendheat").hidden = !S.stallShown;
+    $(".as-legend3d").classList.toggle("is-stall", !!S.stallShown);
 
     // ----- timeline -----
-    tl.update({ t: S.t, playing: S.playing, speed: S.speed, t0: refusedDoc ? null : c?.doc?.cutoff_hours ?? null, checks: (r.checks || []).map(x => x.cut_h), msg: S.msg });
+    tl.update({ t: S.t, playing: S.playing, speed: S.speed, t0: refusedDoc ? null : c?.doc?.cutoff_hours ?? null,
+      checks: (r.checks || []).map(x => ({ h: x.cut_h, kind: x.decision ? decisionKind(x.decision) : "go", pending: x.needsApproval && !S.approvals[x.cut_h] })) });
 
     // ----- panel (re-render only when something it shows changed) -----
-    const key = [S.item.id, S.active, cNow?.cut_h, JSON.stringify(S.approvals), S.tab, !!refusedDoc, S.msg].join("|");
+    const key = [S.item.id, S.active, cNow?.cut_h, JSON.stringify(S.approvals), !!refusedDoc, S.msg].join("|");
     if (key !== S.panelKey) {
       S.panelKey = key;
-      const ps = { check: cNow, run: r, approvals: S.approvals, sourceKind: S.item.kind, rejectNote: S.rejectNote,
-        branchAvailable: !!(S.branch && cNow && branchCut() === cNow.cut_h) };
-      if (refusedDoc) {
-        const im = images();
-        panel.innerHTML = refusedPanel(refusedDoc, cNow, S.item.kind === "upload" ? "the in-browser port of upload.py's rules" : undefined) + (im ? imagesTab(im, null, r) : "");
-      } else {
-        const body = S.tab === "forecast" ? forecastTab(c, S.t) : S.tab === "images" ? imagesTab(images(), c, r.start ? r : S.main) : whyTab(r, cNow, S.t, S.approvals);
-        panel.innerHTML = decisionCard(ps) + tabs(S.tab) + `<div class="as-tabbody" role="tabpanel">${body}</div>`;
-      }
+      const ps = { check: cNow, run: r, approvals: S.approvals, sourceKind: S.item.kind };
+      const im = images();
+      panel.innerHTML = refusedDoc ? refusedPanel(refusedDoc) + framesRow(im) : decisionCard(ps) + charts(r, c, S.t) + framesRow(im);
       panel.querySelectorAll("canvas[data-mask]").forEach(drawMask);
     }
     const now = panel.querySelector(".c-now");
@@ -458,7 +443,14 @@ export async function mount(el, ctx) {
     const tip = $(".as-tip");
     if (!h || tissue?.isSelecting()) { tip.hidden = true; return; }
     tip.hidden = false; tip.style.left = `${h.px + 14}px`; tip.style.top = `${h.py + 14}px`;
-    tip.textContent = `hex (${h.i},${h.j}) · x ${h.x_um} y ${h.y_um} µm · ${STATE_LABEL[h.state]} · density ${h.density.toFixed(2)} (simulated)`;
+    tip.textContent = `${h.x_um}, ${h.y_um} µm · ${STATE_LABEL[h.state]} · ${h.density.toFixed(2)}`;
+  }
+  // age heatmap overlay (button, A, ?heat): recolours the 3D field only, so playback and the live run carry on untouched;
+  // legend as in the glass-dish mockup (title, gradient of the stops, state entries dimmed)
+  function setHeat(on) {
+    if (!tissue) return;
+    tissue.setHeat(on); $('[data-act="heat"]').setAttribute("aria-pressed", on);
+    $(".as-legend3d").classList.toggle("is-heat", on); $(".as-ageleg").hidden = !on;
   }
   function markView() {
     const v = tissue?.view();
@@ -489,9 +481,11 @@ export async function mount(el, ctx) {
       }
     });
   }
+  const zr = $(".as-zoomr");
   tissue?.onFrame(() => {
     const px = tissue.pxPer100um(), [um, w] = px > 260 ? [20, px / 5] : px < 30 ? [500, px * 5] : [100, px];
-    $(".as-scalebar i").style.width = `${Math.round(w)}px`; $(".as-scalebar span").textContent = `${um} µm (at the orbit target)`;
+    $(".as-scalebar i").style.width = `${Math.round(w)}px`; $(".as-scalebar span").textContent = `${um} µm`;
+    if (document.activeElement !== zr) zr.value = tissue.zoomLevel().toFixed(2);
   });
 
   // ---------- exports ----------
@@ -524,6 +518,8 @@ export async function mount(el, ctx) {
     else if (a === "open-images") $("#as-file").click();
     else if (a === "select-area") act("select");
     else if (a === "clear-selection") tissue?.clearSelection();
+    else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
+    else if (a === "toggle-heatmap") act("stall");
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
     else if (a.startsWith("camera:")) { tissue?.goTo(a.slice(7)); markView(); }
     else if (a === "export-forecast") exportForecast();
@@ -539,13 +535,15 @@ export async function mount(el, ctx) {
     else if (a === "zoom-in") tissue?.zoom(1);
     else if (a === "zoom-out") tissue?.zoom(-1);
     else if (a === "select-area") act("select");
+    else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
-    else if (a === "reset-camera") { tissue?.reset(); markView(); }
+    else if (a === "reset-camera") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.reset(); markView(); }
+    else if (a === "toggle-heatmap") act("stall");
   };
   ctx.bus.addEventListener("action", onAction);
   ctx.bus.addEventListener("key", onKey);
 
-  markView();
+  markView(); setHeat(new URLSearchParams(location.search).has("heat"));
   const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
   delete ctx.openItem;
   if (first) await select(first.id);

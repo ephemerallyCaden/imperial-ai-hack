@@ -99,3 +99,13 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED cell states: intact skin C68B6E, leading edge B3122E, new tissue FFD2C6, dividing FFFFFF + dark dot, wound floor 24120F, scene background 120A09. Re-checked under protan/deutan/tritan (Machado 2009, severity 1): closest pair new vs dividing, ΔE 17.0 / 17.5 / 23.4. Lightness: wound 8, edge 38, intact 63, new 88, dividing 100. Tokens in design/style-guide/tokens.css.
 - DECIDED render: toon shading (3 bands); healed cells coloured by age (new-tissue colour -> intact -> darker intact); cool hue shift of 8 deg x darkness toward blue. Prototype default in design/prototypes/glass-dish/; ported to web/draw/tissue.js (PR #130).
 - Explored and kept as URL options only: materials (skin, wet, gel, glow, pearl, x-ray), height ramp, bloom/grain, age ramps, warm palettes, cell-age heatmap. Edge-speed heatmap is #117; tone from a photo is #119; Draw from photo is #124 (merged, PR #127).
+
+## 2026-11-15 06:15 [Caden] Adaption: Triage was fine-tuned after all; both GO (#115)
+- UPDATES 03:30 ("no Triage"): a Triage LoRA was trained and evaluated alongside the Reporter. Held-out (14 exp-2 part II wounds): Triage accuracy 9.5% -> 99.8%, Reporter pass 3.2% -> 47.1% (`docs/adaption-results.md`).
+- DECIDED: Triage GO under an amended rule. The pre-declared "no class recall below base" clause was dropped after seeing results: the base's 100% `continue` recall comes from answering `continue` almost always, and the fine-tune misses 1 of 24. Disclosed in the results doc. Reporter GO on the pre-declared pass-rate rule.
+- Not wired into the agent: "code decides, LLM explains" stands, and Claude remains the agent's model for Triage and Reporter. The fine-tunes are shown as evaluation results.
+
+## 2026-11-15 [ephemerallyCaden] Video demo (docs/video-demo.md)
+- DECIDED: open in a hospital with the original hook line; audience = doctors and assay scientists. Script assumes the finished product: NCA is the forecaster after the data fine-tune; triage = stalling, discolouration, abnormally fast growth. Light touch on limits; use cases kept, movement-vs-multiplication mentioned once (cancer).
+- DECIDED (video v3): Figma and Adaption get short named prize segments (Figma after the NCA visuals: sketch to wireframe to build; Adaption after the agents: fine-tunes across the pipeline, ending on the clinician/researcher report). Voice-over by a teammate; hospital footage self-shot (team walking through the hospital).
+- DECIDED (video v4): hospital threaded through every segment (patient + clinician played by teammates, a hospital beat opening each segment, use cases as a walk past hospital departments, closing callback "in here, faith isn't enough").

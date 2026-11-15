@@ -66,6 +66,23 @@ const CSS = `
 .evidence .ev-tip { position: absolute; z-index: 5; pointer-events: none; background: ${C.ink}; color: ${C.bg}; font: var(--fs-label, 10px)/1.4 var(--font-mono, monospace);
   padding: 4px 8px; white-space: pre; display: none; }
 .evidence .ev-foot { color: ${C.dim}; font: italic var(--fs-label, 10px) var(--font-serif, Georgia, serif); margin-top: var(--ev-gap); }
+/* one look with the Ops overview: full width, hairline panel grid, number-first tiles, caps titles */
+.evidence { max-width: none; margin: 0; padding: 0; background: transparent; }
+.evidence.ev-embed { padding: 0; }
+.evidence .ev-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3, 12px); margin-bottom: var(--s3, 12px); }
+.evidence .ev-chips { margin: 0; }
+.evidence .ev-tiles { margin-bottom: 0; }
+.evidence .ev-tile { display: grid; gap: 2px; align-content: start; }
+.evidence .ev-tile b { font: 500 24px/1 var(--font-mono, monospace); color: ${C.ink}; margin: 0; }
+.evidence .ev-tile b.is-flag { color: ${C.accent}; }
+.evidence .ev-tile span { color: ${C.dim}; font-size: var(--fs-label, 10px); text-transform: uppercase; letter-spacing: .06em; }
+.evidence .ev-grid { gap: 1px; background: var(--hair, rgba(232,236,239,.18)); border: 1px solid var(--hair, rgba(232,236,239,.18)); border-top: 0; }
+.evidence .ev-card { border: 0; padding: var(--s3, 12px) var(--s4, 16px); }
+.evidence h3 { font: 600 var(--fs-label, 10px) var(--font-cond, "Arial Narrow", sans-serif); letter-spacing: var(--track-label, .1em); text-transform: uppercase; color: ${C.dim}; margin: 0 0 4px; }
+.evidence .ev-note { color: ${C.dim}; font-size: var(--fs-small, 11px); }
+.evidence .ev-tip { background: var(--panel-solid, #0B0D10); color: ${C.ink}; border: 1px solid var(--line, rgba(232,236,239,.5)); font: var(--fs-small, 11px)/1.4 var(--font-mono, monospace);
+  padding: 6px 8px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.evidence .ev-foot { margin-top: var(--s3, 12px); }
 @media (max-width: 760px) { .evidence .ev-grid { grid-template-columns: minmax(0, 1fr); } .evidence { padding: var(--s4, 16px); } }
 `;
 

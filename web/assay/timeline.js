@@ -1,6 +1,7 @@
 // Bottom timeline: transport (step back, play/pause, step forward), speed 0.5x–4x, "t = x h of 19 h",
 // a ribbon with observed history solid, the t0 marker, the forecast hatched, check ticks and a draggable playhead.
 import { HORIZON_H } from "./runlog.js";
+import { ICON } from "./panel.js";
 
 const SPEEDS = [0.5, 1, 2, 4];
 const I = {
@@ -21,12 +22,11 @@ export function createTimeline(el, { onPlay, onStep, onSpeed, onSeek }) {
       <div class="st-seg tl-speed">${SPEEDS.map(s => `<button class="st-btn" data-speed="${s}">${s}×</button>`).join("")}</div>
       <span class="tl-t num"></span>
       <span class="st-chip st-chip--honesty tl-sped" hidden>Sped up</span>
-      <span class="tl-msg as-caption"></span>
     </div>
     <div class="tl-ribbon" role="slider" tabindex="0" aria-label="Time" aria-valuemin="0" aria-valuemax="${HORIZON_H}">
       <div class="tl-obs"></div><div class="tl-fc"></div><div class="tl-t0"></div><div class="tl-ticks"></div><div class="tl-head"></div>
     </div>
-    <div class="tl-key as-caption"><span>observed history (solid)</span><span class="tl-key-t0">t0 = forecast origin</span><span>forecast (hatched)</span><span>ticks = agent checks</span></div>`;
+`;
   const $ = s => el.querySelector(s), rib = $(".tl-ribbon");
   el.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
@@ -43,18 +43,17 @@ export function createTimeline(el, { onPlay, onStep, onSpeed, onSeek }) {
   return {
     update({ t, playing, speed, t0, checks = [], msg = "" }) {
       const p = h => `${(h / HORIZON_H) * 100}%`;
-      $(".tl-t").textContent = `t = ${t.toFixed(1)} h of ${HORIZON_H} h`;
+      $(".tl-t").innerHTML = `${t.toFixed(1)} h <span>/ ${HORIZON_H} h</span>`;
       const pb = $('[data-tl="play"]'); pb.innerHTML = playing ? I.pause : I.play;
       pb.setAttribute("aria-label", playing ? "Pause (Space)" : "Play (Space)"); pb.title = playing ? "Pause · Space" : "Play · Space";
       el.querySelectorAll("[data-speed]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === speed));
       $(".tl-sped").hidden = !(speed > 1);
-      $(".tl-msg").textContent = msg;
       const o = t0 ?? 0;
       $(".tl-obs").style.width = p(o); $(".tl-fc").style.left = p(o); $(".tl-t0").style.left = p(o);
       $(".tl-t0").hidden = t0 == null;
       $(".tl-head").style.left = p(t);
       rib.setAttribute("aria-valuenow", t.toFixed(1));
-      const ticks = checks.map(c => `<i style="left:${p(c)}" title="check at ${c} h"></i>`).join("");
+      const ticks = checks.map(c => `<i class="tl-tick tl-tick--${c.kind || "go"} ${c.pending ? "is-pending" : ""}" style="left:${p(c.h)}" title="${c.h} h">${ICON[c.kind] || ""}</i>`).join("");
       if ($(".tl-ticks").innerHTML !== ticks) $(".tl-ticks").innerHTML = ticks;
     },
   };
