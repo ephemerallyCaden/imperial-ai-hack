@@ -220,6 +220,30 @@ This is the same wound as Agent 4's sim playback, rolled out with the NCA so the
 - **Fit source:** `meta.fit_source` = feature/p2-agent1 aed3174 `sim/fits/whad_fits.json` (sha256 `97943ebccf05`).
 - **Regenerate:** `python3 sim/js/band_check.py <agent1 root> exp1_partII_C61_P2 3.8 case.json`, then `node sim/js/make_nca_playback.mjs web/public/sim/nca_weights.json case.json web/public/sim/whad_partII_C61_P2_nca.json`.
 
+### Assay 3D field: one v2 NCA playback per run wound (`web/public/sim/nca_follow_<wound>.json`)
+
+The Assay 3D view shows the NCA, not the cell-agent playback, for every picker item. `tissue.js` reads density-only files
+(no `agents`): each hex samples the coarse density bilinearly, and the wound mask and outline sit at the area-matched level
+of that density (the `smooth.js` rule), so the open area shown equals the frame's `wound_frac`. `setPlayback(pb)` swaps
+files without rebuilding the scene. The frame shown is still the one whose area best matches the P1 area at t (observed,
+then forecast median). A short legend line (full note on hover) appears only when the field is another wound's or that
+area is more than 0.04 of the start away from every NCA frame.
+
+| Picker item | Field | Parameters |
+|---|---|---|
+| Held-out runs (and the C61_P1 reject branch) for exp1_partII_C61_P1, partII_C61_P2, partII_CC_P2, partI_C61_P1 | the wound's own file, started from its own frame 0 | follow fit `fits[wound]["1.9"]` (frames <= 1.9 h, the first check) |
+| Upload run exp1_pos2033, the 3 samples | `nca_follow_exp1_partII_CC_P2.json`, labelled "field shape not from this item" (the frames are that wound's t00-t02, data/upload.py) | that wound's fit |
+| Runtime uploads | the same CC_P2 file, labelled "field shape not from this item" (no NCA field is made for uploads) | that wound's fit |
+| Refused samples | none (covered, as before) | — |
+
+- **Frames:** deterministic rollout (no noise), one frame per 0.5 h substep, until healed (every coarse cell >= 0.95),
+  stalled or 200 h (`nca.js` `rolloutUntilHealed`). All four heal: 19.5 / 15.5 / 13 / 146.5 h (partI_C61_P1 is slow,
+  Tm 17.3 h, 140 KB). Start = frame 0 of the tracked `data/processed/nca_real_whad.npz` (density + R), so no raw data is needed.
+- **Reach:** on the 6 recorded runs the closest NCA frame is within 0.03 of the P1 area at every 0.1 h of every check.
+- **Regenerate** (per wound): `python3 -I sim/js/assay_nca_case.py <wound> /tmp/case.json`, then
+  `node sim/js/make_nca_playback.mjs web/public/sim/nca_v2_weights.json /tmp/case.json web/public/sim/nca_follow_<wound>.json 0 web/public/sim/nca_v2_weights.config.json`.
+  Output is deterministic.
+
 ### Fair NCA vs sim vs data panel (one wound)
 
 | Layer | File | Start | Fit |

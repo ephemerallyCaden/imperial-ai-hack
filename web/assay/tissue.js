@@ -3,17 +3,19 @@
 // and cell age, height = state as in the mockup (wound 0.08 floor, leading edge <= 0.6, new tissue 0.7 -> 1, intact ~1).
 // Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
 // setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes; colour = simulated cell age, not a measurement.
-// The cells are SIMULATED (P2's cell-agent playback, web/public/sim), never tracked cells: the frame shown is the
-// playback frame whose wound area matches the area curve at time t. Live drawing (web/assay/live.js) feeds the same
-// columns from the live NCA instead (showLive) and paints through setBrush.
+// The field is MODELLED, never tracked cells: a precomputed v2 NCA density playback (web/public/sim/nca_follow_*.json,
+// density only; setPlayback swaps it without rebuilding the scene), and the frame shown is the playback frame whose
+// wound area best matches the area curve at time t. Live drawing (web/assay/live.js) feeds
+// the same columns from the live NCA instead (showLive) and paints through setBrush.
 // DISPLAY INTERPOLATION: the hexes are a display grid, DISPLAY_K per lattice site along x (10 µm hexes, about the M10
 // mockup's density), independent of the model grid. Each hex samples its source density field bilinearly at its centre
-// (playback: the smoothed fine density, smooth.js; live: the coarse NCA density). A hex is a sample, not one cell.
+// (playback and live: the coarse NCA density). A hex is a sample, not one cell.
 // Performance: two InstancedMeshes (colour + matte grey); per frame only the height entry of each instance matrix is
 // written in place, colours only when the field changes, nothing is allocated in the frame loop.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { viewFrame } from "../public/sim/js/playback.js";
+import { densityFrame } from "../public/sim/js/playback.js";
+import { outline as areaOutline, displayOutline } from "../public/sim/js/smooth.js";
 import { edgeSpeed, stallSpeed } from "../edge/edge_speed.js";
 import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from "../vendor-design/look.js";
 
@@ -89,18 +91,20 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   }
 
   // ---------- per-frame data from the playback (cached): density per hex + wound mask at the outline level ----------
-  const cache = new Map();
+  // density-only (NCA) playback: the coarse density sampled bilinearly, wound/outline at the area-matched level of that
+  // density (smooth.js outline), so the open area shown equals the frame's wound_frac. area = wound_frac / frame 0's.
+  let cache = new Map(), wf0 = 1, f0 = null;
   function frameData(f, ref) {
     if (cache.has(f)) return cache.get(f);
-    const { fine, outline } = viewFrame(pb, f), dens = sample({ data: fine.data, w: fine.w, h: fine.h, perSite: fine.scale, norm: 255 }, new Float32Array(COUNT));
-    const level = outline.level == null ? -1 : outline.level, wound = new Uint8Array(COUNT);
+    const rho = densityFrame(pb, f), { h, w } = pb.density, perSite = w / pb.W;
+    const dens = sample({ data: rho, w, h, perSite }, new Float32Array(COUNT));
+    const o = areaOutline({ data: rho, h, w, scale: perSite }, pb.wound_frac[f]);
+    const level = o.level == null ? -1 : o.level, wound = new Uint8Array(COUNT);
     for (let k = 0; k < COUNT; k++) wound[k] = dens[k] < level ? 1 : 0;
-    const d = { f, dens, wound, outline: outline.display, t: pb.t_hours[f], wf: pb.wound_frac[f] };
+    const d = { f, dens, wound, outline: displayOutline(o, pb.outline?.display), t: pb.t_hours[f], area: pb.wound_frac[f] / wf0 };
     if (ref) classify(d, ref);
     cache.set(f, d); return d;
   }
-  const f0 = frameData(0, null); classify(f0, f0.wound);
-  const wf0 = pb.wound_frac[0];
   // frame whose wound area (relative to its own start) best matches `area` (relative to the wound's first frame)
   function frameForArea(area) {
     let best = 0, bd = Infinity;
@@ -169,7 +173,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. span 0.6 x frames.
   // live: born = the step its NCA density is first back at the wound level after its latest carve; step = field.step when
   // the caller passes one (e.g. NCA substeps), else the count of distinct NCA states received. span 60 steps.
-  const SPAN_PB = Math.max(60, 0.6 * pb.wound_frac.length), SPAN_LIVE = 60;
+  let SPAN_PB; const SPAN_LIVE = 60;   // SPAN_PB is set per playback in load()
   const bornPb = new Int32Array(COUNT).fill(-1), woundSeen = new Uint8Array(COUNT); let bornTo = -1;
   function bornUpTo(f) {
     for (let g = bornTo + 1; g <= f; g++) {
@@ -179,8 +183,19 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     bornTo = Math.max(bornTo, f);
   }
   const bornLive = new Int32Array(COUNT).fill(-1); let liveSteps = 0, liveData = null;
+  // (re)start on a playback: frame cache, frame 0, cell ages and the wound centre for the camera presets
+  let woundC = new THREE.Vector3();
+  function load(p) {
+    if (p.W !== FW || p.H !== FH) throw new Error(`playback ${p.name} is ${p.H}x${p.W} sites, the 3D field is ${FH}x${FW}`);
+    pb = p; cache = new Map(); wf0 = pb.wound_frac[0] || 1;
+    f0 = frameData(0, null); classify(f0, f0.wound);
+    SPAN_PB = Math.max(60, 0.6 * pb.wound_frac.length); bornPb.fill(-1); woundSeen.fill(0); bornTo = -1;
+    let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { sx += wx[k]; sz += wz[k]; n++; }
+    woundC = n ? new THREE.Vector3(sx / n, 0, sz / n) : new THREE.Vector3();
+  }
+  load(pb);
 
-  // simulated outline (area-matched contour from smooth.js), labelled uncalibrated
+  // model outline (area-matched contour, smooth.js rule)
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
   const outlineGroup = new THREE.Group(); scene.add(outlineGroup);
   const siteToWorld = (x, y) => V(X0 + x * S, HMAX * 0.9, Z0 + y * S);
@@ -369,8 +384,6 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   controls.mouseButtons.RIGHT = -1;
 
   // ---------- camera presets: field (x1), wound (x10, about 16 sites across), cells (x40, a few sites) ----------
-  let woundC = V(0, 0, 0);
-  { let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { sx += wx[k]; sz += wz[k]; n++; } if (n) woundC = V(sx / n, 0, sz / n); }
   function edgePoint() {
     let best = null, bd = Infinity;
     for (let k = 0; k < COUNT; k++) if (cur.state[k] === 2) { const d = (wx[k] - woundC.x) ** 2 + (wz[k] - woundC.z - 2) ** 2; if (d < bd) { bd = d; best = V(wx[k], 0, wz[k]); } }
@@ -429,6 +442,13 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
 
   return {
     frameForArea,
+    // swap to another playback of the same field size; shows its frame 0 (cell ages restart)
+    setPlayback(p) {
+      if (p === pb) return;
+      load(p); bornUpTo(0); show(f0, bornPb, 0, SPAN_PB); drawOutline(f0.outline);
+      if (stallOpts) { computeStall(); lastAge.fill(NaN); writeColours(); }
+    },
+    playback: () => pb,
     showArea(area) {
       const f = frameForArea(area); if (cur && f === cur.f) return cur;
       bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline);
