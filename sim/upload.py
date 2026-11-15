@@ -16,6 +16,9 @@ Rules:
     until a signal passes).
   - 2+ frames -> fit Tm and bias on the observed areas (follower grid as sim/v2.py, frames interval_h apart) + 50 bootstrap members.
   - Rule: Params(rule="follow") (P2 v2, adopted for physical realism); prior and fits from sim/fits/whad_fits_follow.json.
+  - Condition outside the calibration set (WHAD CC/C61/N61/NC): band widened and an uncalibrated_condition flag added by
+    data/upload.py's condition_guard (imported, same factors eval/results/condition_shift.json); the 1-frame prior then
+    draws from all conditions.
   - Forecast grid hourly from the last frame to 19 h (the WHAD horizon the models were validated on).
   - Field size: fitted Tm depends on the field of view (vacancies leave through the border reservoir), so every upload is
     mapped onto the WHAD field extent (32 x 44 sites = 640 x 880 um): a window centred on the first frame's wound, padded with
@@ -78,13 +81,29 @@ def to_whad_field(masks, um_per_px):
     return out, note
 
 
+def p1_upload():
+    """P1's data/upload.py, loaded by path (this module is also named `upload`); sys.path restored afterwards."""
+    import importlib.util
+    if "p1_upload" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("p1_upload", os.path.join(HERE, "..", "data", "upload.py"))
+        mod, saved = importlib.util.module_from_spec(spec), sys.path[:]
+        try:
+            spec.loader.exec_module(mod)
+        finally:
+            sys.path[:] = saved
+        sys.modules["p1_upload"] = mod
+    return sys.modules["p1_upload"]
+
+
 def prior_members(condition, exclude_wound, rng):
-    """(Tm, bias) of WHAD training wounds' fits at t0 = 10, same condition if known, sampled with replacement."""
+    """(Tm, bias) of WHAD training wounds' fits at t0 = 10, same condition if known, sampled with replacement.
+    Series P1 excludes from evaluation (forecast_baselines.EXCLUDE) never enter the prior."""
+    from forecast_baselines import EXCLUDE
     df = F.load_curves()
     meta = df.drop_duplicates("position").set_index("position")[["wound", "condition"]].to_dict("index")
     fits = json.load(open(FITS))["fits"]  # follower fits, manual + auto
     pool = [[fits[p][PRIOR_T0]["Tm"], fits[p][PRIOR_T0]["bias"]] for p in fits
-            if fits[p].get(PRIOR_T0) and meta[p]["wound"] != exclude_wound
+            if fits[p].get(PRIOR_T0) and p not in EXCLUDE and meta[p]["wound"] != exclude_wound
             and (condition is None or meta[p]["condition"] == condition)]
     assert pool, f"no training fits for condition {condition}"
     return [pool[i] for i in rng.integers(0, len(pool), N_MEMBERS)], len(pool)
@@ -112,7 +131,7 @@ def build_doc(model, wound_id, condition, t_obs, a_obs, grid, trajs, seg_quality
     q = np.quantile(trajs, [0.05, 0.5, 0.95], axis=0)
     rd = lambda v: [round(float(x), 4) for x in v]
     fc = dict(wound_id=wound_id, t_hours=grid.tolist(), area_q05=rd(q[0]), area_q50=rd(q[1]), area_q95=rd(q[2]),
-              t50=t50, t90=t90, p_close_by_T=round(float(np.mean(times90 <= T_CLOSE)), 4), p_stall=None, flags=flags,
+              t50=t50, t90=t90, p_close_by_T=round(float(np.mean(times90 <= T_CLOSE)), 4), p_stall=None, flags=list(flags),
               segmentation_quality=seg_quality, observed=dict(t_hours=rd(t_obs), area=rd(a_obs)),
               members=[rd(tr) for tr in trajs[:10]])
     if condition:
@@ -140,9 +159,10 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     t_obs = np.arange(len(masks)) * float(interval_h)
     a_obs = wf / wf[0]
     if len(masks) == 1:
-        members, n_pool = prior_members(condition, exclude_wound, rng)
+        prior_cond = condition if condition in p1_upload().CALIBRATED else None
+        members, n_pool = prior_members(prior_cond, exclude_wound, rng)
         how = (f"single frame: parameters drawn from the training-population prior ({N_MEMBERS} draws from the fitted parameters "
-               f"of {n_pool} WHAD wounds, {condition or 'all conditions'}); band not conformal-calibrated")
+               f"of {n_pool} WHAD wounds, {prior_cond or 'all conditions'}); band not conformal-calibrated")
     else:
         fit = fit_members(occ0, wf, interval_h, rng)
         members = fit["members"]
@@ -177,6 +197,12 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     else:
         for doc in out.values():
             calibrate_doc(doc, None, 0)
+    for doc in out.values():  # condition outside the calibration set: widen + flag, exactly as data/upload.py
+        fc = doc["forecasts"][0]
+        p1_upload().condition_guard(fc, condition, float(t_obs[-1]))
+        if any(f["type"] == "uncalibrated_condition" for f in fc["flags"]):
+            fc["band"] = (fc["band"].replace("90% band = ", "band = ") + "; widened for a condition outside the calibration "
+                          "set (flag uncalibrated_condition), so not a calibrated 90% band")
     return out
 
 
