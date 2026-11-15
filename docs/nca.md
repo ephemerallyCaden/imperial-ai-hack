@@ -27,8 +27,9 @@ simulator output.
 ## Training data (`nca/gen_data.py`, `nca/train.py`)
 - 3000 simulator runs (frozen rules, sim 1e26b38 / c5ccc6c), 19 h, hourly frames, 32 x 44 lattice.
 - Parameters: Tm log-uniform in [0.05, 5] h, bias uniform in [0.25, 0.9] (the calibration grid). Division off.
-- Start shapes: 50% real WHAD masks from frames t <= 2 h only (the earliest cut-off, so no held-out wound's later
-  shapes enter training), flipped. The other 50% are synthetic WHAD-like scratches and blobs.
+- Start shapes: 50% real WHAD masks, start shapes only, from frames t <= 1.9 h (the earliest cut-off), flipped. They
+  come from both parts of each physical wound, so possibly the sibling part of a scored wound (e.g. exp1_pos1021); the
+  training dynamics are simulated. The other 50% are synthetic WHAD-like scratches and blobs.
 - Loss: per-cell energy score (2 members) + per-cell MSE + wound-area MSE, with a rollout-length curriculum up to 19 h.
 
 ## Gate forecasts (`nca/forecast_gate.py`, #25/#26)
