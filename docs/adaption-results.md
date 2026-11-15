@@ -1,15 +1,15 @@
 # Adaption Intake fine-tune: results (#90)
 
-Status: **dataset uploaded, training run not yet launched** (Qwen/Qwen3.5-0.8B is deprecated on the platform; relaunch
-picks the smallest SFT model from `list_models`).
+Status: **training** (run launched 01:4x Sun on Qwen/Qwen3.5-2B). Qwen/Qwen3.5-0.8B was deprecated on the platform; two
+runs launched by mistake on Mixtral-8x7B were cancelled (`data/adaption/run_ids.cancelled-*.json`).
 
 ## Run
 | | |
 |---|---|
 | dataset_id | `8d3f3b8e-4896-4339-940e-28420f4456fb` (train.jsonl, 1,500 templated rows, uploaded raw) |
-| run_id | pending (`data/adaption/run_ids.json` once launched) |
-| model | pending |
-| settings | training_method instruction, data_format chat, max_iterations 1, target_win_rate 0.7 |
+| run_id | `695c8c20-b2c8-4848-ac36-e1ed443281fb` (`data/adaption/run_ids.json`) |
+| model | Qwen/Qwen3.5-2B (smallest chat model that fits local eval; 9B needs ~18 GB disk) |
+| settings | training_method instruction, data_format chat, max_iterations 1, target_win_rate 0.7; recommended hyperparams: LoRA r16/alpha32 all-linear, 1 epoch, lr 5e-5 cosine |
 | best_win_rate (platform, held-out templated rows) | pending |
 
 ## Real test set (30 open-access paragraphs, never trained on)
