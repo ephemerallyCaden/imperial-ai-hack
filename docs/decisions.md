@@ -75,3 +75,9 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 
 ## 2026-11-15 02:00 [randodeh] Upload/agent forecaster = real-data NCA (R29 in design.md)
 - DECIDED: data/upload.py uses the NCA v3 (fallback edge speed). Agent and demo samples pick it up automatically.
+
+## 2026-11-15 03:30 [Caden] Adaption scope = Intake + Reporter, no Triage (#115)
+- DECIDED: fine-tune two steps with Adaption: Intake (protocol text -> settings; run 695c8c20, platform win rate 0.9471) and the Reporter (tool outputs + decision -> two-audience report: assay scientist and clinician).
+- Why no Triage: in 9b triage is code (flags.py stall, 5.5 refusals, schedule_advice, policy code); the LLM only picks among allowed decisions, so a fine-tune would add little and blur "code decides, LLM explains". It also has no clean right answers on real data.
+- Reporter scoring: share of reports whose every number is traced by the Critic, plus a short two-audience rubric, fine-tune vs base. Training rows templated from tool outputs (numbers copied from the input, correct by construction). Data uploaded by ~05:00 to finish before the 08:00 freeze; otherwise the Reporter stays on Claude and only Intake is claimed.
+- On-screen win rates are the platform figures (held-out split of our synthetic rows), always shown next to the real-set result.
