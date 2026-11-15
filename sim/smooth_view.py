@@ -25,7 +25,7 @@ def fine_density(occ, k=2, sigma=2.5):
         occ = occ[None]
     up = occ.repeat(k, 1).repeat(k, 2)
     My, Mx = _blur_matrix(up.shape[1], sigma * k), _blur_matrix(up.shape[2], sigma * k)
-    return np.clip(np.einsum("ij,fjk,lk->fil", My, up, Mx), 0, 1).astype(np.float32)
+    return np.clip(My @ up @ Mx.T, 0, 1).astype(np.float32)  # (F,h,w); matmul, not a naive einsum
 
 
 def outline(fine, wound_frac, k=2):
