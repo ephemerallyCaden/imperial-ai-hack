@@ -6,7 +6,7 @@ Rand + friend present on camera; the middle is app footage with voice-over. Shot
 
 | Part | Time | Who | On screen | Words |
 |---|---|---|---|---|
-| Open | 0:00-0:13 | Rand, then friend | Rand in a corridor; cut to the WHAD time-lapse on "dish" | ~45 (written, below) |
+| Open | 0:00-0:18 | Rand, then friend | Rand in a corridor; cut to the WHAD time-lapse on "dish" | ~60 (written, below) |
 | Draw + Assay demo | 0:13-0:50 | Friend, voice-over | Draw (draw, Run, zoom); terminal upload; mask still; Assay forecast; decision card + Approve; Why tab | ~85 |
 | Does it hold? | 0:50-1:25 | Rand, voice-over | `eval/figures/video/1_forecast.png`, `2_reveal.png`, `3_scorecard.png`, `4_calibration.png`, `5_failure.png` | ~80 |
 | Ops proof | 1:25-1:45 | Friend, voice-over | Ops: run log, scoreboard, adversarial 14 of 14 | ~45 |
@@ -16,9 +16,11 @@ Rand + friend present on camera; the middle is app footage with voice-over. Shot
 
 > **Rand** (corridor): "In a hospital, a wound that won't heal can be life or death. Nobody here has the luxury of faith."
 >
-> **Friend** (cut to the lab or the WHAD time-lapse): "But every treatment for those wounds starts in a dish of cells. Stitch tells you early how that dish will heal, and how sure it is."
+> **Friend** (cut to the lab or the WHAD time-lapse): "What if you could know, hours early, how a wound will heal? Treatments for diabetic wounds, cancer and scarring are all tested first on cells in a dish. Stitch forecasts how that dish will heal, and how sure it is."
 
-Cut to the time-lapse on "dish", so the lab is on screen when Stitch is named. The hospital is the motivation; the lab is the product.
+Cut to the time-lapse on "dish", so the lab is on screen when Stitch is named. The hospital is the motivation; the lab is the product. The opening is about 60 words (~18 s), which leaves about 190 words for the rest.
+
+Use cases (diabetic wounds, infection, cancer, fibrosis, drug screens) are motivation and "where next" only, with an on-screen label "next steps, not yet validated". Say Stitch *forecasts* closure. Never say it shows *why* a wound is slow, or whether cells move less or multiply less: our own identifiability test (design.md R30) shows wound area alone cannot separate the two.
 
 ## Hospital scene rules
 - Don't film inside a real hospital without written permission. Use a clean corridor that looks the part, or Pexels or Pixabay stock footage.
@@ -48,7 +50,7 @@ Cut to the time-lapse on "dish", so the lab is on screen when Stitch is named. T
 Say "a neural cellular automaton forecasts" only over the upload/sample run or the terminal shot; held-out runs in Assay show the edge-speed forecast.
 
 ## Order of work (Sun 15 Nov)
-1. 08:00-09:00: write the rest of the script (~205 words after the opening); read it aloud with a timer.
+1. 08:00-09:00: write the rest of the script (~190 words after the opening); read it aloud with a timer.
 2. 09:00-09:45: screen recordings, silent, 2-3 takes per shot (app: `python -m http.server 8010` from the repo root, then http://127.0.0.1:8010/web/index.html).
 3. 09:45-10:15: voice-over, recorded separately (quiet room, phone 15-20 cm away, one take per paragraph).
 4. 10:15-10:30: on-camera bits (landscape, eye level, facing a window, 3 takes each, look at the lens).
