@@ -68,14 +68,16 @@ vs the simulator is 0.042 (mean; median 0.034). The simulator's own member sprea
 - NCA member spread is about 6x too small (0.002 vs 0.014). The training loss's MSE terms pull members to the mean.
 
 **Gate (design.md 5.3).** Scored by P1's `eval/score_forecasts.py`. "ratio" = qscore of `nca_ensemble` / best
-*statistical* baseline. Passable = ratio <= 1.10 and coverage in [0.85, 0.95].
+*statistical* baseline. Passable = ratio <= 1.10 and coverage in [0.85, 0.95]. The loo_all rows are rescored (audit,
+15 Nov) on the regenerated gate files, which drop P1's spliced series exp1_partII_NC_P3 from series and pools, against
+P1's current baselines; pass count unchanged (4/12).
 
 | split | cut-off | n | nca_ensemble qscore | cov | best statistical baseline | qscore | ratio | result |
 |---|---|---|---|---|---|---|---|---|
-| loo_all | 1.9 | 56 | 0.0782 | 0.93 | edge_speed | 0.0657 | 1.19 | fail |
-| loo_all | 3.8 | 56 | 0.0495 | 0.93 | edge_speed | 0.0385 | 1.29 | fail |
-| loo_all | 5.7 | 55 | 0.0397 | 0.93 | edge_speed | 0.0327 | 1.22 | fail |
-| loo_all | 9.5 | 52 | 0.0304 | 0.92 | linear | 0.0311 | 0.98 | pass |
+| loo_all | 1.9 | 55 | 0.0705 | 0.93 | edge_speed | 0.0562 | 1.26 | fail |
+| loo_all | 3.8 | 55 | 0.0502 | 0.93 | edge_speed | 0.0386 | 1.30 | fail |
+| loo_all | 5.7 | 54 | 0.0403 | 0.92 | edge_speed | 0.0327 | 1.23 | fail |
+| loo_all | 9.5 | 51 | 0.0306 | 0.92 | linear | 0.0316 | 0.97 | pass |
 | loo_manual | 1.9 | 16 | 0.0559 | 0.87 | edge_speed | 0.0412 | 1.36 | fail |
 | loo_manual | 3.8 | 16 | 0.0458 | 0.87 | gompertz | 0.0393 | 1.17 | fail |
 | loo_manual | 5.7 | 16 | 0.0404 | 0.85 | edge_speed | 0.0362 | 1.12 | fail |
@@ -90,8 +92,8 @@ Reading:
   condition. At early cut-offs it is 12-36% worse.
 - The raw NCA ensemble covers only 1-24% (qscore 0.050-0.187), so all the calibration comes from P1's conformal step.
 - `nca_deterministic` is within about 5% of `nca_ensemble`, so the stochastic members add little beyond their median.
-- Note: P1's `gate()` counts every non-gated model in a group as a "baseline", so `nca_deterministic` shows up as
-  "best baseline" in some rows. The table above compares against the statistical baselines only.
+- P1's `gate()` in `eval/score_forecasts.py` and `nca/gate_table.py` both compare against the statistical baselines
+  only; `nca/gate_table.py` counts passes on the 3 R15 folds (/12).
 
 ---
 
@@ -176,10 +178,10 @@ coverage 0.85-0.95 (design.md 5.3). Each cell is qscore (coverage) ratio.
 
 | split | cut | nca_follow (demo) | nca_follow_deterministic | nca_follow_realft | nca_ensemble (v1) | nca_realft (v1, P1) | best statistical |
 |---|---|---|---|---|---|---|---|
-| loo_all | 1.9 | 0.0668 (0.93) 1.19 | 0.0627 (0.93) 1.12 | 0.0572 (0.92) 1.02 P | 0.0715 (0.94) 1.27 | 0.0605 (0.93) 1.08 P | edge_speed 0.0562 |
-| loo_all | 3.8 | 0.0478 (0.93) 1.24 | 0.0461 (0.92) 1.19 | 0.0415 (0.93) 1.07 P | 0.0499 (0.93) 1.29 | 0.0403 (0.93) 1.04 P | edge_speed 0.0386 |
-| loo_all | 5.7 | 0.0409 (0.92) 1.25 | 0.0364 (0.92) 1.11 | 0.0382 (0.92) 1.17 | 0.0402 (0.92) 1.23 | 0.0356 (0.93) 1.09 P | edge_speed 0.0327 |
-| loo_all | 9.5 | 0.0295 (0.91) 0.93 P | 0.0295 (0.91) 0.93 P | 0.0303 (0.92) 0.96 P | 0.0307 (0.92) 0.97 P | 0.0291 (0.92) 0.92 P | linear 0.0316 |
+| loo_all | 1.9 | 0.0668 (0.93) 1.19 | 0.0627 (0.93) 1.12 | 0.0572 (0.92) 1.02 P | 0.0705 (0.93) 1.26 | 0.0605 (0.93) 1.08 P | edge_speed 0.0562 |
+| loo_all | 3.8 | 0.0478 (0.93) 1.24 | 0.0461 (0.92) 1.19 | 0.0415 (0.93) 1.07 P | 0.0502 (0.93) 1.30 | 0.0403 (0.93) 1.04 P | edge_speed 0.0386 |
+| loo_all | 5.7 | 0.0409 (0.92) 1.25 | 0.0364 (0.92) 1.11 | 0.0382 (0.92) 1.17 | 0.0403 (0.92) 1.23 | 0.0356 (0.93) 1.09 P | edge_speed 0.0327 |
+| loo_all | 9.5 | 0.0295 (0.91) 0.93 P | 0.0295 (0.91) 0.93 P | 0.0303 (0.92) 0.96 P | 0.0306 (0.92) 0.97 P | 0.0291 (0.92) 0.92 P | linear 0.0316 |
 | loo_manual | 1.9 | 0.0515 (0.87) 1.25 | 0.0469 (0.87) 1.14 | 0.0430 (0.87) 1.04 P | 0.0559 (0.87) 1.36 | 0.0474 (0.86) 1.15 | edge_speed 0.0412 |
 | loo_manual | 3.8 | 0.0465 (0.87) 1.18 | 0.0471 (0.87) 1.20 | 0.0448 (0.87) 1.14 | 0.0458 (0.87) 1.17 | 0.0398 (0.87) 1.01 P | gompertz 0.0393 |
 | loo_manual | 5.7 | 0.0466 (0.87) 1.29 | 0.0439 (0.86) 1.21 | 0.0425 (0.86) 1.17 | 0.0404 (0.85) 1.12 | 0.0389 (0.87) 1.07 P | edge_speed 0.0362 |
@@ -200,4 +202,6 @@ Reading:
   the drift seen from frame 0. The demo decision was taken on the diagnostic before these scores, and is not revisited.
 - Raw (uncalibrated) bands: `nca_follow_raw` covers 0.00-0.23 (qscore 0.049-0.181), so all calibration still comes
   from P1's conformal step.
-- Baseline numbers here are from main 614e19e (P1's NC/P3 data fix), so the v1 rows differ slightly from the table above.
+- Baseline numbers here are from main 614e19e (P1's NC/P3 data fix). The v1 `nca_ensemble` loo_all cells were
+  rescored on the regenerated v1 gate files (NC/P3 dropped from series and pools; audit, 15 Nov), so both tables agree.
+  The v2 files already matched P1's series and bands; regenerating them changed only the 5 example `members`.
