@@ -44,7 +44,7 @@ Three modes:
   - Fine-tuned on real frames, it passes at every cut-off on unseen wounds. It scores 0.0397 vs edge speed's 0.0386 at 3.8 h, and it is the best model of all at the earliest check (1.9 h: 0.0530 vs 0.0562) and the latest (9.5 h).
 - **Stopping early:** in replay on held-out wounds, 82% get a call at the first check (1.9 h). 91% of those calls are right, against 75% for always guessing "won't close".
 - **Stall flag:** AUC 0.77 to 0.90 across the checks.
-- **Agent safety:** in our adversarial test set (stub models, inputs written by us), 14 of 14 expected outcomes were met. The set covers prompt injection in protocol text, metadata and image files; bad frames; and planted numbers.
+- **Agent safety:** in our adversarial test set (stub models, inputs written by us), 15 of 15 expected outcomes were met. The set covers prompt injection in protocol text, metadata and image files; bad frames; and planted numbers.
 
 ## What doesn't work (we say it plainly)
 - **New cell types:** the band does not transfer. Calibrated on ordinary MCF-7 cells, it covers only 15 to 58% of the stem-cell-enriched wells' future. Stitch must be calibrated per cell line.
@@ -90,4 +90,4 @@ Python, NumPy, SciPy, pandas, PyTorch, matplotlib, Pillow, tifffile, JSON Schema
 | 15-58% on stem-cell-enriched wells | results.md, "What does not work" |
 | CYR61 0.72 -> 0.90 | design.md R28 (rest_to_C61, NCA 9.5 h) |
 | identifiability 2-63x | design.md R30 (D 9-63x, r 2-39x) |
-| adversarial 14/14 | agent/results/adversarial.md |
+| adversarial 15/15 | agent/results/adversarial.md |
