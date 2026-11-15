@@ -1,0 +1,41 @@
+{
+ "rule": "fold = zlib.crc32(wound.encode()) % 4 (P1, nca/finetune_real.py); nca/v2/weights_real_fold{k}.pt was trained WITHOUT fold k",
+ "folds": {
+  "0": [
+   "exp1_pos1034",
+   "exp1_pos2028",
+   "exp1_pos3031",
+   "exp1_pos4035",
+   "exp2_pos1039",
+   "exp2_pos1047",
+   "exp2_pos2044",
+   "exp2_pos3049",
+   "exp2_pos4046",
+   "exp2_pos4050"
+  ],
+  "1": [
+   "exp1_pos1024",
+   "exp1_pos2025",
+   "exp1_pos2033",
+   "exp1_pos3023",
+   "exp2_pos1036",
+   "exp2_pos1043",
+   "exp2_pos2037",
+   "exp2_pos2040",
+   "exp2_pos3038",
+   "exp2_pos4042"
+  ],
+  "2": [
+   "exp1_pos1021",
+   "exp1_pos2022",
+   "exp1_pos3026",
+   "exp1_pos3032",
+   "exp2_pos3041"
+  ],
+  "3": [
+   "exp1_pos1027",
+   "exp2_pos2048",
+   "exp2_pos3045"
+  ]
+ }
+}
