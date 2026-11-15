@@ -1,6 +1,6 @@
 # Stitch style guide (v1, 15 Nov 2026)
 
-Use it for the web viewer in `web/`. Live specimen: `design/style-guide/index.html`. Tokens and base components: `tokens.css`. Layout and screens: Figma "Stitch-UI", page "Wireframes" (Assay v2, Ops, Draw). Decisions behind it: `docs/decisions.md` ("Glass-dish 3D look" and "UI wireframe review").
+Figma: "Stitch-UI", page "Style guide" (variables "Stitch tokens" with CSS code syntax, text styles "Stitch/…", components Stitch/Button, Stitch/Chip, Stitch/Decision card). Use it for the web viewer in `web/`. Live specimen: `design/style-guide/index.html`. Tokens and base components: `tokens.css`. Layout and screens: Figma "Stitch-UI", page "Wireframes" (Assay v2, Ops, Draw). Decisions behind it: `docs/decisions.md` ("Glass-dish 3D look" and "UI wireframe review").
 
 ## Principles
 1. **Decision first.** Every screen answers "stop, extend or image again?" before showing detail.

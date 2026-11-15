@@ -87,7 +87,7 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: var(--fs
 .st-btn:hover { background: var(--raise); }
 .st-btn--primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .st-btn--primary:hover { background: #fff; }
-.st-btn[aria-pressed="true"], .st-btn--selected { background: var(--ink); color: var(--bg); }
+.st-btn[aria-pressed="true"], .st-btn--selected { background: var(--raise); border-color: var(--ink); color: var(--ink); }  /* distinct from the white primary */
 .st-btn--icon { width: 28px; padding: 0; justify-content: center; }   /* must have aria-label + a tooltip */
 .st-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .st-btn:disabled { color: var(--faint); border-color: var(--hair); cursor: not-allowed; }
