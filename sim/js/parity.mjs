@@ -11,6 +11,6 @@ for (let s = 0; s < n; s++) {
   for (let t = 1; t <= 24; t++) { e.advance(1); if (T.includes(t)) r.push(e.wound_frac); }
   rows.push(r);
 }
-const st = T.map((_, j) => { const c = rows.map((r) => r[j]), m = c.reduce((a, b) => a + b) / n;
-  return `${m.toFixed(4)}±${Math.sqrt(c.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1)).toFixed(4)}`; });
-console.log(`JS  ${rule} Tm=${Tm} n=${n} @4/12/24h:`, st.join(' '), `(${((performance.now() - t0) / n) | 0} ms/run)`);
+const st = T.map((_, j) => { const c = rows.map((r) => r[j]), m = c.reduce((a, b) => a + b) / n, sd = Math.sqrt(c.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+  return `${m.toFixed(4)}±${sd.toFixed(4)}(${(sd / Math.sqrt(n)).toFixed(4)})`; });
+console.log(`JS  ${rule} Tm=${Tm} n=${n} @4/12/24h (mean±sd, se):`, st.join(' '), `(${((performance.now() - t0) / n) | 0} ms/run)`);
