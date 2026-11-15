@@ -2,6 +2,7 @@
 
   ADAPTION_API_KEY=... python -I data/adaption/launch.py [--model ID]   # launch on the uploaded dataset, writes run_ids.json
   python -I data/adaption/launch.py --models                        # list trainable base models
+  python -I data/adaption/launch.py --cancel                        # cancel that run, keep its IDs as run_ids.cancelled-*.json
   python -I data/adaption/launch.py --status                        # poll the run in run_ids.json
 
 The key is read from the environment only and never written anywhere. run_ids.json holds IDs only (safe to commit).
@@ -16,16 +17,22 @@ DATASET_ID = "8d3f3b8e-4896-4339-940e-28420f4456fb"  # train.jsonl already uploa
 
 
 def size_b(m):
-    try:
-        return float((m.api_model_size or "999").upper().rstrip("B"))
-    except ValueError:
-        return 999.0
+    """Billions of parameters from model_size ("4B", "8x7B") or the id ("gemma-3-4b-it"); 999 if unknown."""
+    import re
+    for text in (m.api_model_size or "", m.id):
+        x = re.search(r"(\d+)x(\d+(?:\.\d+)?)\s*[bB]", text)
+        if x:
+            return float(x.group(1)) * float(x.group(2))
+        x = re.search(r"(\d+(?:\.\d+)?)\s*[bB](?![a-zA-Z])", text)
+        if x:
+            return float(x.group(1))
+    return 999.0
 
 
 c = Adaption()
 models = c.autoscientist.list_models().models
 for m in models:
-    print("model", m.id, m.api_model_size, m.methods, "reasoning" if m.train_with_reasoning else "", flush=True)
+    print("model", m.id, m.api_model_size, size_b(m), m.methods, "reasoning" if m.train_with_reasoning else "", flush=True)
 if "--models" in sys.argv:
     sys.exit(0)
 # smallest SFT model without reasoning traces (plain JSON replies, fast training and local eval); override with --model ID
@@ -34,6 +41,11 @@ ok = [m for m in models if "sft" in m.methods and not m.train_with_reasoning] or
 ok = [m for m in ok if m.id.lower().endswith("-it") or "instruct" in m.id.lower()] or ok
 MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else min(ok, key=size_b).id
 print("chosen model", MODEL, flush=True)
+if "--cancel" in sys.argv:  # cancel the run in run_ids.json and move the file aside so a relaunch is possible
+    ids = json.load(open(IDS))
+    print("cancel", ids["run_id"], c.autoscientist.cancel(ids["run_id"]))
+    os.replace(IDS, IDS.replace(".json", f".cancelled-{ids['run_id'][:8]}.json"))
+    sys.exit(0)
 if "--status" in sys.argv:
     ids = json.load(open(IDS))
     r = c.autoscientist.get(ids["run_id"])
