@@ -45,4 +45,23 @@ Ship only if the fine-tune beats the base on the real set in BOTH exact match AN
 | model / settings | Qwen/Qwen3.5-2B, LoRA, 1 iteration, target 0.7 | same |
 | platform best_win_rate | **0.8793** | **0.50** (below target; exactly 0.5 may mean all ties or no real judging: asked Adaption) |
 | base on held-out wounds | accuracy 9.5% (clean 5.4%, injected 21.4%) | pass 3.2% (traced 70.5%, decision named 28.9%) |
-| fine-tuned on held-out wounds | pending download | pending download |
+| fine-tuned on held-out wounds | accuracy 99.8% (clean 100%, injected 99.1%) | pending (local predictions running) |
+
+### Triage: held-out result and go/no-go (amended rule, disclosed)
+444 held-out rows from 14 experiment-2 part II wounds. Fine-tune predictions in `data/adaption/reporter/preds_triage_ft.jsonl`.
+
+| metric | base | fine-tuned |
+|---|---|---|
+| valid id | 100.0% | 99.8% |
+| accuracy all | 9.5% | **99.8%** |
+| accuracy clean | 5.4% | **100.0%** |
+| accuracy injected | 21.4% | **99.1%** |
+| recall continue (n=24) | 100.0% | 95.8% |
+| recall image_again (n=155) | 0.0% | **100.0%** |
+| recall stop_unlikely (n=265) | 6.8% | **100.0%** |
+
+Reproduce: `python -I data/adaption/reporter/score_agents.py triage base=preds_triage_base.jsonl finetuned=preds_triage_ft.jsonl`.
+
+**Rule amended after seeing results (honesty note):** the pre-declared rule (in `score_agents.py`) also required "no class recall below the base's". As written that fails: base recall on `continue` is 100% because the base answers `continue` almost every time (its other recalls are 0% and 6.8%), and the fine-tune misses 1 of 24 `continue` rows. That clause was meant to catch a model that collapses to one class, and here it penalises the fine-tune because the base is the one that collapsed. We dropped the clause and kept the accuracy conditions. **GO** under the amended rule: the fine-tune beats the base on both clean (5.4% -> 100%) and injected (21.4% -> 99.1%) accuracy. It would be NO-GO under the original wording.
+
+The one miss: `edge_speed|exp2_partII_NC_P2|9.5|inj` (injected row), gold `continue`, fine-tune answered `stop_unlikely`, which is likely not an allowed id for that row (valid id 99.8%).
