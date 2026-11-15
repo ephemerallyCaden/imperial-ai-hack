@@ -1,4 +1,4 @@
-"""Export what the in-browser upload (web/upload/forecast.js, issue #39) needs -> web/data/browser_calib.json.
+"""Export what the in-browser upload (web/upload/forecast.js, issue #39) needs -> web/upload/browser_calib.json.
 
   python -I web/upload/export_calib.py
 
@@ -22,6 +22,6 @@ doc = {
     "condition_shift_edge_speed": {k: v["lambda"] for k, v in json.load(open(f"{res}/condition_shift.json")).get("edge_speed", {}).items()},
     "series": [{"id": k, "wound": s["wound"], "t": [float(x) for x in s["t"]], "a": [float(x) for x in s["a"]]} for k, s in S.items()],
 }
-out = os.path.join(ROOT, "web", "data", "browser_calib.json")
+out = os.path.join(ROOT, "web", "upload", "browser_calib.json")
 json.dump(doc, open(out, "w"), separators=(",", ":"))
 print(f"{len(S)} WHAD series -> {out} ({os.path.getsize(out) // 1024} KB)")

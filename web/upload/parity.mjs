@@ -7,10 +7,13 @@ import { execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runUpload } from "./forecast.js";
 
-const ROOT = new URL("../../", import.meta.url).pathname, SAMPLES = join(ROOT, "web/data/samples");
-const calib = JSON.parse(readFileSync(join(ROOT, "web/data/browser_calib.json")));
+// schedule compared without its evidence text: the browser quotes edge-speed widths, upload.py quotes the NCA's
+const sched = (x) => x && { ...x, evidence: undefined };
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)), SAMPLES = join(ROOT, "web/data/samples");
+const calib = JSON.parse(readFileSync(join(ROOT, "web/upload/browser_calib.json")));
 
 // minimal PNG decoder (8-bit grey / grey+alpha / RGB / RGBA, non-interlaced) -> grey as load_gray does
 function png(path) {
@@ -57,7 +60,7 @@ for (const n of [1, 2, 3]) {
   const d = { area_q05: maxDiff(F.area_q05, R.area_q05), area_q50: maxDiff(F.area_q50, R.area_q50), area_q95: maxDiff(F.area_q95, R.area_q95),
     t50: Math.max(...evDiff(F.t50, R.t50)), t90: Math.max(...evDiff(F.t90, R.t90)), p_close_by_T: Math.abs(F.p_close_by_T - R.p_close_by_T),
     p_stall: Math.abs((F.p_stall ?? 0) - (R.p_stall ?? 0)), observed: maxDiff(F.observed.area, R.observed.area) };
-  const same = js.doc.model === ref.model && js.doc.notes === ref.notes && JSON.stringify(js.doc.schedule) === JSON.stringify(ref.schedule)
+  const same = js.doc.model === ref.model && js.doc.notes === ref.notes && JSON.stringify(sched(js.doc.schedule)) === JSON.stringify(sched(ref.schedule))
     && JSON.stringify(F.flags) === JSON.stringify(R.flags) && JSON.stringify(F.segmentation_quality) === JSON.stringify(R.segmentation_quality)
     && (!R.members || maxDiff(F.members.flat(), R.members.flat()) === 0);
   const pass = ious.every(x => x > 0.999) && Object.values(d).every(x => x < 1e-3) && same;

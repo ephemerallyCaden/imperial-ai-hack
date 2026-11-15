@@ -1,6 +1,6 @@
 // Browser port of data/upload.py run(..., forecaster="edge_speed") (issue #39): masks -> forecast contract doc.
 // >= 2 frames: eval/forecast_baselines.py forecast_file, model edge_speed, leave-one-wound-out conformal band over the
-// WHAD pool; 1 frame: whad_population_prior (spread of WHAD wounds). Calibration data: web/data/browser_calib.json
+// WHAD pool; 1 frame: whad_population_prior (spread of WHAD wounds). Calibration data: web/upload/browser_calib.json
 // (web/upload/export_calib.py). Plain ES module, no dependencies; nothing is sent anywhere.
 //   runUpload(frames [{grey, h, w}], interval, scale, calib, {condition}) -> { doc, masks: [{mask, mh, mw} | null] }
 import { checkFrame, DOWN, WHAD_UM_PER_PX } from "./segment.js";
@@ -123,7 +123,7 @@ export function scheduleAdvice(p, cut) {
     evidence: "on held-out WHAD wounds such early calls were right 91% of the time (always saying no: 75%)" };
   if (p >= 0.9) return { action: "call", call: "likely to reach 90% closure by 19 h", evidence: "untested: no held-out WHAD wound got this call early" };
   return { action: "image_again", next_image_hours: nxt,
-    evidence: "the 90% band narrows on average from 0.49 (1.9 h) to 0.34 (3.8 h) of the starting area (held-out WHAD, real-data NCA)" };
+    evidence: "the 90% band narrows on average from 0.49 (1.9 h) to 0.32 (3.8 h) of the starting area (held-out WHAD, edge speed)" };
 }
 const nearest = (obj, cut) => { let best = null; for (const k of Object.keys(obj)) if (best === null || Math.abs(+k - cut) < Math.abs(+best - cut)) best = k; return best === null ? null : obj[best]; };
 

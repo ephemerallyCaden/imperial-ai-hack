@@ -19,7 +19,7 @@ const SAMPLES = [
   { id: "bad_blurred", label: "Sample · blurred frame (refused)", frames: ["bad_blurred.png"], masks: ["bad_blurred_frame1_mask.png"] },
 ];
 const SAMPLE_DIR = "web/data/samples/";
-const CALIB = "web/data/browser_calib.json";   // WHAD calibration pool for the in-browser upload (web/upload/export_calib.py)
+const CALIB = "web/upload/browser_calib.json";   // WHAD calibration pool for the in-browser upload (web/upload/export_calib.py)
 
 export async function mount(el, ctx) {
   const ROOT = ctx.data.ROOT;
@@ -382,7 +382,8 @@ export async function mount(el, ctx) {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
   }
-  const COLORS = { wound: "#0B1116", intact: "#1F4F5C", edge: "#EE7F2D", fresh: "#F9D6FB" };
+  const rootCss = getComputedStyle(document.documentElement), cv = (n, h) => rootCss.getPropertyValue(n).trim() || h;
+  const COLORS = { wound: cv("--cell-wound", "#24120F"), intact: cv("--cell-intact", "#C68B6E"), edge: cv("--cell-edge", "#B3122E"), fresh: cv("--cell-new", "#FFD2C6") };
   function drawThumbs() {
     if (!tissue) return;
     const { NX, NY } = tissue.grid, st = Array.from({ length: NX * NY }, (_, k) => tissue.stateOf(k)), HY = Math.sqrt(3) / 2;

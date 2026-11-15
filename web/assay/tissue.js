@@ -7,7 +7,12 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { viewFrame } from "../public/sim/js/playback.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
-const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, wound: 0x0B1116 };   // tokens.css --cell-*
+// colours from tokens.css (--cell-*, --scene-bg, final skin look #131), read once at import; hex = fallback if missing
+const tok = (name, hex) => { let v = ""; try { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch { /* no DOM */ } return /^#[0-9a-f]{6}$/i.test(v) ? v : hex; };
+const hexNum = (h) => parseInt(h.slice(1), 16);
+const PAL = { intact: hexNum(tok("--cell-intact", "#C68B6E")), edge: hexNum(tok("--cell-edge", "#B3122E")),
+  fresh: hexNum(tok("--cell-new", "#FFD2C6")), wound: hexNum(tok("--cell-wound", "#24120F")) };
+const SCENE_BG = hexNum(tok("--scene-bg", "#120A09"));
 const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11 };                // tokens.css --ghost-* (linear)
 export const STATE_LABEL = { wound: "wound (no cells)", intact: "intact sheet", edge: "leading edge", fresh: "new tissue" };
 const HY = Math.sqrt(3) / 2, S = 0.5, HMAX = 0.7;
@@ -56,7 +61,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const canvas = document.createElement("canvas"); canvas.className = "tissue-canvas"; host.prepend(canvas);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x050607);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(SCENE_BG);
   const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.minDistance = 1.5; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;

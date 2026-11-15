@@ -105,7 +105,7 @@ numpy, scipy, pandas, matplotlib, tifffile, Pillow, jsonschema, PyTorch (NCA), a
 - Cell-agent simulator and NCA: our code (`sim/`, `nca/`), PyTorch on CPU.
 - Claude (Anthropic) was used as a coding assistant.
 - In the product, Claude (Opus 5.5) is the agent's model: it chooses among the decisions the policy code allows, explains them, writes the end-of-run summary and, without the fine-tune, reads protocol text. It never produces a number that the Critic cannot trace to a tool output, and it never raises or clears a flag. Demo runs are recorded once and played back, so viewing needs no key.
-- Adaption: a small model (Qwen3.5-2B) fine-tuned on our Intake task (protocol text to settings); see `data/adaption/` (win rate not yet reported).
+- Adaption: `Qwen/Qwen3.5-2B` fine-tuned with an Adaption LoRA for the Intake step (protocol text to settings): mean field accuracy 80.4% vs 47.4% for the base model on 30 real paragraphs; platform win rate 0.9471 on held-out synthetic rows (`docs/adaption-results.md`, #126). It runs locally; Claude is the fallback.
 
 ## Honesty notes
 
