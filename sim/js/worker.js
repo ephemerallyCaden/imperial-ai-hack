@@ -3,7 +3,12 @@
 //   wk.postMessage({ type:'init', w, h, wound:Uint8Array(w*h), preset:'CC'|'C61', seed });  // lattice locked to 32x44
 //     optional rule: 'follow' (default, sheet-like followers, cellsim Params.rule) | 'free' (the pre-registered gate rules)
 //   wk.postMessage({ type:'run', hoursPerFrame: 0.5 });  // also 'pause','step','preset','reset'
-//   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac, fine, outline }
+//     optional untilClosed: true -> the worker stops by itself and the last frame has stopped: 'closed' (every site
+//     occupied) | 'stalled' (occupied count unchanged for stallHours, default 12 simulated h) | 'cap' (t_hours >= maxHours,
+//     default 500). Without it, 'run' runs until 'pause' as before.
+//   wk.onmessage = e => e.data = { type:'frame', occ:Uint8Array(h*w), t_hours, wound_frac, closed, touches_edge, fine, outline }
+//   closed = every site occupied (integer count, not a float compare); touches_edge = the t0 wound reaches the border
+//   band, which is then not reservoir there (docs/sim.md boundary rule), so it may never close (free rule, no reservoir).
 //   fine = { scale:k, sigma, h:h*k, w:w*k, data:Uint8Array round(smoothed occupancy*255) }   (sim/js/smooth.js,
 //   outline = { units:'sites', rule:'area-matched', level, lines:[flat x,y,...], display:{opacity, lines} }  same as playback)
 //   init option smooth: { k, sigma } overrides SMOOTH_K/SMOOTH_SIGMA; smooth:false turns both off.
@@ -29,10 +34,14 @@ const DEFAULT_NCA = {
 };
 
 let eng = null, init = null, running = false, hpf = 0.5, timer = null;
+const STALL_HOURS = 12, MAX_HOURS = 500;
+let until = null, lastOcc = -1, lastChange = 0; // untilClosed run: stall tracking
 
-function post() {
-  const occ = eng.occ.slice(), wf = eng.wound_frac;
-  const msg = { type: 'frame', w: eng.w, h: eng.h, rule: eng.rule, label: presetLabelFor(eng.rule), caption: presetCaptionFor(eng.rule), occ, t_hours: eng.t_hours, wound_frac: wf }, tr = [occ.buffer];
+function post(stopped) {
+  const occ = eng.occ.slice(), n = eng.occupied, wf = 1 - n / occ.length;
+  const msg = { type: 'frame', w: eng.w, h: eng.h, rule: eng.rule, label: presetLabelFor(eng.rule), caption: presetCaptionFor(eng.rule), occ, t_hours: eng.t_hours, wound_frac: wf,
+    closed: n === occ.length, touches_edge: eng.touches_edge }, tr = [occ.buffer];
+  if (stopped) msg.stopped = stopped;
   if (init.resampled_from) msg.resampled_from = init.resampled_from;
   const sm = init.smooth === false ? null : { k: SMOOTH_K, sigma: SMOOTH_SIGMA, ...(init.smooth || {}) };
   if (sm) {
@@ -49,8 +58,13 @@ function loop() {
   if (!running) return;
   const t0 = performance.now();
   eng.advance(hpf);
-  post();
-  timer = setTimeout(loop, Math.max(0, 33 - (performance.now() - t0)));
+  const n = eng.occupied;
+  if (n !== lastOcc) { lastOcc = n; lastChange = eng.t_hours; }
+  const why = !until ? null : n === eng.occ.length ? 'closed'
+    : eng.t_hours - lastChange >= until.stallHours - 1e-9 ? 'stalled' : eng.t_hours >= until.maxHours - 1e-9 ? 'cap' : null;
+  if (why) stop();
+  post(why);
+  if (running) timer = setTimeout(loop, Math.max(0, 33 - (performance.now() - t0)));
 }
 // lock the draw lattice to the WHAD field (FIELD_H x FIELD_W sites at SITE_UM): a wound mask of any other size
 // (e.g. canvas pixels) is resampled nearest-neighbour onto it; frames then report resampled_from: [h, w].
@@ -94,6 +108,10 @@ onmessage = (e) => {
   if (m.type === 'reset') { stop(); eng = new Engine(init); post(); }
   else if (m.type === 'preset') eng.setPreset(m.preset, m.params);
   else if (m.type === 'step') { eng.advance(m.hours || hpf); post(); }
-  else if (m.type === 'run') { hpf = m.hoursPerFrame || hpf; if (!running) { running = true; loop(); } }
+  else if (m.type === 'run') {
+    hpf = m.hoursPerFrame || hpf;
+    until = m.untilClosed ? { stallHours: m.stallHours || STALL_HOURS, maxHours: m.maxHours || MAX_HOURS } : null;
+    if (!running) { lastOcc = eng.occupied; lastChange = eng.t_hours; running = true; loop(); } // fresh stall window
+  }
   else if (m.type === 'pause') stop();
 };

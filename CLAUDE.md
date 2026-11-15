@@ -31,7 +31,7 @@ Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is 
 - Agent replay of one held-out WHAD wound: `.venv/bin/python -m agent.run --wound exp1_partII_C61_P1 --run-id <new id> [--both-branches] [--reject]` (log in `agent/runs/<id>.jsonl`)
 - Agent scoreboard: `.venv/bin/python -m agent.evaluate` (writes `agent/results/scoreboard.csv` and `.md`; no real model calls)
 - Agent real run: load `.env` (`set -a; . ./.env; set +a`, with `STITCH_PROVIDER`, `STITCH_MODEL` and key or AWS profile), then the `agent.run` command above
-- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`
+- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`, `node sim/js/heal_check.mjs`
 
 ## Architecture
 <!-- Fill in after initial scaffolding -->
