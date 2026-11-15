@@ -35,7 +35,7 @@
 .dr-body { padding: var(--s4) 0; }
 .dr-view { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s4); align-items: start; outline: none; }
 .dr-stage { position: relative; }
-.dr-canvas { display: block; width: 100%; height: auto; aspect-ratio: 44 / 32; border: 1px solid var(--hair); background: var(--cell-wound); touch-action: none; cursor: crosshair; }
+.dr-canvas { display: block; width: 100%; height: auto; aspect-ratio: 44 / 32; border: 1px solid var(--hair); background: #120A09; touch-action: none; cursor: crosshair; }
 .dr-zoom { position: absolute; right: var(--s2); bottom: var(--s2); display: flex; gap: 4px; }
 .dr-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
 .dr-pair figure { margin: 0; } .dr-pair figcaption { margin-top: 6px; } .dr-pair .dr-canvas { cursor: zoom-in; }
