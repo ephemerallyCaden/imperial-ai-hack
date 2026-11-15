@@ -9,7 +9,7 @@ Rand + friend present on camera; the middle is app footage with voice-over. Shot
 | Open | 0:00-0:18 | Rand, then friend | Rand in a corridor; cut to the WHAD time-lapse on "dish" | ~60 (written, below) |
 | Draw + Assay demo | 0:13-0:50 | Friend, voice-over | Draw (draw, Run, zoom); terminal upload; mask still; Assay forecast; decision card + Approve; Why tab | ~85 |
 | Does it hold? | 0:50-1:25 | Rand, voice-over | `eval/figures/video/1_forecast.png`, `2_reveal.png`, `3_scorecard.png`, `4_calibration.png`, `5_failure.png` | ~80 |
-| Ops proof | 1:25-1:45 | Friend, voice-over | Ops: run log, scoreboard, adversarial 14 of 14 | ~45 |
+| Ops proof | 1:25-1:45 | Friend, voice-over | Ops: run log, scoreboard, adversarial 15 of 15 | ~45 |
 | Close | 1:45-2:00 | Both, on camera | Faces, then end card | ~15 |
 
 ## Opening (option C, agreed)
@@ -34,7 +34,7 @@ Use cases (diabetic wounds, infection, cancer, fibrosis, drug screens) are motiv
 - NCA trained only on simulation failed our pre-set test; fine-tuned on real frames it is within 3% of edge speed at 3.8 h and better at 1.9 h and 9.5 h
 - inside the band at 15 of 16 later frames
 - 82% called at the first check, 91% right vs 75% for always guessing "won't close" (replay, simulation on recorded data)
-- 14 of 14 adversarial inputs handled
+- 15 of 15 adversarial inputs handled
 
 ## Never say
 "first", "clinical", "diagnosis", "predicts drug effects", "separates migration from division", "3D model", "saves N hours", "the AI decides".
