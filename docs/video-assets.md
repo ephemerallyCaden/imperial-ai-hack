@@ -22,7 +22,7 @@ The example wound (`exp1_partII_CC_P2`, a WHAD control wound) is the same wound 
 |---|---|---|
 | Band holds on unseen wounds | 92% (target 90%) | results.md, headline |
 | Edge speed vs fine-tuned NCA (v3) | 3.8 h: 0.0386 vs 0.0397 (+3%); 1.9 h: 0.0562 vs 0.0530 (NCA better) | results.md, gate table |
-| Simulator-only NCA | 0.0499 (+29%, failed) | results.md, gate table |
+| Simulator-only NCA | 0.0502 (+30%, failed) | results.md, gate table |
 | New cell type | 58% coverage | results.md, calibration |
 | Stop-early calls | 82% called at 1.9 h, 91% right (same with the shipped NCA v3) vs 75% always-no | results.md, stop early |
 | Stall flag | AUC 0.77-0.90 | results.md, flags |
