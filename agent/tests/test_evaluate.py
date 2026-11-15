@@ -106,3 +106,30 @@ def test_agent_on_one_wound_matches_rules(tmp_path, monkeypatch):
         assert o["stop_kind"] == "unlikely" and o["stop_h"] == 1.9
     finally:
         llm.set_stub(None)
+
+
+def test_non_closer_imaged_to_end():
+    ws = {"a": _w(False, stall_true=True), "b": _w(False, stall_true=True), "c": _w(False), "d": _w(True)}
+    r = E.score(ws, {"a": _o(), "b": _o(1.9, "stall"), "c": _o(5.7, "unlikely"), "d": _o()})
+    assert r["non_closer_to_end"] == 1                # only a: never stopped for any reason
+    assert r["missed_non_closer"] == 2                # a and b (b's stall stop is not a closure call)
+
+
+def test_stall_stop_error_rate():
+    ws = {"a": _w(False, stall_true=False), "b": _w(False, stall_true=True), "c": _w(False, stall_true=False)}
+    r = E.score(ws, {"a": _o(1.9, "stall"), "b": _o(1.9, "stall"), "c": _o(1.9, "stall")})
+    assert r["stall_stop_error_rate"] == pytest.approx(0.667)
+    assert E.score(ws, {k: _o() for k in ws})["stall_stop_error_rate"] is None
+
+
+def test_scoreboard_says_replay_model(tmp_path):
+    ws = {"a": _w(False)}
+    rows = [{"policy": p, **E.score(ws, {"a": _o()}, rate)} for rate in E.RATES for p in E.POLICIES]
+    xc = {"scheduler_csv_calls_wont_close": None, "scheduler_csv_wrong_calls": None, "scheduler_rule_unlikely_calls": 0,
+          "scheduler_rule_wrong": 0, "agent_unlikely_calls": 0, "agent_unlikely_wrong": 0, "same_wound_same_check": 0,
+          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0}
+    p = tmp_path / "s.md"
+    E.write_md(str(p), rows, xc, str(tmp_path))
+    md = p.read_text()
+    assert "not a real LLM" in md and "#82" in md and "Non-closer imaged to the end" in md
+    assert "Stall-stop error rate" in md

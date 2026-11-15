@@ -19,6 +19,13 @@ decisions, a forced decision (refused / stall) skips the model, otherwise the mo
 policy.check() validates it (fallback: first allowed reversible decision), the Critic traces every number in the
 explanation, and an irreversible decision (a stop) needs approve(decision). Everything goes to agent/runs/<run_id>.jsonl.
 
+The Critic traces against tool outputs with metadata subtrees (META_KEYS) removed: numbers in wound names, notes or
+protocol text are never evidence. Metadata sent to the model is truncated (META_STR_MAX per string, META_TOTAL_MAX in
+total); the prompt size is estimated before each call and the call is skipped (fallback) if it would exceed the token
+budget left. If the budget runs out on a call, that check still gets its Critic and decision records, then the run
+stops. With record_both_branches, <run_id>.reject.jsonl is created before the first approval is asked, so an existing
+file fails before any stop (the parent log still gets run_end); run_end lists branch_run_ids.
+
 What a human answer does (issue #83 replay semantics):
   - "stall flagged, ask a human": approve(decision) is asked; approved = stop the plate at that check (stop_kind
     "stall"), rejected = keep imaging.
@@ -42,6 +49,11 @@ LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
 HANDOVER = {policy.ASK_HUMAN_REFUSED}   # ends the run with no stop
 STOP_KIND = {policy.ASK_HUMAN_STALL: "stall", policy.STOP_UNLIKELY: "unlikely", policy.STOP_LIKELY: "likely"}
 META_KEYS = ("wound_id", "wound", "condition", "part", "name", "notes", "metadata", "protocol_text", "dataset")
+META_STR_MAX, META_TOTAL_MAX = 500, 2000   # chars per metadata string / over all metadata strings
+META_JSON_MAX = 4000                       # whole metadata block (keys and numbers too); bigger is dropped
+CHARS_PER_TOKEN = 4                        # rough prompt-size estimate used before a model call
+MODEL_MAX_TOKENS = 1024
+TRUNC = "...[truncated]"
 
 
 # ---------------------------------------------------------------- wound sources
@@ -147,14 +159,15 @@ class _Stop(Exception):
 
 
 class _Run:
-    def __init__(self, run_id, source, approve, record_both, max_steps, token_budget, runs_dir, parent=None):
-        self.log = RunLog(run_id, runs_dir=runs_dir) if runs_dir else RunLog(run_id)
+    def __init__(self, run_id, source, approve, record_both, max_steps, token_budget, runs_dir, parent=None, log=None):
+        self.log = log or (RunLog(run_id, runs_dir=runs_dir) if runs_dir else RunLog(run_id))
         self.run_id, self.src, self.approve, self.record_both = run_id, source, approve, record_both
         self.max_steps, self.token_budget, self.runs_dir = max_steps, token_budget, runs_dir
         self.steps, self.tok_in, self.tok_out, self.traced, self.untraced = 0, 0, 0, 0, 0
         self.inherited_outputs, self.branches, self.last, self.last_cut = [], [], None, None
+        self.budget_out, self.child_log, self.child_used = False, None, False
         if parent is not None:   # a branch shares the parent's counters and evidence up to the branch point
-            for k in ("steps", "tok_in", "tok_out", "traced", "untraced", "last", "last_cut"):
+            for k in ("steps", "tok_in", "tok_out", "traced", "untraced", "last", "last_cut", "budget_out"):
                 setattr(self, k, copy.deepcopy(getattr(parent, k)))
             self.inherited_outputs = parent.inherited_outputs + parent.log.tool_outputs()
 
@@ -168,7 +181,9 @@ class _Run:
         return self.tok_in + self.tok_out
 
     def _outputs(self):
-        return self.inherited_outputs + self.log.tool_outputs()
+        """Critic sources: tool outputs with metadata subtrees (META_KEYS) removed. Numbers in names, notes or
+        protocol text come from files, not tools, so they are never evidence."""
+        return [_strip_meta(o) for o in self.inherited_outputs + self.log.tool_outputs()]
 
     # -- fixed steps
     def _tool(self, name, inp, fn):
@@ -191,8 +206,15 @@ class _Run:
         ids = [d["id"] for d in allowed]
         system, tool = prompts.SYSTEM, prompts.decision_tool(ids)
         messages = [{"role": "user", "content": prompts.user_message(cut, allowed, data)}]
-        if self._tokens() >= self.token_budget:
-            raise _Stop("token_budget")
+        remaining = self.token_budget - self._tokens()
+        est = estimate_tokens(system, messages, [tool]) + MODEL_MAX_TOKENS
+        if remaining <= 0 or est > remaining:   # skip the call; this check still gets a (fallback) decision
+            why = "token budget exhausted" if remaining <= 0 else \
+                f"estimated prompt + reply {est} tokens > {remaining} left in the token budget"
+            self.log.log("model_skipped", cut_h=cut, reason=why, estimated_tokens=est, tokens_left=remaining, data=data)
+            if remaining <= 0:
+                self.budget_out = True
+            return None, None, f"model call skipped: {why}"
         self._step()
         t0 = time.time()
         try:
@@ -200,7 +222,7 @@ class _Run:
         except Exception as e:  # noqa: BLE001 - a failed call falls back like an invalid proposal
             resp, err = None, f"{type(e).__name__}: {e}"
         rec = {"step": self.steps, "input_fp": fingerprint({"system": system, "messages": messages, "tools": [tool]}),
-               "elapsed_s": round(time.time() - t0, 3)}
+               "elapsed_s": round(time.time() - t0, 3), "estimated_tokens": est, "data": data}
         if resp is None:
             self.log.log("model_call", error=err, **rec)
             return None, None, f"model call failed: {err}"
@@ -210,8 +232,8 @@ class _Run:
         self.log.log("model_call", model=resp.get("model"), stop_reason=resp.get("stop_reason"), usage=u,
                      tokens_total=self._tokens(), text=resp.get("text", ""), tool_calls=resp.get("tool_calls", []),
                      **rec)
-        if self._tokens() >= self.token_budget:
-            raise _Stop("token_budget")
+        if self._tokens() >= self.token_budget:   # finish this check (Critic + decision), then stop the run
+            self.budget_out = True
         if resp.get("stop_reason") == "refusal":
             return None, None, "model refused (stop_reason=refusal)"
         call = next((c for c in resp.get("tool_calls") or [] if c.get("name") == prompts.TOOL_NAME), None)
@@ -241,7 +263,11 @@ class _Run:
                             lambda _: tools.flags_schedule(doc))
             if fl.get("error"):
                 raise _Stop("tool_error")
-        res = (fl or {}).get("results", [{}])[0] if fl else {}
+        results = (fl or {}).get("results") if fl else None
+        res = results[0] if isinstance(results, list) and results and isinstance(results[0], dict) else {}
+        if fl is not None and not res:
+            self.log.log("warning", cut_h=cut, tool="flags_schedule",
+                         message="flags_schedule returned no results; treated as no stall flag and no schedule advice")
         stall, sched = res.get("stall") or {}, res.get("schedule") or {}
         state = {"refused": refused, "stall": bool(stall.get("fired")), "p_close": sched.get("p_close_by_T"),
                  "cut_h": cut, "next_check_h": nxt}
@@ -252,8 +278,11 @@ class _Run:
             did, source = allowed[0]["id"], "forced"
             expl = f"{allowed[0]['label']}: {allowed[0]['evidence']}."
         else:
+            meta, meta_trunc = _metadata(doc)
             data = {"allowed_decisions": allowed, "state": state, "stall": stall, "schedule": sched,
-                    "forecast": _forecast_facts(doc), "wound_metadata": _metadata(doc)}
+                    "forecast": _forecast_facts(doc), "wound_metadata": meta}
+            if meta_trunc:
+                data["wound_metadata_truncated"] = True
             proposed, expl, fallback = self._propose(cut, state, allowed, data)
             did, source = proposed, "llm"
             if fallback:
@@ -267,7 +296,7 @@ class _Run:
         self.log.log("critic", cut_h=cut, calibrated_band=calibrated, removed=cr["removed"], traced=cr["traced"],
                      untraced=cr["untraced"], text_in=expl, text_out=cr["text"])
         self.last = {**item, "explanation": cr["text"], "cut_h": cut}
-        self.log.log("decision", cut_h=cut, state=state, allowed=[d["id"] for d in allowed], decision=did,
+        self.log.log("decision", cut_h=cut, state=state, allowed=[_allowed_item(d) for d in allowed], decision=did,
                      label=item["label"], irreversible=item["irreversible"], untested=item["untested"], source=source,
                      proposed=proposed, fallback_reason=fallback, explanation=cr["text"])
         return item, cut
@@ -280,6 +309,8 @@ class _Run:
             while k < len(checks):
                 item, cut = self._check(k, checks)
                 if item["irreversible"] or item["id"] == policy.ASK_HUMAN_STALL:   # approved = stop the plate
+                    if self.record_both:
+                        self._reserve_branch()   # an existing <run_id>.reject log fails here, before approval
                     dec = {**self.last, "run_id": self.run_id}
                     try:
                         ok, note = bool(self.approve(dec)), None
@@ -294,29 +325,51 @@ class _Run:
                     self.log.log("human_review", cut_h=cut, decision=item["id"], note="human reviewed; imaging continues")
                 elif item["id"] in HANDOVER:
                     return self._end("handed_to_human")
+                if self.budget_out:
+                    raise _Stop("token_budget")
                 k += 1
             return self._end("schedule_complete")
         except _Stop as s:
             return self._end(s.reason)
+        except FileExistsError as e:   # the rejected-branch log already exists: end this run cleanly, then fail
+            self._end("branch_log_exists", error=str(e))
+            raise
+
+    def _reserve_branch(self):
+        if self.child_log is None:
+            kw = {"runs_dir": self.runs_dir} if self.runs_dir else {}
+            self.child_log = RunLog(f"{self.run_id}.reject", **kw)
 
     def _branch(self, item, cut, k, checks):
-        child = _Run(f"{self.run_id}.reject", self.src, self.approve, False, self.max_steps, self.token_budget,
-                     self.runs_dir, parent=self)
+        self._reserve_branch()
+        child = _Run(self.child_log.run_id, self.src, self.approve, False, self.max_steps, self.token_budget,
+                     self.runs_dir, parent=self, log=self.child_log)
+        self.child_used = True
         child.log.log("run_start", parent_run_id=self.run_id, branch_seq=self.log.seq - 1, branch_cut_h=cut,
                       wound=self.src.describe(), checks_h=checks, max_steps=self.max_steps,
-                      token_budget=self.token_budget, model_provider=llm._provider())
+                      token_budget=self.token_budget, model_provider=llm._provider(), model_id=_model_id())
         child._approval(item, cut, False, "recorded rejected branch")
-        self.branches.append(child.run_from(k + 1, checks))
+        if child.budget_out:   # the branch point already used up the budget
+            self.branches.append(child._end("token_budget"))
+        else:
+            self.branches.append(child.run_from(k + 1, checks))
 
-    def _end(self, reason, stop_h=None, stop_kind=None):
+    def _end(self, reason, stop_h=None, stop_kind=None, **extra):
         last = self.last or {}
+        if self.child_log is not None and not self.child_used and not self.child_log.records:
+            try:   # reserved for a rejected branch that was never needed (the stop was rejected): drop the empty file
+                os.remove(self.child_log.path)
+            except OSError:
+                pass
+            self.child_log = None
         summary = self.log.log(
             "run_end", reason=reason, decision=last.get("id"), decision_label=last.get("label"),
             explanation=last.get("explanation"), stopped=stop_h is not None, stop_h=stop_h, stop_kind=stop_kind, ended_at_h=self.last_cut,
             horizon_h=config.HORIZON_H,
             plate_hours_saved=round(config.HORIZON_H - stop_h, 3) if stop_h is not None else 0.0,
             steps=self.steps, tokens={"input": self.tok_in, "output": self.tok_out, "total": self._tokens()},
-            numbers_traced=self.traced, numbers_untraced=self.untraced)
+            numbers_traced=self.traced, numbers_untraced=self.untraced,
+            branch_run_ids=[b["run_id"] for b in self.branches], **extra)
         out = dict(summary)
         if self.branches:
             out["branches"] = self.branches
@@ -338,11 +391,55 @@ def _forecast_facts(doc):
 
 
 def _metadata(doc):
-    """Free text from files (names, notes, protocol text). Data only: it goes inside the delimited block."""
+    """Free text from files (names, notes, protocol text). Data only: it goes inside the delimited block.
+    -> (metadata, truncated). Each string is cut to META_STR_MAX chars and all strings together to META_TOTAL_MAX;
+    if the whole block is still over META_JSON_MAX chars of JSON it is dropped."""
     meta = {k: doc[k] for k in META_KEYS if k in doc}
     for f in doc.get("forecasts") or []:
         meta.update({f"forecast.{k}": f[k] for k in META_KEYS if k in f})
-    return meta
+    left = [META_TOTAL_MAX]
+    cut = [False]
+
+    def trunc(o):
+        if isinstance(o, str):
+            n = min(len(o), META_STR_MAX, left[0])
+            left[0] -= n
+            if n < len(o):
+                cut[0] = True
+                return o[:n] + TRUNC
+            return o
+        if isinstance(o, dict):
+            return {str(k)[:META_STR_MAX]: trunc(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [trunc(v) for v in o]
+        return o
+    meta = trunc(meta)
+    if len(json.dumps(meta, default=str)) > META_JSON_MAX:
+        return {"dropped": f"wound metadata over {META_JSON_MAX} characters"}, True
+    return meta, cut[0]
+
+
+def _strip_meta(obj):
+    """Copy of a tool output with every META_KEYS subtree removed (at any depth)."""
+    if isinstance(obj, dict):
+        return {k: _strip_meta(v) for k, v in obj.items() if k not in META_KEYS}
+    if isinstance(obj, (list, tuple)):
+        return [_strip_meta(v) for v in obj]
+    return obj
+
+
+def _allowed_item(d):
+    return {k: d[k] for k in ("id", "label", "evidence", "irreversible", "untested")}
+
+
+def estimate_tokens(system, messages, tools_):
+    """Rough prompt size in tokens (characters / CHARS_PER_TOKEN, rounded up)."""
+    chars = len(system) + len(json.dumps(messages, default=str)) + len(json.dumps(tools_, default=str))
+    return -(-chars // CHARS_PER_TOKEN)
+
+
+def _model_id():
+    return os.environ.get("STITCH_MODEL", llm.DEFAULT_MODEL)
 
 
 def run_wound(run_id, wound, checks=config.CHECKS_H, approve=lambda decision: True, record_both_branches=False,
@@ -354,7 +451,7 @@ def run_wound(run_id, wound, checks=config.CHECKS_H, approve=lambda decision: Tr
     r = _Run(run_id, src, approve, record_both_branches, max_steps, token_budget, runs_dir)
     r.log.log("run_start", wound=src.describe(), checks_h=src.checks, max_steps=max_steps, token_budget=token_budget,
               record_both_branches=record_both_branches, model_provider=llm._provider(),
-              model_id=os.environ.get("STITCH_MODEL", llm.DEFAULT_MODEL))
+              model_id=_model_id())
     return r.run_from(0, src.checks)
 
 

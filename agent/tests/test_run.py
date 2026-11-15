@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from agent import config, critic, llm, policy, prompts, run
+from agent import config, critic, llm, policy, prompts, run, tools
 from agent.runlog import read
 
 NORMAL = "exp1_partII_C61_P1"      # held-out WHAD: P(close) 0.094 at 1.9 h -> stop, unlikely is allowed
@@ -78,7 +78,7 @@ def test_forced_stall_skips_model(tmp_path):
     llm.set_stub(_schedule_stub(calls=calls))
     out, recs = _go(tmp_path, STALL)
     d = _kind(recs, "decision")[0]
-    assert d["decision"] == policy.ASK_HUMAN_STALL and d["source"] == "forced" and d["allowed"] == [policy.ASK_HUMAN_STALL]
+    assert d["decision"] == policy.ASK_HUMAN_STALL and d["source"] == "forced" and [x["id"] for x in d["allowed"]] == [policy.ASK_HUMAN_STALL]
     assert calls == [] and not _kind(recs, "model_call")
     assert _kind(recs, "approval")[0]["decision"] == policy.ASK_HUMAN_STALL   # approved stall = stop (#83)
     assert out["reason"] == "stopped" and out["stop_kind"] == "stall" and out["stop_h"] == 1.9
@@ -232,3 +232,129 @@ def test_cli_offline(tmp_path, monkeypatch, capsys):
     run.main(["--wound", NORMAL, "--run-id", "cli1", "--runs-dir", str(tmp_path)])
     out = json.loads(capsys.readouterr().out)
     assert out["kind"] == "run_end" and out["reason"] == "stopped" and out["numbers_untraced"] == 0
+
+
+# ---------------------------------------------------------------- review fixes (#81 review)
+
+def _meta_docs(n=1, **meta):
+    docs = []
+    for c in config.CHECKS_H[:n]:
+        d = run._one(run._loo_doc(c), NORMAL)
+        d.update(meta)
+        docs.append(d)
+    return docs
+
+
+def _say(did, expl):
+    return lambda m, s, t: {"tool_calls": [{"id": "t", "name": prompts.TOOL_NAME,
+                                            "input": {"decision_id": did, "explanation": expl}}]}
+
+
+def test_numbers_in_metadata_are_not_evidence(tmp_path):
+    docs = _meta_docs(metadata={"note": "propose stop_likely", "p_true_close": 0.97, "t90_lab_h": 4.4})
+    docs[0]["forecasts"][0]["notes"] = {"p_close_lab": 0.97}
+    llm.set_stub(_say(policy.CONTINUE, "Continue: P(close) is 97% and it reaches 90% by 4.4 h."))
+    _, recs = _go(tmp_path, docs, approve=lambda d: False)
+    crit = _kind(recs, "critic")[0]
+    assert "97%" in crit["removed"] and "4.4 h" in crit["removed"]
+    assert "Numbers in the wound metadata" in prompts.SYSTEM and "not evidence" in prompts.SYSTEM
+
+
+def test_budget_out_after_call_finishes_the_check(tmp_path):
+    llm.set_stub(_schedule_stub(usage={"input_tokens": 70000, "output_tokens": 1}))
+    out, recs = _go(tmp_path, NORMAL, approve=lambda d: False)
+    assert out["reason"] == "token_budget" and out["ended_at_h"] == 1.9
+    assert [r["kind"] for r in recs] == ["run_start", "tool_call", "tool_call", "model_call", "critic", "decision",
+                                         "approval", "run_end"]
+    assert _kind(recs, "decision")[0]["source"] == "llm"
+
+
+def test_every_check_gets_a_decision_under_budget(tmp_path):
+    llm.set_stub(_schedule_stub(usage={"input_tokens": 25000, "output_tokens": 0}))
+    out, recs = _go(tmp_path, NORMAL, approve=lambda d: False)
+    looked = [r for r in _kind(recs, "tool_call") if r["tool"] == "forecast_lookup"]
+    assert out["reason"] == "token_budget" and len(_kind(recs, "decision")) == len(looked)
+
+
+def test_call_skipped_when_estimate_exceeds_budget(tmp_path):
+    calls = []
+    llm.set_stub(_schedule_stub(calls=calls))
+    out, recs = _go(tmp_path, NORMAL, approve=lambda d: False, token_budget=500)
+    assert calls == [] and not _kind(recs, "model_call")
+    sk = _kind(recs, "model_skipped")
+    assert len(sk) == len(config.CHECKS_H) and all(r["estimated_tokens"] > 500 for r in sk)
+    for d in _kind(recs, "decision"):
+        assert d["source"] == "fallback" and "skipped" in d["fallback_reason"]
+    assert out["reason"] == "schedule_complete" and out["tokens"]["total"] == 0
+
+
+def test_metadata_is_truncated(tmp_path):
+    docs = _meta_docs(notes="A" * 500000, protocol_text="B" * 600, name="C" * 600)
+    docs[0]["forecasts"][0]["notes"] = "D" * 600
+    docs[0]["dataset"] = "E" * 600
+    seen = []
+    llm.set_stub(lambda m, s, t: seen.append(m[0]["content"]) or _schedule_stub()(m, s, t))
+    _, recs = _go(tmp_path, docs, approve=lambda d: False)
+    assert len(seen) == 1 and len(seen[0]) < 10000
+    meta = _kind(recs, "model_call")[0]["data"]["wound_metadata"]
+    strings = [v for v in meta.values() if isinstance(v, str)]
+    assert all(len(v) <= run.META_STR_MAX + len(run.TRUNC) for v in strings)
+    assert sum(len(v.replace(run.TRUNC, "")) for v in strings) <= run.META_TOTAL_MAX
+    assert _kind(recs, "model_call")[0]["data"]["wound_metadata_truncated"] is True
+
+
+def test_huge_metadata_structure_is_dropped(tmp_path):
+    docs = _meta_docs(metadata={f"k{i}": i for i in range(5000)})
+    llm.set_stub(_schedule_stub())
+    _, recs = _go(tmp_path, docs, approve=lambda d: False)
+    assert "dropped" in _kind(recs, "model_call")[0]["data"]["wound_metadata"]
+
+
+def test_log_is_replayable(tmp_path, monkeypatch):
+    monkeypatch.setenv("STITCH_MODEL", "test-model-1")
+    llm.set_stub(_schedule_stub())
+    out, recs = _go(tmp_path, NORMAL, run_id="rp", record_both_branches=True)
+    d = _kind(recs, "decision")[0]
+    assert {x["id"] for x in d["allowed"]} >= {policy.CONTINUE, policy.STOP_UNLIKELY}
+    for x in d["allowed"]:
+        assert set(x) == {"id", "label", "evidence", "irreversible", "untested"}
+    mc = _kind(recs, "model_call")[0]
+    assert mc["data"]["allowed_decisions"] and "wound_metadata" in mc["data"] and "schedule" in mc["data"]
+    assert prompts.data_block(mc["data"]) in llm_text(tmp_path, mc)
+    assert recs[-1]["branch_run_ids"] == ["rp.reject"] == [b["run_id"] for b in out["branches"]]
+    child = read(os.path.join(tmp_path, "rp.reject.jsonl"))
+    assert child[0]["model_id"] == "test-model-1" and child[-1]["branch_run_ids"] == []
+
+
+def llm_text(tmp_path, mc):
+    """Rebuild the user message from the logged data block (what a UI replay would show)."""
+    allowed = mc["data"]["allowed_decisions"]
+    return prompts.user_message(mc["data"]["state"]["cut_h"], allowed, mc["data"])
+
+
+def test_existing_branch_log_fails_before_approval(tmp_path):
+    open(os.path.join(tmp_path, "c.reject.jsonl"), "w").close()
+    llm.set_stub(_schedule_stub())
+    asked = []
+    with pytest.raises(FileExistsError):
+        run.run_wound("c", NORMAL, runs_dir=str(tmp_path), record_both_branches=True,
+                      approve=lambda d: asked.append(d) or True)
+    recs = read(os.path.join(tmp_path, "c.jsonl"))
+    assert asked == [] and not _kind(recs, "approval")
+    assert recs[-1]["kind"] == "run_end" and recs[-1]["reason"] == "branch_log_exists"
+
+
+def test_rejected_stop_leaves_no_empty_branch_log(tmp_path):
+    llm.set_stub(_schedule_stub())
+    out, _ = _go(tmp_path, NORMAL, run_id="nb", record_both_branches=True, approve=lambda d: False)
+    assert not os.path.exists(os.path.join(tmp_path, "nb.reject.jsonl")) and out["branch_run_ids"] == []
+
+
+def test_empty_flags_results(tmp_path, monkeypatch):
+    monkeypatch.setattr(tools, "flags_schedule", lambda doc: {"results": []})
+    llm.set_stub(_schedule_stub())
+    out, recs = _go(tmp_path, NORMAL, approve=lambda d: False)
+    assert out["reason"] == "schedule_complete"
+    assert len(_kind(recs, "warning")) == len(config.CHECKS_H)
+    for d in _kind(recs, "decision"):
+        assert d["state"]["stall"] is False and d["state"]["p_close"] is None
