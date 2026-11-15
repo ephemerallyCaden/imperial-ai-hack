@@ -130,6 +130,7 @@ Times match `docs/video-script-draft.md`. "Label" is the honesty chip that must 
 - **Clicks:** `#draw` opens Assay's 3D view in live drawing ("Draw a wound · live NCA"). Press the **CC** preset and pick a brush size (S/M/L). Drag on the tissue to cut a wound: the NCA keeps running and fills the gap live, and you can keep cutting while it heals. Set speed (1/2/4/8 h/s). Wheel to zoom in on single hexes, then out to the whole field; right-drag orbits. **Reset to intact tissue** starts over. It stops by itself once every cell is back to at least 95% density.
 - **Length:** cut 3 s, heal 5 s, zoom 4 s. Capture about 30 s and speed up.
 - **On-screen text:** "Simulation (NCA emulator, follower rule; preset parameters)" · "Simulated cells · not tracked cells" · "No forecast". Hexes are 10 µm display samples of the NCA density, not cells.
+- **Optional, wound photo:** the same **Upload images…** button that takes microscopy frames also takes one skin-wound photo (there is no separate photo button). Pick `design/prototypes/glass-dish/sample/test_skin_wound_synthetic.jpg`: Assay switches to live drawing and opens the photo. Drag a box around the wound, press **Trace outline**, and the outline is carved into the tissue and healed by the NCA. Add the on-screen text "Shape from photo; healing is a cell-culture model, not this wound". The step counter counts simulation steps, not hours: do not caption a healing time.
 - **Label:** simulated · sped up.
 
 ### Shot 3a. Real pipeline in the terminal (inside 0:22-0:34, about 4 s)
