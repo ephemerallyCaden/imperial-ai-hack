@@ -1,5 +1,24 @@
 # Cell simulator: rules and output format (P2, `sim/cellsim.py`)
 
+> **Scope.** Stitch's simulator is a mechanistic lattice model of collective epithelial migration in 2D in-vitro scratch assays
+> (MCF10A cells, WHAD dataset). It forecasts the closure of the assay's cell-free gap; it does **not** model skin wounds in patients. In-vivo healing
+> adds haemostasis, inflammation, granulation tissue, contraction and remodelling, and none of these is modelled. Cell division is switched off for
+> WHAD because WHAD treated the cells with mitomycin C to block proliferation (WHAD paper: Iheme et al. 2024, doi 10.1109/ieeedata.2024.3481394; Zenodo
+> 12806149; as recorded in docs/design.md, WHAD protocol line). CC vs C61 is a genetic condition (shRNA), not a drug. The wound-bias parameter is not
+> identified from these data, so Tm carries the signal. All tuning and evaluation are on WHAD only.
+
+> **P2 v2 (Sun 00:00): the follower rule is the default for WHAD forecasts, upload, draw tool and playback.** Use `Params(rule="follow")`
+> (Agent 4, 3dd4fcf). A cell that moves pulls the chain behind it, so the sheet stays packed and the wound closes as a front, and fitted Tm no longer
+> depends on field size. The code default stays `rule="free"`, so the v1 results (sim_ensemble, rules below) reproduce bit for bit. Under the follower rule:
+> Tm grid 0.05-500 h (fits are about 8-10x the free-rule Tm; part II about 4-8 h, part I stalls up to 500 h); fits in `sim/fits/whad_fits_follow.json` (sim/v2.py,
+> series time at P1's cut-offs, near-tie break); gate files `sim_follow*` via `python sim/v2.py gate sim_follow`; upload `sim/upload.py` (follower fits and
+> prior, NCA band only with the follower weights `nca/v2/weights.pt`). Results and the pre-declared criterion it did not pass: `docs/p2-results.md` "P2 v2".
+> Upload bands (Sun 00:15): `area_q05/q50/q95` = P1's leave-one-wound-out conformal (`forecast_file`, upload = test series, pool = WHAD series minus
+> the upload's own wound, point = member median; pool points from follower fits at the upload's cut-off), as `data/upload.py`. The raw ensemble is
+> kept in `raw_band` ("uncalibrated spread"); `band` says which was used. One frame: population-prior draws, with no conformal step (as `data/upload.py`).
+> The 3-frame sample (exp1_partII_CC_P2): the observed 0.06 at 19 h is inside the calibrated band (0.00-0.45), whereas the raw band was 0/0/0. The observation
+> is inside at 13 of 17 forecast hours, and just above the top at 7-10 h (by up to 0.02), because the follower sim closes this wound too fast mid-course.
+
 Run: `python3 sim/cellsim.py --hours 24 --Tm 0.1 [--Td 20] [--out run.npz]` (synthetic straight scratch, ~1 s).
 API: `simulate(occ0, Params(...), hours, frame_dt=1.0, seed=0, grain=GRAIN) -> dict`; `occ0` is an (H,W) uint8 array, 1 = cell.
 Shared constants in `sim/cellsim.py`: `DT = 0.05` (h per step), `SITE_UM = 20` (one site = one cell), `GRAIN = 2`. A WHAD field (1920x1440 px at 0.454 um/px) becomes a **32 x 44** lattice and a **16 x 22** density grid.
@@ -83,7 +102,7 @@ The notes below describe the earlier `sim/forecasts/whad/` files (t0 2/4/6/10, f
 `python3 sim/upload.py --masks f0.png [f1.png ...] --um-per-px U --interval H [--condition CC] [--wound-value 255] [--seg-quality q.json] --out-dir D`.
 Masks are True = wound, in time order, `interval_h` apart. The output is `{wound_id}_sim_ensemble.json`, plus `{wound_id}_nca_ensemble.json` when Agent 2's `nca/api.py` and its weights import (`$NCA_DIR`, default `<repo>/nca`); fold = dataset = "upload".
 - Refused, so no file and exit code 2: `seg_quality.status == "refused"`, missing scale, or any mask outside 1-70% of the field.
-- 1 frame: 50 draws from the t0 = 10 fits of WHAD wounds of the same condition (never `exclude_wound`), so the band is wide; flagged `measure_again`. 2+ frames: grid fit plus bootstrap, as in #23.
+- 1 frame: 50 draws from the t0 = 10 fits of WHAD wounds of the same condition (never `exclude_wound`), so the band is wide; noted in the `band` field and notes, with no flag (design R16: no measure-again flag until a signal passes). A different field size is a `segmentation_quality` reason, not a flag. 2+ frames: grid fit plus bootstrap, as in #23.
 - The field is windowed or padded to 640 x 880 um around the wound; differences above 5% are flagged. The lattice area check (< 2%) is asserted. The grid runs hourly to 19 h.
 - NCA band: `NCA_DIR=<agent2 worktree>/nca /tmp/p2venv/bin/python sim/upload.py --samples` (needs torch; `/tmp/p2venv` is Agent 2's venv and is not durable). The committed `sample_*_nca_ensemble.json` came from Agent 2's `a9ef439` code with weights sha256 `c413a063825e`.
 - `python3 sim/upload.py --samples` writes `sim/forecasts/upload/sample_3frames_*.json` and `sample_1frame_*.json` (manual masks t00-t02 of `exp1_partII_CC_P2`, with wound `exp1_pos2033` excluded from the prior) and checks that a blank mask is refused.
