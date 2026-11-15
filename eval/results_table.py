@@ -115,7 +115,7 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           for g_ in [S[(S.dataset == "whad") & (S.split == sp) & (S.cutoff_h.round(2) == cut)]]
           for b in [g_[g_.model.isin(STAT)].sort_values("qscore").iloc[0]]
           for _, n in g_[g_.model.isin(list(VAR))].set_index("model").loc[[m for m in VAR if m in set(g_.model)]].reset_index().iterrows()] + ["",
-          "**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (29% worse than edge speed "
+          "**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (30% worse than edge speed "
           "at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA "
           "passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is "
           "the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition "
