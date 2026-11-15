@@ -29,7 +29,9 @@ def leaks(text):
             r"@amazon\."]
     hits = [p for p in pats if re.search(p, text, re.I)]
     home = os.path.expanduser("~")
-    if home and home not in ("~", os.sep) and re.search(re.escape(home), text, re.I):
+    # run logs are JSON, so a Windows home (C:\\Users\\x) appears with doubled backslashes: check both forms
+    forms = {home, json.dumps(home)[1:-1], home.replace("\\", "/")} if home and home not in ("~", os.sep) else set()
+    if any(f and re.search(re.escape(f), text, re.I) for f in forms):
         hits.append("home folder")
     user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
     if user and re.search(r"(?<![A-Za-z0-9_])" + re.escape(user) + r"(?![A-Za-z0-9_])", text):

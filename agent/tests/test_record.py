@@ -29,3 +29,11 @@ def test_leaks_still_finds_fixed_patterns(monkeypatch):
     monkeypatch.setenv("USER", "nobodyhere")
     assert record.leaks("see /home/someone/file") == ["/home/"]
     assert record.leaks("account 123456789012") == [r"\b\d{12}\b"]
+
+
+def test_json_escaped_windows_home_is_caught(monkeypatch):
+    import json, os
+    from agent import record
+    monkeypatch.setattr(os.path, "expanduser", lambda p: "C:\\Users\\rand" if p == "~" else p)
+    line = json.dumps({"path": "C:\\Users\\rand\\stitch\\x.png"})
+    assert "home folder" in record.leaks(line)

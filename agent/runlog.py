@@ -20,7 +20,7 @@ def scrub(obj):
     home folder ~/name. Applied to every record before it is written."""
     if isinstance(obj, str):
         if REPO and obj.startswith(REPO + os.sep):
-            return os.path.relpath(obj, REPO)
+            return os.path.relpath(obj, REPO).replace(os.sep, "/")   # same log on every OS
         for root, tag in ((_TMP, "<tmp>"), ("/tmp", "<tmp>")):
             if obj.startswith(root + os.sep):
                 return tag + "/" + os.path.basename(obj)
