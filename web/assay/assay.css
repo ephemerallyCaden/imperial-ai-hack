@@ -205,3 +205,8 @@
 .as-panel svg text { stroke: none; }
 .as-panel { gap: var(--s2); }
 .as-chart .as-legend { margin: 0 0 2px; }
+.as-notice { font-size: 13px; }
+.as-upform label { font-size: 13px; color: var(--ink); font-style: normal; }
+.as-upform .as-input { height: 40px; font-size: 15px; }
+.as-upform .st-btn, .as-notice .st-btn { height: 44px; padding: 0 18px; }
+.as-notice::backdrop { background: rgba(0,0,0,.5); }
