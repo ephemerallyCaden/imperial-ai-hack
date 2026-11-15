@@ -106,6 +106,7 @@ function ageSkin(c, age) {   // age < 0 never happens for healed cells; original
   const t = ageT(age); return t < 0.3 ? c.copy(STOPS[0]).lerp(STOPS[1], t / 0.3) : c.copy(STOPS[1]).lerp(STOPS[2], (t - 0.3) / 0.7);
 }
 // inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow
+const cRef = new THREE.Color();
 const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
 function heatCol(c, age) {
   const u = (1 - ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
@@ -166,9 +167,30 @@ const MATS = {
 };
 // ?ramp=1: colour by world height like a space-time stack (dark base -> state colour -> pale tips); works with any ?mat=
 const RAMP = Q.has('ramp');
+// ?hshift=deg: as a colour gets darker (cell variation, age, shadow) its hue turns toward cool blue (240 deg, shortest way round),
+// in proportion to how much darker it got. deg = shift at fully dark, so a cell 50% darker turns deg/2. Default 8 (~4 deg at half); 0 = off
+const HSHIFT = +(Q.get('hshift') ?? 8);
+const lum = c => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, hslT = {};
+function coolShift(c, dark) {   // dark: 0 (as bright as its reference) .. 1 (black)
+  if (!HSHIFT || dark <= 0) return c; c.getHSL(hslT);
+  let d = 0.6667 - hslT.h; d -= Math.floor(d + 0.5);
+  return c.setHSL((hslT.h + Math.sign(d) * Math.min(Math.abs(d), HSHIFT / 360 * Math.min(1, dark)) + 1) % 1, hslT.s, hslT.l);
+}
 const M = MATS[Q.get('mat')] || MATS.matte;
 const colMat = M.make();
-if (M.emit || M.rim || RAMP) colMat.onBeforeCompile = sh => {
+if (M.emit || M.rim || RAMP || HSHIFT) colMat.onBeforeCompile = sh => {
+  if (HSHIFT) {   // same cool shift for lighting: compare lit colour with the unlit albedo
+    sh.uniforms.uHShift = { value: HSHIFT };
+    sh.fragmentShader = `uniform float uHShift;
+vec3 hsRgb2Hsv(vec3 c){ vec4 K=vec4(0.,-1./3.,2./3.,-1.); vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)); vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
+  float d=q.x-min(q.w,q.y); return vec3(abs(q.z+(q.w-q.y)/(6.*d+1e-10)),d/(q.x+1e-10),q.x); }
+vec3 hsHsv2Rgb(vec3 c){ vec4 K=vec4(1.,2./3.,1./3.,3.); vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www); return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y); }
+vec3 coolShift(vec3 c, float dark){ vec3 h=hsRgb2Hsv(c); float d=0.6667-h.x; d-=floor(d+0.5); h.x=fract(h.x+sign(d)*min(abs(d),uHShift/360.*dark)); return hsHsv2Rgb(h); }
+` + sh.fragmentShader.replace('#include <opaque_fragment>', `{ const vec3 W = vec3(.2126,.7152,.0722);
+    float dk = clamp(1.0 - dot(outgoingLight, W) / max(dot(diffuseColor.rgb, W), 1e-4), 0.0, 1.0);
+    outgoingLight = coolShift(outgoingLight, dk); }
+  #include <opaque_fragment>`);
+  }
   if (RAMP) {
     sh.uniforms.uHMax = { value: HMAX };
     sh.vertexShader = 'uniform float uHMax; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vH = (instanceMatrix * vec4(position, 1.0)).y / uHMax;');
@@ -222,6 +244,7 @@ function updateColumns(f, dt) {
     if (HEAT && st !== 'wound') heatCol(col, age);
     else if (AGE_SKIN && (st === 'intact' || st === 'fresh')) ageSkin(col, age).multiplyScalar(0.92 + 0.16 * rnd[k]);
     else if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
+    if (!HEAT && (st === 'intact' || st === 'fresh')) { cRef.setHex(PAL.intact); coolShift(col, 1 - lum(col) / lum(cRef)); }   // darker than plain skin -> cooler
     let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
     if (!on) {
       if (GHOST === 'rims') { showGhost = showRim = true; }
