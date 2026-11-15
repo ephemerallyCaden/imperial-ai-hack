@@ -3,6 +3,7 @@
 // colour while the rest drops to dark greyscale (each state keeps its own grey step). Readouts/curve from Rand's embryo export (sample).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
@@ -20,13 +21,14 @@ const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // rela
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0x050607);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(parseInt(Q.get('bg') || '050607', 16));   // ?bg=hex look-dev
 const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
-scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, 1.1));
-const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-30, 60, 25); scene.add(key);
-const fill = new THREE.DirectionalLight(0xe4e6ea, 0.5); fill.position.set(40, 20, -30); scene.add(fill);
+const LIT = Q.get('mat') && Q.get('mat') !== 'matte' ? [0.4, 1.25, 0.3] : [1.1, 1.6, 0.5];   // new materials add env + emissive light, so dim the rig
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, LIT[0]));
+const key = new THREE.DirectionalLight(0xffffff, LIT[1]); key.position.set(-30, 60, 25); scene.add(key);
+const fill = new THREE.DirectionalLight(0xe4e6ea, LIT[2]); fill.position.set(40, 20, -30); scene.add(fill);
 
 // ---------- hex lattice + simulation (stand-in for P2's cell simulator) ----------
 const NX = 90, NY = 104, HY = Math.sqrt(3) / 2;
@@ -106,7 +108,27 @@ label('local density (relative)', V(xa - 0.4, top + 1.2, za), 1.0, '#e8ecef').ce
 
 // ---------- columns: coloured + ghost instanced meshes ----------
 const colGeo = new THREE.CylinderGeometry(0.5 * S * 1.1, 0.5 * S * 1.1, 1, 6); colGeo.translate(0, 0.5, 0); colGeo.rotateY(Math.PI / 6);
-const colMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 });
+// ?mat= look-dev materials: matte (original) | skin (velvet sheen + faked subsurface) | wet (clearcoat, moist wound bed)
+// | gel (translucent, fresnel rim) | glow (self-lit, fluorescence-style). emit = instance colour added as light, rim = fresnel edge
+const MATS = {
+  matte: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), emit: 0, rim: 0 },
+  skin: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.5, sheen: 0.5, sheenRoughness: 0.5, sheenColor: 0xff9c8c }), emit: 0.1, rim: 0.3, rimCol: 0xffc4b0 },
+  wet: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.06 }), emit: 0.05, rim: 0.2, rimCol: 0xffffff },
+  gel: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.82 }), emit: 0.12, rim: 0.8, rimCol: 0xdfeaff },
+  glow: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 }), emit: 0.4, rim: 0.35, rimCol: 0xffffff },
+};
+const M = MATS[Q.get('mat')] || MATS.matte;
+const colMat = M.make();
+if (M.emit || M.rim) colMat.onBeforeCompile = sh => {
+  sh.uniforms.uEmit = { value: M.emit }; sh.uniforms.uRim = { value: M.rim }; sh.uniforms.uRimCol = { value: new THREE.Color(M.rimCol) };
+  sh.fragmentShader = 'uniform float uEmit; uniform float uRim; uniform vec3 uRimCol;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+    `#include <emissivemap_fragment>
+    float fres = pow(1.0 - saturate(dot(normalize(normal), normalize(vViewPosition))), 3.0);
+    totalEmissiveRadiance += vColor.rgb * uEmit + uRimCol * vColor.rgb * fres * uRim;`);
+};
+if (M !== MATS.matte) {   // studio reflections for sheen / clearcoat highlights
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.12;
+}
 const cols = new THREE.InstancedMesh(colGeo, colMat, COUNT);
 // outside-selection look (?ghost=): grey (default) | rims | dim | flat | dots | lift
 const GHOST = Q.get('ghost') || 'grey', LIFT = 1.4;
