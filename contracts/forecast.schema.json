@@ -32,7 +32,7 @@
       "type": "object",
       "required": ["type", "reason"],
       "properties": {
-        "type": {"enum": ["out_of_band", "stall", "measure_again", "segmentation"]},
+        "type": {"enum": ["out_of_band", "stall", "measure_again", "segmentation", "uncalibrated_condition"]},
         "reason": {"type": "string", "description": "one plain sentence shown in the UI"}
       }
     },

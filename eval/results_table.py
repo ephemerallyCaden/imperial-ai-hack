@@ -8,16 +8,18 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 S = pd.read_csv(f"{HERE}/results/scorecard.csv")
 F = pd.read_csv(f"{HERE}/results/flags.csv")
+S_ = F[F.flag == "stall"]
 OUT = os.path.join(HERE, "..", "docs", "results.md")
 NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz",
          "lvcf": "typical-wound curve", "nca_ensemble": "NCA ensemble (calibrated)",
          "sim_ensemble": "cell-agent simulator ensemble (calibrated)"}
 STAT = ["lvcf", "linear", "edge_speed", "logistic", "gompertz"]
-VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator", "nca_realft": "NCA real-data",
-       "nca_realplus": "NCA real + Zaritsky"}
-NAMES.update({"nca_realft": "NCA fine-tuned on real frames (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)"})
+VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator", "nca_realft": "NCA real-data v1",
+       "nca_realplus": "NCA real + Zaritsky", "nca_realft2": "NCA real-data v2", "nca_realft3": "NCA real-data v3 (headline)"}
+NAMES.update({"nca_realft": "NCA real-data v1 (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)",
+              "nca_realft3": "NCA real-data v3 (calibrated)"})
 MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
-SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
+SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 55 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
           ("whad", "CC_to_C61", "WHAD MCF10A", "held-out condition: CC to C61"),
           ("whimbc", "loo", "WHiM-BC MCF-7", "unseen wells (24)"),
@@ -42,7 +44,7 @@ lines = ["# Stitch: results", "",
          "calibrates its own forecast. CIs: 95%, bootstrap over physical wounds.", "",
          "## Data", "",
          "| Dataset | Cells | Wounds | Frames | Masks | Role |", "|---|---|---|---|---|---|",
-         "| WHAD (Zenodo 12806149, CC BY 4.0) | MCF10A, control (CC) vs CYR61 knockdown (C61) | 31 physical wounds (9 manual masks + 22 auto-segmented); 28 pass QC, 56 series | hourly, 20 per part | authors' + our segmenter | **main benchmark** |",
+         "| WHAD (Zenodo 12806149, CC BY 4.0) | MCF10A, control (CC) vs CYR61 knockdown (C61) | 31 physical wounds (9 manual masks + 22 auto-segmented); 28 pass QC, 56 series (55 scored: one spliced series excluded) | hourly, 20 per part | authors' + our segmenter | **main benchmark** |",
          "| WHiM-BC (Zenodo 8131123, CC BY 4.0) | MCF-7 ordinary (monolayer) vs cancer-stem-cell-enriched (sphere) | 24 wells | 0-27 h, 6-7 per well | authors' | held-out condition |",
          "| Fly embryo (Zenodo 7660424, CC BY 4.0) | Drosophila epidermis, laser wounds | 62 | 1 per min | authors' | secondary |",
          "| Zaritsky 2015 (GigaDB 100118, CC0) | DA3, MDCK, +/- HGF, Met inhibitor | 19 wells | 14.5 min | authors' (noisy) | secondary |",
@@ -83,6 +85,9 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "- **Calibration does not transfer to a faster-closing cell type.** Bands calibrated on ordinary MCF-7 wells cover only 15-58% of the stem-cell wells' future (target 90%); 97% of their observations fall below the forecast median.",
           "- **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage is lowest at the earliest cut-off and recovers with more history.",
           f"- **No 'measure again' signal**: band width, history-fit error and stall ambiguity give AUC {F[F.flag == 'measure_again'].auc.min():.2f}-{F[F.flag == 'measure_again'].auc.max():.2f} for predicting a bad forecast, inconsistent across cut-offs.",
+          f"- **The stall flag is a prompt to look, not a verdict**: when it fires it is right only {S_.precision.min():.0%}-{S_.precision.max():.0%} of the time "
+          "across the checks (it ranks stalls well, AUC above 0.77, but stalls are rare). The agent replay agrees: about half of all "
+          "stall stops are wrong (agent/results/scoreboard.md). That is why a fired flag means 'ask a human', never an automatic stop.",
           "- **Simple models are strong**: a 2-parameter constant-edge-speed model is the best forecaster on WHAD; more history helps every model.",
           "- **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).",
           "- **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.",
@@ -91,12 +96,15 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "Policy fixed in advance: at each check (1.9, 3.8, 5.7, 9.5 h), if P(90% closed by 19 h) <= 0.1 or >= 0.9, make the call "
           "and stop imaging; otherwise keep imaging. Held-out WHAD wounds, edge-speed forecaster. This is a simulation on recorded "
           "data, not a lab trial.", ""] + (lambda R: [
-          f"- **{int(R.called_early)} of {int(R.n)} wounds ({R.share_called:.0%}) get a call by the first check** (median {R.median_stop_h_if_called:.1f} h); "
+          f"- **{int(R.called_early)} of {int(R.n)} series ({R.share_called:.0%}) get a call by the first check** (median {R.median_stop_h_if_called:.1f} h); "
           f"{R.accuracy_of_calls:.0%} of calls are right ({int(R.wrong_calls)} wrong), vs {R.base_rate_not_closed:.0%} for always saying 'won't close'.",
           f"- Every early call is **'won't reach 90% closure by 19 h'** ({int(R.calls_wont_close)} calls); the forecaster never confidently calls early closure. "
           "The wrong calls are wounds that did close: stopping them would have been a mistake.",
-          f"- Simulated imaging saved: {R.hours_saved_mean:.1f} h per wound on average (of 19 h)."])(
-          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'edge_speed' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + ["",
+          f"- Simulated imaging saved: {R.hours_saved_mean:.1f} h per series on average (of 19 h)."])(
+          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'edge_speed' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + (lambda R: [
+          f"- Same policy with the shipped forecaster (real-data NCA v3): {int(R.called_early)} of {int(R.n)} series called by the first check, "
+          f"{R.accuracy_of_calls:.0%} of calls right ({int(R.wrong_calls)} wrong)."])(
+          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'nca_realft3' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + ["",
           "## NCA vs baselines (gate, design.md 5.3)", "",
           "Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator "
           "forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).", "",
@@ -111,13 +119,41 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           for g_ in [S[(S.dataset == "whad") & (S.split == sp) & (S.cutoff_h.round(2) == cut)]]
           for b in [g_[g_.model.isin(STAT)].sort_values("qscore").iloc[0]]
           for _, n in g_[g_.model.isin(list(VAR))].set_index("model").loc[[m for m in VAR if m in set(g_.model)]].reset_index().iterrows()] + ["",
-          "**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (29% worse than edge speed "
+          "**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (30% worse than edge speed "
           "at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA "
           "passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is "
           "the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition "
           "(CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step "
           "is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained "
           "on that wound (its own forecast never does).", "",
+          "## Held-out condition: what fixes the under-coverage? (v4, design.md R28)", "",
+          "The pre-registered test (calibrate on CC, test on C61) under-covers. Tested mitigations, reported next to it, not instead of it: "
+          "**rest** = calibrate on all non-C61 conditions (CC + N61 + NC); **rest + inflate** = also widen the band by a factor "
+          "measured on known conditions only (leave-one-condition-out among CC/N61/NC, largest factor, cap 3x; fixed before "
+          "looking at C61). Coverage of the 90% band on C61 wounds (target 0.90) / quantile score:", "",
+          "| Model | Calibration | 1.9 h | 3.8 h | 5.7 h | 9.5 h |", "|---|---|---|---|---|---|"] + [
+          f"| {NAMES.get(m, m)} | {lab} | " + " | ".join(
+              (lambda r: f"{r.coverage.iloc[0]:.2f} / {r.qscore.iloc[0]:.4f}" if len(r) else "-")(
+                  S[(S.dataset == "whad") & (S.split == sp) & (S.model == m) & (S.cutoff_h.round(2) == c)]) for c in (1.9, 3.8, 5.7, 9.5)) + " |"
+          for m in ("edge_speed", "nca_realft3") for sp, lab in (("CC_to_C61", "CC only (pre-registered)"), ("rest_to_C61", "rest"),
+                                                                ("rest_to_C61_infl", "rest + inflate"))] + ["",
+          "Inflation lifts the earliest cut-off towards nominal but over-widens later ones (coverage up to 1.00, worse quantile "
+          "score): it is a safety fallback for a truly unknown condition, which is how the upload path uses it "
+          "(`uncalibrated_condition` flag), not a free fix.", "",
+          "## Can closure curves separate movement from division? (Jin 2016 PC-3, Fisher-KPP)", "",
+          "Fisher-KPP (u_t = D u_xx + r u(1 - u/K), K = 1.7e-3 cells/um^2) fitted over a grid of (D, r) at each of 6 initial "
+          "densities, once to the full density profiles and once to the closure curve derived from the same profiles. "
+          "Ranges = 95% region (`eval/jin_identifiability.py`, figure `eval/figures/jin_identifiability.png`).", "",
+          "| Initial density | Profiles: D (um^2/h) | Profiles: r (1/h) | Profile fit R^2 | Closure only: D range | Closure only: r range |",
+          "|---|---|---|---|---|---|"] + [
+          f"| {int(p.density)} | {p.D_best:.0f} ({p.D_min:.0f}-{p.D_max:.0f}) | {p.r_best:.3f} | {p.profile_R2:.2f} | "
+          f"x{c.D_fold_range:.0f} | x{c.r_fold_range:.0f} |"
+          for J in [pd.read_csv(f"{HERE}/results/jin_identifiability.csv")] for d in sorted(J.density.unique())
+          for p in [J[(J.density == d) & (J.fit == "profiles")].iloc[0]] for c in [J[(J.density == d) & (J.fit == "closure")].iloc[0]]] + ["",
+          "**Closure curves alone do not separate cell movement from division** (D uncertain over 9-63x, r over 2-39x, often "
+          "along a constant-front-speed valley); **full density profiles do** (D within ~20%, r within one grid step, R^2 "
+          "0.90-0.95). Fitted D rises with initial density, as Jin et al. reported. So Stitch, which sees wound area only, "
+          "does not claim to separate the two.", "",
           "## Figures", "",
           "`eval/figures/calibration.png`, `error_vs_history.png`, `reliability.png`, `worst_wounds.png` (regenerate with `python eval/figures.py`)."]
 open(OUT, "w", encoding="utf-8").write("\n".join(lines) + "\n")

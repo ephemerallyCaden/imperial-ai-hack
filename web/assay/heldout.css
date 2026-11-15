@@ -1,0 +1,57 @@
+/* Held-out wound view (heldout.js), moved from the removed web/draw/draw.css. Colours, type and the st-* components
+   come from tokens.css; the :where() fallbacks copy the values used here (zero specificity, so tokens.css wins). */
+:where(:root) {
+  --bg: #050607; --panel: rgba(5,6,7,.62); --panel-solid: #0B0D10; --raise: #12151A;
+  --ink: #E8ECEF; --dim: #8A949C; --faint: #5C656D; --line: rgba(232,236,239,.5); --hair: rgba(232,236,239,.18);
+  --accent: #E0A458; --cell-wound: #24120F; --cell-intact: #C68B6E; --cell-edge: #B3122E;
+  --cell-new: #FFD2C6; --cell-dividing: #FFFFFF; --scene-bg: #120A09;
+  --chart-observed: var(--ink); --chart-median: var(--accent); --chart-member: rgba(232,236,239,.22);
+  --chart-cut: rgba(232,236,239,.5); --chart-grid: rgba(232,236,239,.08); --chart-axis: rgba(232,236,239,.3);
+  --font-cond: "Avenir Next Condensed", "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --font-serif: Charter, "Iowan Old Style", Georgia, serif; --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --s2: 8px; --s3: 12px; --s4: 16px; --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+:where(.dr-root) { color: var(--ink); font: 12px/1.4 var(--font-mono); }
+:where(.dr-root) .st-btn { display: inline-flex; align-items: center; height: 28px; padding: 0 var(--s3); border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  font: 600 11px var(--font-cond); letter-spacing: .12em; text-transform: uppercase; cursor: pointer; border-radius: 0; }
+:where(.dr-root) .st-btn:hover { background: var(--raise); }
+:where(.dr-root) .st-btn--primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+:where(.dr-root) .st-btn[aria-pressed="true"] { background: var(--raise); border-color: var(--ink); }
+:where(.dr-root) .st-btn--icon { width: 28px; padding: 0; justify-content: center; }
+:where(.dr-root) .st-seg { display: inline-flex; } :where(.dr-root) .st-seg > .st-btn + .st-btn { border-left: 0; }
+:where(.dr-root) .st-chip { display: inline-flex; padding: 4px 10px; border: 1px dashed var(--line); color: var(--dim); font: 10px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+:where(.dr-root) .st-chip--flag { color: var(--accent); border: 1px solid var(--accent); }
+:where(.dr-root) .st-panel--solid { background: var(--panel-solid); border: 1px solid var(--hair); }
+:where(.dr-root) .st-row { display: flex; justify-content: space-between; gap: var(--s3); margin: 7px 0; }
+:where(.dr-root) .st-row > :first-child { color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
+:where(.dr-root) .st-row > :last-child { color: var(--accent); font-variant-numeric: tabular-nums; }
+:where(.dr-root) .st-kicker { font: 600 10px var(--font-cond); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+:where(.dr-root) .st-caption { font: italic 10px/1.45 var(--font-serif); color: var(--dim); margin: var(--s2) 0; }
+:where(.dr-root) .st-tabs { display: flex; border-bottom: 1px solid var(--hair); }
+:where(.dr-root) .st-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--dim); padding: 8px 12px; font: 600 11px var(--font-cond); letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+:where(.dr-root) .st-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.dr-root :focus-visible { outline: none; box-shadow: var(--focus); }
+.dr-root .dr-view:focus-visible { box-shadow: none; }  /* the view takes focus only for keyboard shortcuts */
+
+.dr-body { padding: var(--s4) 0; }
+.dr-view { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s4); align-items: start; outline: none; }
+.dr-stage { position: relative; }
+.dr-canvas { display: block; width: 100%; height: auto; aspect-ratio: 44 / 32; border: 1px solid var(--hair); background: var(--scene-bg, #120A09); touch-action: none; cursor: crosshair; }
+.dr-zoom { position: absolute; right: var(--s2); bottom: var(--s2); display: flex; gap: 4px; }
+.dr-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.dr-pair figure { margin: 0; } .dr-pair figcaption { margin-top: 6px; } .dr-pair .dr-canvas { cursor: zoom-in; }
+.dr-side { padding: var(--s3); display: grid; gap: 2px; }
+.dr-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: var(--s2) 0; }
+.dr-tools input[type=range] { flex: 1; accent-color: var(--accent); }
+.dr-chart { width: 100%; height: auto; margin-top: var(--s2); }
+.dr-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--dim); font-size: 10px; }
+.dr-legend i { display: inline-block; width: 16px; margin-right: 5px; vertical-align: middle; }
+.dr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s2); }
+@media (max-width: 860px) { .dr-view { grid-template-columns: 1fr; } .dr-pair { grid-template-columns: 1fr; } }
+.dr-scale { position: relative; height: 44px; margin: 6px 0 2px; font-size: 9px; color: var(--dim); }
+.dr-scale b { position: absolute; left: 0; right: 0; top: 0; height: 10px; border: 1px solid var(--hair); }
+.dr-scale i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--accent); }
+.dr-scale span { position: absolute; top: 15px; color: var(--accent); white-space: nowrap; }
+.dr-scale em { position: absolute; top: 30px; font-style: normal; }
+.dr-root [hidden] { display: none !important; }   /* .st-btn / .dr-canvas set display, which beats the hidden attribute */
+.dr-root svg.dr-chart { width: 100%; height: auto; stroke: none; fill: none; }   /* beats .assay svg (icon size) */

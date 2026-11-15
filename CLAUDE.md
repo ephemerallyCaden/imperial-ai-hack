@@ -15,16 +15,23 @@ Event: Imperial AI Hack, Huxley Building, 12:00 Sat 14 Nov to 12:00 Sun 15 Nov 2
 ## Commands
 Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is plain ES modules.
 - `pip install -r requirements.txt` to install
-- `export CLOSURECALL_DATA=/path/outside/repo` then `python data/fetch.py` to download raw data (~2.5 GB, kept outside the repo)
+- `export CLOSURECALL_DATA=/path/outside/repo` then `python data/fetch.py` to download raw data (~4 GB incl. WHAD + WHiM-BC via range requests, kept outside the repo)
 - `python -I data/build_curves.py` to build `data/processed/*.csv` from raw data
 - `python eval/run_baselines.py [embryo|zaritsky ...]` to score the baselines (results in `eval/results/`)
-- `python contracts/validate.py contracts/example_forecast.json` to check forecast JSON against `contracts/forecast.schema.json` (test substitute; exit 1 on failure). Note: `web/data/*.json` currently use an older format (minutes, `wounds`) and fail this schema
-- Viewer dev: `python3 -m http.server 8000 --directory web` once `web/index.html` exists; design mockups were removed (archived at git tag `archive/mockups-2026-11-15`)
+- `python contracts/validate.py contracts/example_forecast.json` to check forecast JSON against `contracts/forecast.schema.json` (exit 1 on failure); `web/data/*.json` use this format too (refusal files in web/data/samples are the exception)
+- Viewer dev: `python3 -m http.server 8010 --bind 127.0.0.1` from the repo root, then open http://127.0.0.1:8010/web/index.html (the app reads agent/ and eval/ files, so do not serve web/ alone); design mockups were removed (archived at git tag `archive/mockups-2026-11-15`)
 - Lint: none configured; check syntax with `python -m compileall -q data eval contracts sim nca`
+- `python -m pytest -q tests/` to run tests (P1 pipeline: contract, scorer, segmenter, upload refusals, folds; ~40 s)
 - P2 sim (sim/, docs/sim.md): `python sim/calibrate.py` (fits), `python sim/forecast.py` (sim_ensemble gate files), `python sim/upload.py` (masks -> forecast JSON)
+- P2 tests: `python -I sim/tests/test_pool_exclusion.py` (no calibration pool or prior contains the test wound or its sibling part; every gate file matches P1's test sets), `python -I sim/tests/test_rules.py`, `python -I sim/tests/test_alt_start.py`, `python -I nca/tests/test_mass.py`
 - P2 NCA (nca/, see docs/nca.md; needs torch from requirements.txt): `python nca/gen_data.py --out /tmp/nca_data.npz`, `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt`, `python nca/forecast_gate.py` (nca_* gate files)
-- Score all forecasts: `python eval/score_forecasts.py eval/forecasts --gate nca_ensemble` (compare against statistical baselines only; gate() counts P2 models as baselines too)
-- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`
+- P1 data (data/, needs CLOSURECALL_DATA): `python -I data/fetch.py`, then `python -I data/build_curves.py`, `build_whad.py`, `build_whad_auto.py`, `build_whimbc.py`
+- P1 eval (eval/): `python eval/forecast_baselines.py`, `python eval/score_forecasts.py eval/forecasts --gate nca_realft` (gate compares against the statistical baselines only), then `flags.py`, `scheduler.py`, `results_table.py`, `figures.py`, `web_evidence.py` (writes `web/ops/evidence.json` for the Ops "Forecast evidence" page `web/ops/evidence.js`)
+- Agent tests (offline, stub model): `.venv/bin/python -m pytest -q agent/tests`; see `agent/README.md`
+- Agent replay of one held-out WHAD wound: `.venv/bin/python -m agent.run --wound exp1_partII_C61_P1 --run-id <new id> [--both-branches] [--reject]` (log in `agent/runs/<id>.jsonl`)
+- Agent scoreboard: `.venv/bin/python -m agent.evaluate` (writes `agent/results/scoreboard.csv` and `.md`; no real model calls)
+- Agent real run: load `.env` (`set -a; . ./.env; set +a`, with `STITCH_PROVIDER`, `STITCH_MODEL` and key or AWS profile), then the `agent.run` command above
+- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`, `node sim/js/heal_check.mjs`, `node sim/js/live_check.mjs`; look parity `python3 -I scripts/check_look_sync.py` (web/vendor-design/look.js must equal design/prototypes/glass-dish/look.js)
 
 ## Architecture
 <!-- Fill in after initial scaffolding -->

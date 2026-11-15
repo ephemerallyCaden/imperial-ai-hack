@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stitch · early wound-closure forecast</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+               "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header class="menubar" role="banner">
+  <div class="wordmark">STITCH</div>
+  <nav class="menus" aria-label="Menu">
+    <div class="menu" data-menu="file"><button>File</button><ul role="menu">
+      <li data-action="new-analysis">New analysis<kbd>Ctrl N</kbd></li>
+      <li data-action="open-images">Open images…<kbd>Ctrl O</kbd></li>
+      <li data-action="try-sample">Try a sample</li>
+      <li data-action="open-heldout">Open held-out wound<span class="sub">▸</span></li>
+      <li class="sep" data-action="export-forecast">Export forecast<kbd>JSON · CSV · PNG</kbd></li>
+      <li data-action="export-runlog">Export run log (JSONL)</li>
+      <li class="sep" data-action="close-analysis">Close analysis</li></ul></div>
+    <div class="menu" data-menu="view"><button>View</button><ul role="menu">
+      <li data-action="toggle-panel:readout">Panels · Field readout</li>
+      <li data-action="toggle-panel:minimap">Panels · Minimap</li>
+      <li data-action="toggle-panel:legend">Panels · Legend</li>
+      <li data-action="toggle-panel:selection">Panels · Selection stats</li>
+      <li data-action="toggle-panel:steps">Panels · Agent steps</li>
+      <li class="sep" data-action="toggle-heatmap">Edge heatmap<kbd>H</kbd></li>
+      <li data-action="reset-camera">Zoom out<kbd>Esc</kbd></li></ul></div>
+    <div class="menu" data-menu="analysis"><button>Analysis</button><ul role="menu">
+      <li data-action="run-forecast">Run forecast<kbd>Ctrl Enter</kbd></li>
+      <li class="sep" data-action="compare-baselines">Stats</li>
+      <li data-action="stall-details">Open stall flag details</li></ul></div>
+    <div class="menu" data-menu="help"><button>Help</button><ul role="menu">
+      <li data-action="shortcuts">Keyboard shortcuts<kbd>?</kbd></li>
+      <li data-action="how-it-works">How the forecast works</li>
+      <li data-action="limitations">Limitations · simulated cells, no clinical use</li>
+      <li data-action="about">About · data sources and citations</li></ul></div>
+  </nav>
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" data-mode="assay">ASSAY</button>
+    <button role="tab" data-mode="ops">OPS</button>
+    <button role="tab" data-mode="stats">STATS</button>
+  </div>
+  <div class="hint">Space · ←/→ · +/− · right-drag · Esc · H · A · B</div>
+  <button class="help-btn" data-action="shortcuts" aria-label="Keyboard shortcuts">?</button>
+</header>
+<main id="mode-root"></main>
+<footer class="purpose">Research use only · simulated cells</footer>
+<dialog id="dialog"><div class="dialog-body"></div><form method="dialog"><button>Close</button></form></dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>

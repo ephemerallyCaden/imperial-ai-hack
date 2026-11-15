@@ -8,7 +8,7 @@ The example wound (`exp1_partII_CC_P2`, a WHAD control wound) is the same wound 
 |---|---|---|---|
 | 1 | 5 | `1_forecast.png` | "Here's a wound the model has never seen. After 3.8 hours, Stitch forecasts the rest, with a 90% band." |
 | 2 | 5 | `2_reveal.png` (cut or fade from 1) | "Here's what actually happened: inside the band at 15 of 16 later frames." |
-| 3 | 8 | `3_scorecard.png` | "Across 27 unseen wounds, a simple edge-speed model is hard to beat. Our neural cellular automaton, trained only on simulation, failed our pre-set test. Fine-tuned on real frames, it passes, within 4%." |
+| 3 | 8 | `3_scorecard.png` | "Across 28 unseen wounds, a simple edge-speed model is hard to beat. Our neural cellular automaton, trained only on simulation, failed our pre-set test. Fine-tuned on real frames, it matches it, and beats it at the earliest forecast." |
 | 4 | 7 | `4_calibration.png` | "The band is honest: about 90% on new wounds and a new condition. But not on a new cell type: 58%. So Stitch must be calibrated per cell line, and we say so." |
 | 5 | 6 | `5_failure.png` | "And here's where it fails: a wound that's slow at first, then suddenly speeds up." |
 
@@ -21,8 +21,8 @@ The example wound (`exp1_partII_CC_P2`, a WHAD control wound) is the same wound 
 | Claim | Number | Source |
 |---|---|---|
 | Band holds on unseen wounds | 92% (target 90%) | results.md, headline |
-| Edge speed vs fine-tuned NCA at 3.8 h | 0.0386 vs 0.0403 (+4%) | results.md, gate table |
-| Simulator-only NCA | 0.0499 (+29%, failed) | results.md, gate table |
+| Edge speed vs fine-tuned NCA (v3) | 3.8 h: 0.0386 vs 0.0397 (+3%); 1.9 h: 0.0562 vs 0.0530 (NCA better) | results.md, gate table |
+| Simulator-only NCA | 0.0502 (+30%, failed) | results.md, gate table |
 | New cell type | 58% coverage | results.md, calibration |
-| Stop-early calls | 82% called at 1.9 h, 91% right (95% with real-data NCA) vs 75% always-no | results.md, stop early |
+| Stop-early calls | 82% called at 1.9 h, 91% right (same with the shipped NCA v3) vs 75% always-no | results.md, stop early |
 | Stall flag | AUC 0.77-0.90 | results.md, flags |

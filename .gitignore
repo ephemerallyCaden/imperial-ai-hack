@@ -35,3 +35,10 @@ secrets/
 *.pem
 *.key
 upload_out/
+
+# Adaption LoRA downloads (#90)
+*.tgz
+*.tgz.part
+
+# Agent practice runs (local model login; re-record on the submission account)
+agent/runs/practice/

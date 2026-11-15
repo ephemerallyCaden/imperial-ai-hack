@@ -38,7 +38,7 @@ Listed on the event's tech partners slide. Credits/keys and exact offers: [TBC, 
 | Tamarind Bio | Hosted bio/protein modelling tools | Bio/chem workflows |
 
 ## Design (Figma)
-Because we are targeting Best Designed AI Product: design the 3 demo screens in Figma in hour 0:30-2:00 (one person), then build to the Figma. Keep the file link here: [Figma link]. Reserve time at 16:00-18:00 for design polish, not just feature work.
+Because we are targeting Best Designed AI Product: design the 3 demo screens in Figma in hour 0:30-2:00 (one person), then build to the Figma. Keep the file link here: https://www.figma.com/design/vTCApH2oLBShNu4Oi9dsGg. Reserve time at 16:00-18:00 for design polish, not just feature work.
 
 
 ## Timeline

@@ -1,0 +1,36 @@
+{
+ "kind": "intake_proposal",
+ "version": 1,
+ "status": "proposed: confirm or edit each value before it is used",
+ "model": "Qwen3.5-2B + Adaption LoRA (run 695c8c20), local, greedy",
+ "source": "Iheme et al. 2024, Wound Healing Assay Dataset (WHAD), Methods; CC BY 4.0",
+ "source_text": "The main steps of the wound healing assay are illustrated in Fig. 1. Briefly, cells were seeded on 12-well plates at the density of 1 × 10^6 cells/well and 7.5 × 10^5 cells/well, for MCF10A and MCF7 cells, respectively. A 2-h treatment with 10 µg/mL mitomycin C was applied to block proliferation. The phase-contrast images of defined positions were recorded every hour for 48 or 72 h with Leica DMI8 confocal microscope supplemented with 5% CO2 at 37 °C. Spatial resolution was satisfied by using 10× and 40× objectives to give pixel size of 0.454 × 0.454 µm and of 0.117 × 0.117 µm for WHAD and CAMAD, respectively.",
+ "fields": {
+  "frame_interval_h": 1.0,
+  "pixel_um": 0.454,
+  "duration_h": 48.0,
+  "cell_type": "MCF10A",
+  "assay_type": "scratch",
+  "imaging": "phase_contrast",
+  "proliferation_blocked": true,
+  "condition": "drug:mitomycin C",
+  "in_scope": true,
+  "missing": []
+ },
+ "raw_reply": "{\"frame_interval_h\": 1.0, \"pixel_um\": 0.454, \"duration_h\": 48.0, \"cell_type\": \"MCF10A\", \"assay_type\": \"scratch\", \"imaging\": \"phase_contrast\", \"proliferation_blocked\": true, \"condition\": \"drug:mitomycin C\", \"in_scope\": true, \"missing\": [\"duration_h\"]}\n",
+ "proposed_upload_settings": {
+  "interval_hours": 1.0,
+  "um_per_px": 0.454,
+  "condition": null
+ },
+ "frames_um_per_px": 0.908,
+ "notes": [
+  "Stated pixel size 0.454 um/px differs from these frames (0.908 um/px): the frames may be resized exports. Confirm the scale of the images you upload.",
+  "Condition 'drug:mitomycin C' is not a WHAD calibration condition (CC, C61, N61, NC): it is not passed to the simulator; the forecast treats the upload as an unknown condition (uncalibrated_condition flag)."
+ ],
+ "scope": {
+  "in_validated_scope": true,
+  "reasons": []
+ },
+ "evaluation": "fine-tune on 30 real paragraphs: mean field accuracy 80.4% (base 47.4%), exact match 20% (docs/adaption-results.md); review every value"
+}
