@@ -27,6 +27,27 @@ def test_runlog_roundtrip_and_append_only(tmp_path):
         runlog.RunLog("t1", runs_dir=str(tmp_path))
 
 
+@pytest.mark.parametrize("bad", ["../x", "a/b", "..", ".", "", "a b", "x..y", None, "a\\b"])
+def test_runlog_rejects_bad_run_id(tmp_path, bad):
+    with pytest.raises(ValueError):
+        runlog.RunLog(bad, runs_dir=str(tmp_path))
+    assert os.listdir(tmp_path) == []
+
+
+def test_runlog_exclusive_create(tmp_path, monkeypatch):
+    """The file is created with mode 'x' at construction, so a log written between check and open is never appended to."""
+    modes = []
+    real_open = open
+    monkeypatch.setattr("builtins.open", lambda p, m="r", *a, **k: (modes.append(m), real_open(p, m, *a, **k))[1])
+    rl = runlog.RunLog("run_1.ok-x", runs_dir=str(tmp_path))
+    assert modes[0] == "x" and os.path.exists(rl.path)
+    monkeypatch.undo()
+    (tmp_path / "taken.jsonl").write_text("{}\n")
+    with pytest.raises(FileExistsError):
+        runlog.RunLog("taken", runs_dir=str(tmp_path))
+    assert (tmp_path / "taken.jsonl").read_text() == "{}\n"
+
+
 def test_allowlist_has_units():
     assert all(u in {"%", "h", "p", "cost"} for _, u in config.ALLOWLIST)
     assert (19.0, "h") in config.ALLOWLIST and (5, "cost") in config.ALLOWLIST

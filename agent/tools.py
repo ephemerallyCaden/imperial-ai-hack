@@ -26,7 +26,11 @@ FRAME_EXTS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
 MAX_FRAMES = 5
 MAX_FILE_BYTES = 50 * 1024 * 1024
 STALL_TRUTH = "stall = the wound closes less than 10% more after the cut-off (area at the last frame >= 90% of the area at the cut-off)"
+MAX_PIXELS = 40_000_000           # per frame, checked from the header before any decode
+MAX_SIDE = 20_000
 SIM_BAND_LABEL = "raw simulator ensemble spread, uncalibrated; not a 90% band and not used for decisions"
+SIM_CONFORMAL_LABEL = ("simulator ensemble with a leave-one-wound-out conformal adjustment on the simulator's own WHAD "
+                       "predictions (sim/upload.py); not validated for the agent: not a 90% band and not used for decisions")
 
 _mods = {}
 
@@ -88,11 +92,31 @@ def _positive(v, what):
 
 @contextlib.contextmanager
 def _quiet():
-    """Library code prints and warns; keep tool output clean and hand the text back as messages."""
+    """Library code prints and warns; keep tool output clean and hand the text back as messages.
+    PIL's DecompressionBombWarning is never hidden: it is raised as an error (callers turn it into a refusal)."""
+    from PIL import Image
     buf = io.StringIO()
     with warnings.catch_warnings(), contextlib.redirect_stdout(buf):
         warnings.simplefilter("ignore")
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
         yield buf
+
+
+def _image_size_problem(path):
+    """Read only the image header (no pixel decode) and reject oversized frames before data/upload.py decodes them."""
+    from PIL import Image
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(path) as im:
+                w, h = im.size
+    except (Image.DecompressionBombWarning, Image.DecompressionBombError) as e:
+        return f"{os.path.basename(path)}: image too large to decode safely ({e})"
+    except Exception as e:  # noqa: BLE001 - unreadable header -> refusal, not a crash
+        return f"{os.path.basename(path)}: unreadable image ({type(e).__name__})"
+    if w <= 0 or h <= 0 or w > MAX_SIDE or h > MAX_SIDE or w * h > MAX_PIXELS:
+        return f"{os.path.basename(path)}: image {w}x{h} px is over the size limit ({MAX_PIXELS} px, {MAX_SIDE} px a side)"
+    return None
 
 
 # ---------------------------------------------------------------- QC and forecast (data/upload.py)
@@ -109,10 +133,17 @@ def qc_forecast(frames, interval_h, scale, name="upload", out_dir=None, exclude_
     scale = _positive(scale, "scale")
     if not isinstance(name, str) or not name.replace("_", "").replace("-", "").isalnum():
         raise ValueError("name must be letters, digits, '_' or '-'")
+    big = [r for r in (_image_size_problem(p) for p in paths) if r]
+    if big:
+        return {"refused": True, "reasons": big}
+    from PIL import Image
     out_dir = out_dir or tempfile.mkdtemp(prefix="stitch_qc_")
     U = _data_upload()
-    with _quiet():
-        doc = U.run(paths, interval_h, scale, out_dir, name, exclude_wound=exclude_wound)
+    try:
+        with _quiet():
+            doc = U.run(paths, interval_h, scale, out_dir, name, exclude_wound=exclude_wound)
+    except (Image.DecompressionBombWarning, Image.DecompressionBombError) as e:
+        return {"refused": True, "reasons": [f"image too large to decode safely ({e})"]}
     doc = _plain(doc)
     if doc.get("refused"):
         return {"refused": True, "reasons": list(doc.get("reasons", []))}
@@ -174,7 +205,9 @@ def flags_schedule(forecast_doc):
 def simulate(masks_npz_path, interval_h, condition="CC", exclude_wound=None):
     """Wound masks (the *_masks.npz written by qc_forecast) -> sim/upload.py forecast_upload. Returns
     {"sim_ensemble": doc, "nca_ensemble": doc (only if torch and weights exist), "messages": [...]} or
-    {"refused": true, "reasons": [...]}. Every band is marked "calibrated": false: these are raw ensemble spreads."""
+    {"refused": true, "reasons": [...]}. Every band is marked "calibrated": false and never called 90%. "band_kind" says
+    what area_q05/q95 are: "raw_ensemble" (one frame) or "conformal_on_sim" (2+ frames: sim/upload.py swaps in a
+    leave-one-wound-out conformal band built on the simulator's own predictions; raw_band keeps the raw spread)."""
     import numpy as np
     p = _allowed_path(masks_npz_path, (".npz",))
     interval_h = _positive(interval_h, "interval_h")
@@ -201,15 +234,20 @@ def simulate(masks_npz_path, interval_h, condition="CC", exclude_wound=None):
         doc = _plain(doc)
         doc.pop("level", None)  # not a 90% band here
         doc["calibrated"] = False
-        doc["band_label"] = SIM_BAND_LABEL
+        kinds = set()
         for fc in doc["forecasts"]:
-            fc.pop("band", None)  # sim/upload.py's note calls its conformal band "90%"; design 9b says never for sim
+            note = fc.pop("band", None)  # sim/upload.py's note calls its conformal band "90%"; design 9b says never for sim
+            conformal = len(masks) >= 2 and isinstance(note, str) and not note.startswith("single frame")
+            fc["band_kind"] = "conformal_on_sim" if conformal else "raw_ensemble"
+            kinds.add(fc["band_kind"])
             fc["calibrated"] = False
-            fc["band_label"] = SIM_BAND_LABEL
+            fc["band_label"] = SIM_CONFORMAL_LABEL if conformal else SIM_BAND_LABEL
             if isinstance(fc.get("raw_band"), dict):
                 fc["raw_band"]["calibrated"] = False
             if model == "nca_ensemble":
                 fc["label"] = "emulator"
+        doc["band_kind"] = kinds.pop() if len(kinds) == 1 else "mixed"
+        doc["band_label"] = SIM_CONFORMAL_LABEL if doc["band_kind"] == "conformal_on_sim" else SIM_BAND_LABEL
         res[model] = doc
     if "nca_ensemble" not in res:
         res["nca_ensemble"] = None

@@ -89,6 +89,7 @@ def test_simulate_one_frame_uncalibrated():
     assert doc["calibrated"] is False and "level" not in doc and "90% band" not in json.dumps(doc).replace("not a 90% band", "")
     fc = doc["forecasts"][0]
     assert fc["calibrated"] is False and fc["raw_band"]["calibrated"] is False
+    assert fc["band_kind"] == doc["band_kind"] == "raw_ensemble" and fc["band_label"] == tools.SIM_BAND_LABEL
     if r["nca_ensemble"] is not None:  # only with torch + weights
         assert r["nca_ensemble"]["calibrated"] is False and r["nca_ensemble"]["forecasts"][0]["label"] == "emulator"
     json.dumps(r, allow_nan=False)
@@ -102,6 +103,52 @@ def test_simulate_multi_frame_never_raises():
     assert isinstance(r, dict)
     if "error" not in r:
         assert all(f["calibrated"] is False for f in r["sim_ensemble"]["forecasts"])
+        doc = r["sim_ensemble"]
+        assert doc["band_kind"] == "conformal_on_sim" and doc["band_label"] == tools.SIM_CONFORMAL_LABEL
+        assert "90% band" not in json.dumps(doc).replace("not a 90% band", "")
+
+
+def test_simulate_labels_conformal_band(monkeypatch, tmp_path):
+    """2+ frames: sim/upload.py swaps area_q05/q95 for a conformal band; the tool labels it, never as 90%."""
+    import numpy as np
+
+    class FakeSim:
+        @staticmethod
+        def refusal(masks, um, sq):
+            return None
+
+        @staticmethod
+        def forecast_upload(masks, *a):
+            fc = {"area_q05": [0.5], "area_q95": [0.9], "raw_band": {"label": "uncalibrated spread"},
+                  "band": "90% band = P1's leave-one-wound-out conformal ..."}
+            return {"sim_ensemble": {"model": "sim_ensemble", "level": 0.9, "forecasts": [fc]}}
+
+    monkeypatch.setattr(tools, "_sim_upload", lambda: FakeSim)
+    p = tmp_path / "m_masks.npz"
+    np.savez(p, masks=np.ones((2, 8, 8), np.uint8), um_per_px=1.0)
+    r = tools.simulate(str(p), 1.0)
+    doc = r["sim_ensemble"]
+    fc = doc["forecasts"][0]
+    assert fc["band_kind"] == doc["band_kind"] == "conformal_on_sim" and fc["calibrated"] is False
+    assert "band" not in fc and "level" not in doc
+    assert "90% band" not in json.dumps(doc).replace("not a 90% band", "")
+
+
+def test_qc_forecast_refuses_oversized_image(monkeypatch, tmp_path):
+    _need(FRAMES[0])
+    monkeypatch.setattr(tools, "MAX_PIXELS", 1000)
+    d = tools.qc_forecast(FRAMES[:1], 1.0, SAMPLE_SCALE, "big", str(tmp_path))
+    assert d["refused"] is True and "size limit" in d["reasons"][0]
+
+
+def test_qc_forecast_decompression_bomb_is_refusal(monkeypatch, tmp_path):
+    _need(FRAMES[0])
+    from PIL import Image
+    with Image.open(FRAMES[0]) as im:
+        n = im.size[0] * im.size[1]
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", int(n * 0.75))   # PIL warns (not errors) between 1x and 2x
+    d = tools.qc_forecast(FRAMES[:1], 1.0, SAMPLE_SCALE, "bomb", str(tmp_path))
+    assert d["refused"] is True and "too large" in d["reasons"][0]
 
 
 def test_simulate_refuses_blank_mask(tmp_path):
