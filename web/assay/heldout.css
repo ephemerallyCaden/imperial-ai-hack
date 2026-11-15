@@ -1,6 +1,5 @@
-/* Draw mode layout (#106). Colours, type and the st-* components come from design/style-guide/tokens.css (linked by index.html);
-   the :where() fallbacks below copy its values (final skin look, #131) so the module still matches where tokens.css is not loaded
-   (zero specificity, so tokens.css wins wherever both are loaded). */
+/* Held-out wound view (heldout.js), moved from the removed web/draw/draw.css. Colours, type and the st-* components
+   come from tokens.css; the :where() fallbacks copy the values used here (zero specificity, so tokens.css wins). */
 :where(:root) {
   --bg: #050607; --panel: rgba(5,6,7,.62); --panel-solid: #0B0D10; --raise: #12151A;
   --ink: #E8ECEF; --dim: #8A949C; --faint: #5C656D; --line: rgba(232,236,239,.5); --hair: rgba(232,236,239,.18);
@@ -55,3 +54,4 @@
 .dr-scale span { position: absolute; top: 15px; color: var(--accent); white-space: nowrap; }
 .dr-scale em { position: absolute; top: 30px; font-style: normal; }
 .dr-root [hidden] { display: none !important; }   /* .st-btn / .dr-canvas set display, which beats the hidden attribute */
+.dr-root svg.dr-chart { width: 100%; height: auto; stroke: none; fill: none; }   /* beats .assay svg (icon size) */

@@ -8,6 +8,9 @@ import { decisionCard, refusedPanel, tabs, forecastTab, imagesTab, whyTab, esc }
 import { createTimeline } from "./timeline.js";
 import { greyFromFile } from "../upload/segment.js";
 import { runUpload, BROWSER_LABEL } from "../upload/forecast.js";
+import { createLive, livePanel, liveReadouts, LIVE_LABEL } from "./live.js";
+import { photoDialog } from "./photo.js";
+import { mountHeldout } from "./heldout.js";
 
 const PLAYBACK = "web/public/sim/whad_partII_C61_P2_follow.json";   // P2 cell-agent playback (follow rule), docs/p2-handoff.md
 const PLAYBACK_WOUND = "exp1_partII_C61_P2";
@@ -34,6 +37,7 @@ export async function mount(el, ctx) {
       <select id="as-wound" class="as-select"></select>
       <button class="st-btn st-btn--primary" data-act="upload"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
       <input type="file" accept="image/*" multiple hidden id="as-file">
+      <input type="file" accept="image/png,image/jpeg" hidden id="as-photo">
       <span class="as-qc"></span>
       <span class="as-honesty"></span>
     </div>
@@ -43,12 +47,13 @@ export async function mount(el, ctx) {
           <div class="as-hud as-hud-tl"><div class="as-readout num"></div><div class="as-caption as-simnote"></div></div>
           <div class="as-hud as-hud-tr">
             <div class="st-seg as-views">${["field", "wound", "cells"].map(v => `<button class="st-btn" data-view="${v}">${v}</button>`).join("")}</div>
+            <button class="st-btn" data-act="draw" title="Draw a wound on the tissue · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Draw</button>
             <button class="st-btn" data-act="select" title="Select area · S"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" stroke-dasharray="3 3"/></svg>Select area</button>
             <button class="st-btn" data-act="clear" title="Clear selection · Esc" hidden>Clear</button>
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
-            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim">dividing: off in this simulation</span><span class="as-dim">height = local density</span></div>
+            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = state (wound floor, leading edge, new tissue rising)</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span></div>
           </div>
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
@@ -63,6 +68,7 @@ export async function mount(el, ctx) {
       </div>
       <aside class="as-panel" aria-label="Decision and forecast"></aside>
     </div>
+    <div class="as-heldout" hidden></div>
     <div class="as-timeline"></div>
   </div>`;
   const $ = s => el.querySelector(s), panel = $(".as-panel"), stage = $(".as-stage");
@@ -82,6 +88,8 @@ export async function mount(el, ctx) {
     ...mains.map(r => ({ kind: "run", id: r.run_id, run: r, branch: index.runs.find(b => b.branch && b.run_id === r.run_id + ".reject") || null,
       label: `${r.kind === "frames" ? "Upload run" : "Held-out"} · ${r.wound_id}${r.stop_kind ? ` · stop (${r.stop_kind}) at ${r.stop_h} h` : ""}` })),
     ...SAMPLES.map(s => ({ kind: "sample", id: s.id, sample: s, label: s.label })),
+    { kind: "draw", id: "draw_live", label: "Draw a wound · live NCA (simulation)" },
+    { kind: "heldout", id: "heldout_sim_nca", label: "Held-out wound: sim vs NCA vs data (exp1_partII_C61_P2)" },
   ];
   const sel = $("#as-wound");
   const grp = (name, list) => list.length ? `<optgroup label="${esc(name)}">${list.map(i => `<option value="${esc(i.id)}">${esc(i.label)}</option>`).join("")}</optgroup>` : "";
@@ -89,7 +97,9 @@ export async function mount(el, ctx) {
     sel.innerHTML = grp("Your uploads (run in this browser, nothing sent)", S.items.filter(i => i.kind === "upload"))
       + grp("Recorded runs (held-out WHAD replays)", S.items.filter(i => i.kind === "run" && i.run.kind !== "frames"))
       + grp("Recorded runs (upload)", S.items.filter(i => i.kind === "run" && i.run.kind === "frames"))
-      + grp("Samples (offline, no agent run)", S.items.filter(i => i.kind === "sample"));
+      + grp("Samples (offline, no agent run)", S.items.filter(i => i.kind === "sample"))
+      + grp("Validation (held-out WHAD wound)", S.items.filter(i => i.kind === "heldout"))
+      + grp("Draw (simulation, no forecast)", S.items.filter(i => i.kind === "draw"));
     if (!mains.length) sel.insertAdjacentHTML("beforeend", `<option disabled>No recorded runs found in agent/runs</option>`);
   };
   fillSelect();
@@ -109,8 +119,79 @@ export async function mount(el, ctx) {
     onPlay: togglePlay, onStep: step, onSpeed: v => { S.speed = v; refresh(); }, onSeek: t => { S.playing = false; seek(t); },
   });
 
+  // ---------- item kinds with their own view: { enter(item), leave(), key(action) -> handled } ----------
+  // "draw": live drawing (live.js) on the same 3D view, fed by the live NCA instead of the playback.
+  // "heldout": the held-out validation view (heldout.js, 2D, moved from the old Draw screen) in place of the stage.
+  let live = null, special = null, heldout = null, thumbAt = 0;
+  const leaveRun = it => {
+    S.item = it; sel.value = it.id; S.main = S.branch = S.merged = null; S.playing = false; S.msg = ""; S.panelKey = ""; S.thumbF = -1;
+    $(".as-timeline").hidden = true; $(".as-qc").innerHTML = ""; $(".as-cover").hidden = true;
+  };
+  const chips = list => list.map(x => `<span class="st-chip st-chip--honesty">${x}</span>`).join("");
+  const VIEWS = {
+    draw: {
+      enter(it) {
+        leaveRun(it); $(".as-honesty").innerHTML = chips([LIVE_LABEL, "Simulated cells · not tracked cells", "No forecast"]);
+        if (!tissue) { panel.innerHTML = `<div class="error">Drawing needs the 3D field, which could not load (three.js offline?).</div>`; return; }
+        tissue.clearSelection();
+        live = live || createLive(tissue, { onState: liveState });
+        live.start(); markDraw(); renderLivePanel();
+        $(".as-divnote").textContent = "new mass appears only next to cells (NCA v2 source term)";
+        $(".as-simnote").textContent = `Simulated cells, not tracked cells: ${LIVE_LABEL}, live in this browser. Drag to cut the tissue.`;
+      },
+      leave() { live?.stop(); markDraw(); $(".as-divnote").textContent = "dividing: off in this simulation"; },
+      key(a) {
+        if (a === "play") { live?.toggle(); return true; }
+        return a === "step-back" || a === "step-forward";
+      },
+    },
+    heldout: {
+      enter(it) {
+        leaveRun(it); $(".as-honesty").innerHTML = chips(["Uncalibrated (simulator / NCA spread)", "Simulated cells · not tracked cells", "Observed data end at 19 h"]);
+        $(".as-main").hidden = true; const host = $(".as-heldout"); host.hidden = false; heldout = mountHeldout(host);
+      },
+      leave() { heldout?.dispose(); heldout = null; $(".as-heldout").hidden = true; $(".as-main").hidden = false; },
+      key: a => a === "play" || a === "step-back" || a === "step-forward" || a === "brush",   // the view handles its own keys
+    },
+  };
+  function renderLivePanel() { panel.innerHTML = livePanel(live.state); liveReadouts(panel, live.state); }
+  function liveState(st) {
+    if (special !== VIEWS.draw) return;
+    $(".as-readout").textContent = `${st.fromPhoto ? "shape from photo" : `simulated t = ${st.t.toFixed(1)} h`} · live NCA · ${st.status === "running" ? "healing" : st.status}`;
+    if (panel.querySelector(".as-live")) liveReadouts(panel, st); else renderLivePanel();
+    const now = performance.now(); if (now - thumbAt > 1000) { thumbAt = now; drawThumbs(); }
+  }
+  function markDraw() {
+    $('[data-act="draw"]').setAttribute("aria-pressed", !!(special === VIEWS.draw && live?.state.brushOn));
+    $('[data-act="select"]').setAttribute("aria-pressed", !!tissue?.isSelecting());
+  }
+  // one active tool on the 3D view: the brush (draw item only) or select-area
+  function useTool(t) {
+    if (!tissue) return;
+    if (t === "brush") { if (special !== VIEWS.draw) return select("draw_live"); live.setBrushOn(!live.state.brushOn); renderLivePanel(); }
+    else { if (live?.state.brushOn && special === VIEWS.draw) { live.setBrushOn(false); renderLivePanel(); } tissue.setSelecting(!tissue.isSelecting()); }
+    markDraw();
+  }
+  panel.addEventListener("click", e => {
+    const b = e.target.closest("[data-live]"); if (!b || !live) return;
+    const [k, v] = b.dataset.live.split(":");
+    if (k === "photo") return $("#as-photo").click();
+    if (k === "brush") return useTool("brush");
+    if (k === "play") return live.toggle();
+    ({ reset: () => live.reset(), preset: () => live.setPreset(v), size: () => live.setBrushSize(v), speed: () => live.setSpeed(+v) })[k]?.();
+    renderLivePanel();
+  });
+  $("#as-photo").addEventListener("change", e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f || !live) return;
+    photoDialog($(".as-notice"), f, mask => { live.carveMask(mask); renderLivePanel(); });
+  });
+
   async function select(id) {
     const it = S.items.find(i => i.id === id); if (!it) return;
+    const v = VIEWS[it.kind] || null;
+    if (special && special !== v) { special.leave(); $(".as-timeline").hidden = false; }
+    special = v;
+    if (v) return v.enter(it);
     S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1;
     try {
       if (it.kind === "run") {
@@ -198,7 +279,8 @@ export async function mount(el, ctx) {
     } else if (a === "why") { S.tab = "why"; }
     else if (a === "upload") return $("#as-file").click();
     else if (a === "sample") return select("sample_3frame");
-    else if (a === "select") { tissue?.setSelecting(!tissue.isSelecting()); $('[data-act="select"]').setAttribute("aria-pressed", !!tissue?.isSelecting()); return; }
+    else if (a === "draw") return useTool("brush");
+    else if (a === "select") return useTool("select");
     else if (a === "clear") return tissue?.clearSelection();
     refresh();
   }
@@ -287,7 +369,7 @@ export async function mount(el, ctx) {
   }
 
   function refresh() {
-    if (!S.item) return;
+    if (!S.item || special) return;
     const r = run(), cNow = checkAt(S.t), c = cNow || r.checks[0] || null;
     const refusedDoc = S.main.refused || (cNow?.doc?.refused ? cNow.doc : null);
     // ----- top bar chips -----
@@ -367,7 +449,7 @@ export async function mount(el, ctx) {
     if (!st) return;
     box.innerHTML = `<div class="st-kicker">Selection · simulated cells</div>
       <div class="st-row"><span>Size</span><span>${st.w_um} × ${st.d_um} µm</span></div>
-      <div class="st-row"><span>Sites</span><span>${st.sites}</span></div>
+      <div class="st-row"><span>Display hexes</span><span>${st.sites}</span></div>
       <div class="st-row"><span>Wound (open)</span><span>${Math.round(st.open * 100)}%</span></div>
       <div class="st-row"><span>Mean density</span><span>${st.density.toFixed(2)}</span></div>
       <div class="st-row"><span>Edge · new · intact</span><span>${st.counts.edge} · ${st.counts.fresh} · ${st.counts.intact}</span></div>`;
@@ -376,7 +458,7 @@ export async function mount(el, ctx) {
     const tip = $(".as-tip");
     if (!h || tissue?.isSelecting()) { tip.hidden = true; return; }
     tip.hidden = false; tip.style.left = `${h.px + 14}px`; tip.style.top = `${h.py + 14}px`;
-    tip.textContent = `site (${h.i},${h.j}) · x ${h.x_um} y ${h.y_um} µm · ${STATE_LABEL[h.state]} · density ${h.density.toFixed(2)} (simulated)`;
+    tip.textContent = `hex (${h.i},${h.j}) · x ${h.x_um} y ${h.y_um} µm · ${STATE_LABEL[h.state]} · density ${h.density.toFixed(2)} (simulated)`;
   }
   function markView() {
     const v = tissue?.view();
@@ -384,23 +466,25 @@ export async function mount(el, ctx) {
   }
   const rootCss = getComputedStyle(document.documentElement), cv = (n, h) => rootCss.getPropertyValue(n).trim() || h;
   const COLORS = { wound: cv("--cell-wound", "#24120F"), intact: cv("--cell-intact", "#C68B6E"), edge: cv("--cell-edge", "#B3122E"), fresh: cv("--cell-new", "#FFD2C6") };
+  // minimaps of the same display hexes (positions in lattice sites from tissue.grid), field / wound / edge crops
   function drawThumbs() {
     if (!tissue) return;
-    const { NX, NY } = tissue.grid, st = Array.from({ length: NX * NY }, (_, k) => tissue.stateOf(k)), HY = Math.sqrt(3) / 2;
-    let cx = 0, cy = 0, n = 0, ex = NX / 2, ey = NY / 2, bd = Infinity;
-    for (let k = 0; k < st.length; k++) if (st[k] === "wound" || st[k] === "edge") { cx += k % NX; cy += (k / NX) | 0; n++; }
-    if (n) { cx /= n; cy /= n; } else { cx = NX / 2; cy = NY / 2; }
-    for (let k = 0; k < st.length; k++) if (st[k] === "edge") { const d = (k % NX - cx) ** 2 + (((k / NX) | 0) - cy - 3) ** 2; if (d < bd) { bd = d; ex = k % NX; ey = (k / NX) | 0; } }
-    const regions = { field: [NX / 2, NY / 2, NX + 1], wound: [cx, cy, 16], cells: [ex, ey, 4] };
+    const { COUNT, u, v, spacing, W, H } = tissue.grid, st = Array.from({ length: COUNT }, (_, k) => tissue.stateOf(k));
+    let cx = 0, cy = 0, n = 0, ex = W / 2, ey = H / 2, bd = Infinity;
+    for (let k = 0; k < COUNT; k++) if (st[k] === "wound" || st[k] === "edge") { cx += u[k]; cy += v[k]; n++; }
+    if (n) { cx /= n; cy /= n; } else { cx = W / 2; cy = H / 2; }
+    for (let k = 0; k < COUNT; k++) if (st[k] === "edge") { const d = (u[k] - cx) ** 2 + (v[k] - cy - 3) ** 2; if (d < bd) { bd = d; ex = u[k]; ey = v[k]; } }
+    const regions = { field: [W / 2, H / 2, W + 1], wound: [cx, cy, 16], cells: [ex, ey, 4] };   // centre and span in sites
     el.querySelectorAll(".as-thumb").forEach(b => {
       const cv = b.querySelector("canvas"), g = cv.getContext("2d"), [mx, my, span] = regions[b.dataset.view];
       const sc = cv.width / span; g.fillStyle = "#050607"; g.fillRect(0, 0, cv.width, cv.height);
-      const r = sc * 0.55;
-      for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-        const x = (i + (j & 1) * 0.5 - mx) * sc + cv.width / 2, y = (j - my) * HY * sc + cv.height / 2;
+      const r = sc * spacing * 0.55;
+      for (let k = 0; k < COUNT; k++) {
+        const x = (u[k] - mx) * sc + cv.width / 2, y = (v[k] - my) * sc + cv.height / 2;
         if (x < -r || y < -r || x > cv.width + r || y > cv.height + r) continue;
-        g.fillStyle = COLORS[st[j * NX + i]]; g.beginPath();
-        for (let a = 0; a < 6; a++) { const t = Math.PI / 3 * a + Math.PI / 6; g.lineTo(x + r * Math.cos(t), y + r * Math.sin(t)); }
+        g.fillStyle = COLORS[st[k]];
+        if (r < 3) { g.fillRect(x - r, y - r, 2 * r, 2 * r); continue; }   // hexes under ~3 px: a square reads the same and is cheap
+        g.beginPath(); for (let a = 0; a < 6; a++) { const t = Math.PI / 3 * a + Math.PI / 6; g.lineTo(x + r * Math.cos(t), y + r * Math.sin(t)); }
         g.fill(); if (span <= 16) { g.strokeStyle = "rgba(232,236,239,.18)"; g.stroke(); }
       }
     });
@@ -447,7 +531,9 @@ export async function mount(el, ctx) {
   };
   const onKey = e => {
     const a = e.detail?.action;
-    if (a === "play") togglePlay();
+    if (special?.key(a)) return;
+    if (a === "brush") useTool("brush");
+    else if (a === "play") togglePlay();
     else if (a === "step-back") step(-1);
     else if (a === "step-forward") step(1);
     else if (a === "zoom-in") tissue?.zoom(1);
@@ -460,12 +546,13 @@ export async function mount(el, ctx) {
   ctx.bus.addEventListener("key", onKey);
 
   markView();
-  const first = S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
+  const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
+  delete ctx.openItem;
   if (first) await select(first.id);
 
   return () => {
     cancelAnimationFrame(raf);
     ctx.bus.removeEventListener("action", onAction); ctx.bus.removeEventListener("key", onKey);
-    tissue?.dispose(); css.remove(); el.replaceChildren();
+    special?.leave(); live?.dispose(); tissue?.dispose(); css.remove(); el.replaceChildren();
   };
 }

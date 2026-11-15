@@ -27,10 +27,10 @@ The Style guide page has four poster boards: **Dark**, two alternative palettes 
 ## How the design drove the build
 
 - **Tokens.** `web/tokens.css` comes straight from the style guide: surfaces (`--bg` #050607, `--panel`), text (`--ink`, `--dim`, `--faint` with contrast ratios), the one amber accent (`--accent` #E0A458) for forecast, selection, focus and "needs a human", the five cell-state colours (checked for colour blindness and greyscale), chart styles, type, spacing and motion. The same file holds the base components named after the Figma components: `.st-btn`, `.st-chip`, `.st-card` (with `--forced`, `--approved` and `--rejected` states), `.st-tabs`, `.st-menubar`, `.st-dropdown`, `.st-table` and `.st-ribbon`. The style guide's written rules are in `web/vendor-design/style-guide-README.md`.
-- **Modes.** `web/index.html` and `web/app.js` build the menu bar and the Assay / Ops / Draw tabs from the menu bar spec. Each mode follows its frame:
+- **Modes.** `web/index.html` and `web/app.js` build the menu bar and the Assay / Ops tabs from the menu bar spec (Draw is now part of Assay: drawing happens on the same 3D view, `#draw` opens it). Each mode follows its frame:
   - `web/assay/` follows Assay v2 and the right-panel frames: pinned decision card, Forecast / Images / Why tabs (`panel.js`), the refused state, the approve and reject states with undo, the Scales strip and the timeline (`timeline.js`).
   - `web/ops/` follows the two Ops frames: Agent runs (`ops.js`) and Forecast evidence (`evidence.js`).
-  - `web/draw/` follows the Draw frame: presets, magnification, field readout, preset assumptions and the first-time hint.
+  - The Draw frame now lives inside Assay (`web/assay/live.js`, `photo.js`): presets, magnification (wheel zoom on the 3D view), field readout, preset assumptions and the first-time hint. The held-out comparison view is `web/assay/heldout.js`.
 - **Honesty labels.** The chips in the frames became required labels in code: "Recorded run", "Simulated cells, not tracked cells", "Sped up" (shown by the timeline whenever speed is above 1x), "Simulation on recorded data" and "Untested" for "stop, likely to close".
 
 ## What changed in code compared with the frames

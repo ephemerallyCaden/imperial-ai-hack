@@ -3,13 +3,13 @@
 // colour while the rest drops to dark greyscale (each state keeps its own grey step). Readouts/curve from Rand's embryo export (sample).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadPhoto, analyse, outline } from './photo.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FINAL, HMAX, colHeight, addLights, addEnvironment, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour } from './look.js';   // the shared final look
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
@@ -19,13 +19,12 @@ const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFF
 // look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time;
 // ?nohud hides the HUD and the axis text labels only (time, camera and buttons still work: clean clip capture)
 const Q = new URLSearchParams(location.search);
-// final look (chosen 15 Nov): skin palette, toon, age colouring, 8 deg hue shift. URL params still override for look-dev.
-for (const [k, v] of Object.entries({ pal: 'C68B6E,B3122E,FFD2C6,FFFFFF,24120F', bg: '120A09', mat: 'toon', age: 'skin' })) if (!Q.has(k)) Q.set(k, v);
+// final look (look.js FINAL, chosen 15 Nov): skin palette, toon, age colouring, 8 deg hue shift. URL params still override for look-dev.
+for (const [k, v] of Object.entries(FINAL)) if (!Q.has(k)) Q.set(k, String(v));
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
 const paintLegend = () => document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
 paintLegend();
 const NOHUD = Q.has('nohud'); if (Q.has('bare') || NOHUD) document.body.classList.add('bare');
-const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // relative density
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
@@ -37,12 +36,9 @@ const controls = new OrbitControls(camera, canvas);
 // ?speed=x playback multiplier, ?orbit=deg slow auto-orbit (for recording clips)
 const SPEED = +(Q.get('speed') || 1); if (Q.has('orbit')) { controls.autoRotate = true; controls.autoRotateSpeed = +Q.get('orbit') || 0.5; }
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
-const LIT = Q.get('mat') && Q.get('mat') !== 'matte' ? [0.4, 1.25, 0.3] : [1.1, 1.6, 0.5];   // new materials add env + emissive light, so dim the rig
+// new materials add env + emissive light, so the rig is dimmer for them (look.js addLights)
 // ?light=warm: warm rig (the default sky is cool blue-white, which greys out reds and oranges) with brighter fill so colours stay vivid
-const WARM = Q.get('light') === 'warm'; if (WARM) LIT[0] *= 1.6;
-scene.add(new THREE.HemisphereLight(WARM ? 0xffe6d6 : 0xdfe8ff, WARM ? 0x2a0c10 : 0x101018, LIT[0]));
-const key = new THREE.DirectionalLight(WARM ? 0xfff0e2 : 0xffffff, LIT[1]); key.position.set(-30, 60, 25); scene.add(key);
-const fill = new THREE.DirectionalLight(WARM ? 0xffd2c2 : 0xe4e6ea, LIT[2]); fill.position.set(40, 20, -30); scene.add(fill);
+addLights(scene, Q.get('mat'), Q.get('light') === 'warm');
 
 // ---------- hex lattice + simulation (stand-in for P2's cell simulator) ----------
 const NX = 90, NY = 104, HY = Math.sqrt(3) / 2;
@@ -91,46 +87,21 @@ function stateOf(f, k) {
 }
 // cell age (sim steps since the cell filled in; original tissue counts as oldest). ?age=skin: intact cells fade
 // new tissue colour -> intact -> darker, quieter intact as they mature. ?heat (or the AGE HEATMAP button): age heatmap overlay
-let AGE_SPAN = Math.max(60, frames.length * 0.6); const AGE_SKIN = Q.get('age') === 'skin';
+const AGE_SKIN = Q.get('age') === 'skin';
 let HEAT = Q.has('heat');
-// ?ageramp= how healed cells change colour as they age (t: 0 = just filled in, 1 = mature). Original tissue is not healed,
-// so it keeps the plain intact colour except in 'pale', where it is the oldest and darkest (the first version).
-//   pale  new-tissue colour -> intact -> darker intact (light -> dark)
-//   scar  dusky red -> pink -> skin tinted toward the new-tissue colour, like a real scar maturing (ends paler than skin)
-//   ember leading-edge colour cooling to intact (hot -> calm)
-//   deep  dark intact -> intact (dark -> normal)
-//   sat   over-saturated intact -> intact (same lightness, colour drains)
-//   hue   intact with hue rotated -> intact (same lightness, hue drifts)
+// ?ageramp= how healed cells change colour as they age: pale (final look) | scar | ember | deep | sat | hue (look.js RAMPS)
 const AGE_RAMP = Q.get('ageramp') || 'pale';
-const C = h => new THREE.Color(h), hsl = (h, dh, ds, dl) => { const c = C(h), o = {}; c.getHSL(o); return c.setHSL((o.h + dh + 1) % 1, Math.min(1, Math.max(0, o.s * ds)), Math.min(1, o.l * dl)); };
-const RAMPS = {
-  pale: () => [C(PAL.fresh), C(PAL.intact), C(PAL.intact).multiplyScalar(0.45).lerp(C(PAL.wound), 0.15)],
-  scar: () => [C(PAL.edge).lerp(C(PAL.wound), 0.35).lerp(C(0x6A1B4D), 0.3), C(PAL.fresh).lerp(C(PAL.edge), 0.25), C(PAL.intact).lerp(C(PAL.fresh), 0.35)],
-  ember: () => [C(PAL.edge), C(PAL.edge).lerp(C(PAL.intact), 0.6), C(PAL.intact)],
-  deep: () => [C(PAL.intact).multiplyScalar(0.35), C(PAL.intact).multiplyScalar(0.7), C(PAL.intact)],
-  sat: () => [hsl(PAL.intact, 0, 2.2, 1.05), hsl(PAL.intact, 0, 1.4, 1), C(PAL.intact)],
-  hue: () => [hsl(PAL.intact, -0.12, 1.3, 1), hsl(PAL.intact, -0.05, 1.1, 1), C(PAL.intact)],
-};
-let STOPS, ORIG;
-function rebuildRamp() { STOPS = (RAMPS[AGE_RAMP] || RAMPS.pale)(); ORIG = AGE_RAMP === 'pale' || !RAMPS[AGE_RAMP] ? STOPS[2] : C(PAL.intact); }
-rebuildRamp();
-const ageT = age => Math.min(1, Math.max(0, age / (AGE_SPAN + 25)));
-function ageSkin(c, age) {   // age < 0 never happens for healed cells; original tissue has age > 999
-  if (age > 900) return c.copy(ORIG);
-  const t = ageT(age); return t < 0.3 ? c.copy(STOPS[0]).lerp(STOPS[1], t / 0.3) : c.copy(STOPS[1]).lerp(STOPS[2], (t - 0.3) / 0.7);
-}
+const AGE = makeAgeRamp(PAL, Math.max(60, frames.length * 0.6), AGE_RAMP);
 // inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow
-const cRef = new THREE.Color();
 const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
 function heatCol(c, age) {
-  const u = (1 - ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
+  const u = (1 - AGE.ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
   return c.copy(HEAT_STOPS[i]).lerp(HEAT_STOPS[i + 1], u - i);
 }
-const targetH = (f, k, st) => st === 'fresh' ? 0.7 + 0.3 * Math.min(1, (f.step - f.born[k]) / 25) : HEIGHT[st];
 
 // ---------- graph space: axis frame, floor grid, rulers ----------
 const S = 0.5;                           // world units per lattice unit
-const X0 = -W * S / 2, Z0 = -D * S / 2, HMAX = 0.65;  // column height scale
+const X0 = -W * S / 2, Z0 = -D * S / 2;  // HMAX (column height scale) from look.js
 const frame = new THREE.Group(); scene.add(frame);
 const lineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.28 });
 const faint = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.08 });
@@ -164,64 +135,14 @@ for (let q = 0; q <= 4; q++) label(q === 4 ? '1.0' : (q / 4).toFixed(2), V(xa - 
 label('local density (relative)', V(xa - 0.4, top + 1.2, za), 1.0, '#e8ecef').center.set(1, 0.5);
 
 // ---------- columns: coloured + ghost instanced meshes ----------
-const colGeo = new THREE.CylinderGeometry(0.5 * S * 1.1, 0.5 * S * 1.1, 1, 6); colGeo.translate(0, 0.5, 0); colGeo.rotateY(Math.PI / 6);
-// ?mat= look-dev materials: matte (original) | skin (velvet sheen + faked subsurface) | wet (clearcoat, moist wound bed)
-// | gel (translucent, fresnel rim) | glow (self-lit, fluorescence-style). emit = instance colour added as light, rim = fresnel edge
-const MATS = {
-  matte: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), emit: 0, rim: 0 },
-  skin: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.5, sheen: 0.5, sheenRoughness: 0.5, sheenColor: 0xff9c8c }), emit: 0.1, rim: 0.3, rimCol: 0xffc4b0 },
-  wet: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.06 }), emit: 0.05, rim: 0.2, rimCol: 0xffffff },
-  gel: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.25, transparent: true, opacity: 0.82 }), emit: 0.12, rim: 0.8, rimCol: 0xdfeaff },
-  glow: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 }), emit: 0.4, rim: 0.35, rimCol: 0xffffff },
-  // toon: 3-band cel shading | pearl: thin-film iridescence | xray: additive fresnel shells, hologram / glass-heart look
-  toon: { make: () => new THREE.MeshToonMaterial({ gradientMap: (() => { const t = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1, THREE.RedFormat);
-    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })() }), emit: 0.05, rim: 0.5, rimCol: 0xffffff },
-  pearl: { make: () => new THREE.MeshPhysicalMaterial({ roughness: 0.22, clearcoat: 0.6, iridescence: 1, iridescenceIOR: 1.35, iridescenceThicknessRange: [180, 520] }), emit: 0.06, rim: 0.3, rimCol: 0xffe0ee },
-  xray: { make: () => new THREE.MeshStandardMaterial({ roughness: 0.4, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }), emit: 0.25, rim: 2.2, rimCol: 0xffffff },
-};
+const colGeo = hexGeo(0.5 * S * 1.1);
+// ?mat= look-dev materials (look.js MATS): matte (original) | skin | wet | gel | glow | toon (final look) | pearl | xray
 // ?ramp=1: colour by world height like a space-time stack (dark base -> state colour -> pale tips); works with any ?mat=
 const RAMP = Q.has('ramp');
-// ?hshift=deg: as a colour gets darker (cell variation, age, shadow) its hue turns toward cool blue (240 deg, shortest way round),
-// in proportion to how much darker it got. deg = shift at fully dark, so a cell 50% darker turns deg/2. Default 8 (~4 deg at half); 0 = off
+// ?hshift=deg: as a colour gets darker (cell variation, age, shadow) its hue turns toward cool blue (look.js coolShift); 0 = off
 const HSHIFT = +(Q.get('hshift') ?? 8);
-const lum = c => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, hslT = {};
-function coolShift(c, dark) {   // dark: 0 (as bright as its reference) .. 1 (black)
-  if (!HSHIFT || dark <= 0) return c; c.getHSL(hslT);
-  let d = 0.6667 - hslT.h; d -= Math.floor(d + 0.5);
-  return c.setHSL((hslT.h + Math.sign(d) * Math.min(Math.abs(d), HSHIFT / 360 * Math.min(1, dark)) + 1) % 1, hslT.s, hslT.l);
-}
-const M = MATS[Q.get('mat')] || MATS.matte;
-const colMat = M.make();
-if (M.emit || M.rim || RAMP || HSHIFT) colMat.onBeforeCompile = sh => {
-  if (HSHIFT) {   // same cool shift for lighting: compare lit colour with the unlit albedo
-    sh.uniforms.uHShift = { value: HSHIFT };
-    sh.fragmentShader = `uniform float uHShift;
-vec3 hsRgb2Hsv(vec3 c){ vec4 K=vec4(0.,-1./3.,2./3.,-1.); vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)); vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));
-  float d=q.x-min(q.w,q.y); return vec3(abs(q.z+(q.w-q.y)/(6.*d+1e-10)),d/(q.x+1e-10),q.x); }
-vec3 hsHsv2Rgb(vec3 c){ vec4 K=vec4(1.,2./3.,1./3.,3.); vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www); return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y); }
-vec3 coolShift(vec3 c, float dark){ vec3 h=hsRgb2Hsv(c); float d=0.6667-h.x; d-=floor(d+0.5); h.x=fract(h.x+sign(d)*min(abs(d),uHShift/360.*dark)); return hsHsv2Rgb(h); }
-` + sh.fragmentShader.replace('#include <opaque_fragment>', `{ const vec3 W = vec3(.2126,.7152,.0722);
-    float dk = clamp(1.0 - dot(outgoingLight, W) / max(dot(diffuseColor.rgb, W), 1e-4), 0.0, 1.0);
-    outgoingLight = coolShift(outgoingLight, dk); }
-  #include <opaque_fragment>`);
-  }
-  if (RAMP) {
-    sh.uniforms.uHMax = { value: HMAX };
-    sh.vertexShader = 'uniform float uHMax; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vH = (instanceMatrix * vec4(position, 1.0)).y / uHMax;');
-    sh.fragmentShader = 'varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float rh = clamp(vH, 0.0, 1.1);
-    diffuseColor.rgb = mix(diffuseColor.rgb * 0.2, diffuseColor.rgb, smoothstep(0.0, 0.7, rh));
-    diffuseColor.rgb = mix(diffuseColor.rgb, mix(diffuseColor.rgb, vec3(1.0, 0.93, 0.95), 0.32), smoothstep(0.85, 1.1, rh));`);
-  }
-  sh.uniforms.uEmit = { value: M.emit }; sh.uniforms.uRim = { value: M.rim }; sh.uniforms.uRimCol = { value: new THREE.Color(M.rimCol) };
-  sh.fragmentShader = 'uniform float uEmit; uniform float uRim; uniform vec3 uRimCol;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-    `#include <emissivemap_fragment>
-    float fres = pow(1.0 - saturate(dot(normalize(normal), normalize(vViewPosition))), 3.0);
-    totalEmissiveRadiance += vColor.rgb * uEmit + uRimCol * vColor.rgb * fres * uRim;`);
-};
-if (M !== MATS.matte) {   // studio reflections for sheen / clearcoat highlights
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.12;
-}
+const colMat = makeColumnMaterial(Q.get('mat'), HSHIFT, { ramp: RAMP, hmax: HMAX });
+addEnvironment(renderer, scene, Q.get('mat'));   // studio reflections for sheen / clearcoat highlights
 const cols = new THREE.InstancedMesh(colGeo, colMat, COUNT);
 // outside-selection look (?ghost=): grey (default) | rims | dim | flat | dots | lift
 const GHOST = Q.get('ghost') || 'grey', LIFT = 1.4;
@@ -248,17 +169,13 @@ function updateColumns(f, dt) {
   const ease = Math.min(1, dt * 6);
   for (let k = 0; k < COUNT; k++) {
     const st = stateOf(f, k); states[k] = st;
-    const tgt = targetH(f, k, st) * (st === 'intact' ? 0.92 + 0.16 * rnd[k] : 1);   // subtle unevenness
+    const age = f.step - f.born[k], tgt = colHeight(st, age, rnd[k]);
     hNow[k] += (tgt - hNow[k]) * ease;
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
     const on = inSel(k), lifted = sel && on && GHOST === 'lift';
     m4.makeScale(1, h, 1).setPosition(x, lifted ? LIFT : 0, z);
-    col.setHex(PAL[st]);
-    const age = f.step - f.born[k];
     if (HEAT && st !== 'wound') heatCol(col, age);
-    else if (AGE_SKIN && (st === 'intact' || st === 'fresh')) ageSkin(col, age).multiplyScalar(0.92 + 0.16 * rnd[k]);
-    else if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
-    if (!HEAT && (st === 'intact' || st === 'fresh')) { cRef.setHex(PAL.intact); coolShift(col, 1 - lum(col) / lum(cRef)); }   // darker than plain skin -> cooler
+    else cellColour(col, st, age, rnd[k], AGE, { age: AGE_SKIN, hshift: HSHIFT });
     let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
     if (!on) {
       if (GHOST === 'rims') { showGhost = showRim = true; }
@@ -300,7 +217,7 @@ function ageLegend() {
   const on = HEAT || AGE_SKIN; $('age-leg').style.display = on ? '' : 'none'; $('btn-heat').classList.toggle('on', HEAT);
   document.querySelectorAll('.legend > .st').forEach(el => { el.style.opacity = HEAT ? 0.35 : 1; });   // state colours are hidden under the overlay
   const hx = c => '#' + c.getHexString(), stops = HEAT ? HEAT_STOPS.slice().reverse().map(hx)
-    : [0, 0.3, 0.65, 1].map(t => hx(ageSkin(new THREE.Color(), t * (AGE_SPAN + 25))));
+    : [0, 0.3, 0.65, 1].map(t => hx(AGE.ageSkin(new THREE.Color(), t * (AGE.span + 25))));
   $('age-bar').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
   $('age-title').textContent = HEAT ? 'Cell age · heatmap overlay' : `Healed cells · colour = age (${AGE_RAMP})`;
 }
@@ -427,8 +344,8 @@ function occFromMask(mask, w, h) {   // fit the mask's bounding box into ~70% of
 function runPhoto() {
   const r = photoRes; if (!r || r.kind !== 'wound') return;
   PAL.intact = hex(r.skinRGB); PAL.edge = 0xFF3E41; PAL.fresh = hex(mixRGB(r.skinRGB, [255, 255, 255], 0.65)); PAL.wound = hex(r.skinRGB.map(v => Math.round(v * 0.1)));
-  rebuildRamp(); paintLegend(); ageLegend();
-  frames = simulate(occFromMask(r.mask, r.w, r.h)); AGE_SPAN = Math.max(60, frames.length * 0.6); hNow.fill(0.5);
+  AGE.rebuild(); paintLegend(); ageLegend();
+  frames = simulate(occFromMask(r.mask, r.w, r.h)); AGE.span = Math.max(60, frames.length * 0.6); hNow.fill(0.5);
   PHOTO = true; document.body.classList.add('photo-mode'); $('photo').style.display = 'none';
   slider.max = frames.length - 1; slider.step = 1; setTime(0); playing = true; playBtn.textContent = 'PAUSE'; goTo('close');
 }
