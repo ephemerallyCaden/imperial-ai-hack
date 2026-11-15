@@ -51,6 +51,26 @@ def check_clean(path):
     return bad
 
 
+def write_index(runs_dir):
+    """agent/runs[/practice]/index.json: the list of run logs the web app plays back (a static server can't list dirs)."""
+    runs = []
+    for f in sorted(os.listdir(runs_dir)):
+        if not f.endswith(".jsonl"):
+            continue
+        recs = [json.loads(l) for l in open(os.path.join(runs_dir, f)) if l.strip()]
+        start = next((r for r in recs if r.get("kind") == "run_start"), {})
+        end = next((r for r in recs if r.get("kind") == "run_end"), {})
+        rep = next((r for r in recs if r.get("kind") == "report"), {})
+        runs.append({"file": f, "run_id": start.get("run_id", f[:-6]), "branch": f.endswith(".reject.jsonl"),
+                     "wound_id": (start.get("wound") or {}).get("wound_id") if isinstance(start.get("wound"), dict) else None,
+                     "kind": (start.get("wound") or {}).get("kind") if isinstance(start.get("wound"), dict) else None,
+                     "stop_kind": end.get("stop_kind"), "stop_h": end.get("stop_h"),
+                     "plate_hours_saved": end.get("plate_hours_saved"), "headline": rep.get("headline")})
+    with open(os.path.join(runs_dir, "index.json"), "w") as fh:
+        json.dump({"runs": runs}, fh, indent=1)
+    return runs
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True)
@@ -71,6 +91,7 @@ def main(argv=None):
             bad = check_clean(os.path.join(a.out, f))
             if bad:
                 dirty[f] = bad
+    write_index(a.out)
     out = {"runs": [{k: s.get(k) for k in ("run_id", "stop_kind", "stop_h", "plate_hours_saved",
                                              "numbers_traced", "numbers_untraced")} for s in summary],
            "cost_usd": sum(r.get("cost_usd") or 0 for f in os.listdir(a.out) if f.startswith(stamp)
