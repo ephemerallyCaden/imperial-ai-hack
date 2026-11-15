@@ -19,7 +19,9 @@ Figma: "Stitch-UI", page "Style guide" (variables "Stitch tokens" with CSS code 
 | `--faint` | #5C656D | decoration only (3.4:1) |
 | `--accent` | #E0A458 | median, band, selection, focus, decision card (9.3:1) |
 
-**Cell states** (do not change without re-running the colour-blindness and greyscale check): wound #0B1116 · intact #1F4F5C · leading edge #EE7F2D · new tissue #F9D6FB · dividing #FFFFFF with a dark centre dot. Lightness steps 5 / 31 / 65 / 89 / 100. Intact is 2.3:1 on the background, so never use it for text or thin lines, and give 2D swatches a hairline. Outside a box selection, cells become matte greyscale with one step per state (`--ghost-*`).
+**Cell states** (skin look, chosen 15 Nov; do not change without re-running the colour-blindness and greyscale check): wound #24120F · intact skin #C68B6E · leading edge #B3122E · new tissue #FFD2C6 · dividing #FFFFFF with a dark centre dot, on scene background #120A09. Lightness: wound 8 · edge 38 · intact 63 · new 88 · dividing 100. Colour-blindness check (Machado 2009, severity 1): closest pair (new tissue vs dividing) ΔE 17 protan, 17.5 deutan, 23 tritan; dividing also has its dot.
+
+**3D render:** toon shading (3 bands), healed cells coloured by age (new-tissue colour → intact → darker intact), and an 8° cool hue shift: as a colour darkens (cell variation, age, shadow) its hue turns toward blue in proportion. Reference: `design/prototypes/glass-dish/` (defaults = this look; `coolShift`, `ageSkin` in `main.js`). Tissue tone switcher (R11) swaps intact/new for other skin tones; edge, wound and dividing stay. Outside a box selection, cells become matte greyscale with one step per state (`--ghost-*`).
 
 ## Type
 - Wordmark: condensed caps, 22 px, 0.2em tracking, plus an italic serif subtitle (M6 style).

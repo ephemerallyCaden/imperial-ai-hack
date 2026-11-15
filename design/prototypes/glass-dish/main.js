@@ -18,6 +18,8 @@ const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || d
 const PAL = { intact: 0x1F4F5C, edge: 0xEE7F2D, fresh: 0xF9D6FB, dividing: 0xFFFFFF, wound: 0x0B1116 };
 // look-dev params: ?pal=intact,edge,fresh,dividing,wound (hex) overrides colours; ?bare&t=30&view=close hides HUD, freezes time
 const Q = new URLSearchParams(location.search);
+// final look (chosen 15 Nov): skin palette, toon, age colouring, 8 deg hue shift. URL params still override for look-dev.
+for (const [k, v] of Object.entries({ pal: 'C68B6E,B3122E,FFD2C6,FFFFFF,24120F', bg: '120A09', mat: 'toon', age: 'skin' })) if (!Q.has(k)) Q.set(k, v);
 if (Q.get('pal')) Q.get('pal').split(',').forEach((h, i) => { PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]] = parseInt(h, 16); });
 const paintLegend = () => document.querySelectorAll('.legend .st i').forEach((el, i) => { if (i === 3) return; el.style.background = '#' + PAL[['intact', 'edge', 'fresh', 'dividing', 'wound'][i]].toString(16).padStart(6, '0'); });
 paintLegend();

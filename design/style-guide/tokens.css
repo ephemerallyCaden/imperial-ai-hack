@@ -24,11 +24,13 @@
   --accent-fill: rgba(224, 164, 88, 0.18);
   --accent-soft: rgba(224, 164, 88, 0.08);
 
-  /* ---- cell states (3D columns + legend). DECIDED 2026-11-14; do not change without re-running the CVD check ---- */
-  --cell-wound: #0B1116;               /* floor; lightness 5 */
-  --cell-intact: #1F4F5C;              /* lightness 31; never text; 2D swatches need a --hair outline */
-  --cell-edge: #EE7F2D;                /* leading edge; lightness 65 */
-  --cell-new: #F9D6FB;                 /* new tissue; lightness 89 */
+  /* ---- cell states (3D columns + legend). DECIDED 2026-11-15 (skin look); CVD re-checked: min dE 17 protan/deutan, 23 tritan
+     (Machado 2009, severity 1); do not change without re-running it. Render: toon shading, age colouring, 8 deg cool hue shift ---- */
+  --cell-wound: #24120F;               /* floor; lightness 8 */
+  --cell-intact: #C68B6E;              /* skin; lightness 63; healed cells fade --cell-new -> intact -> darker with age */
+  --cell-edge: #B3122E;                /* leading edge; lightness 38 */
+  --cell-new: #FFD2C6;                 /* new tissue; lightness 88 */
+  --scene-bg: #120A09;                 /* 3D scene background behind the skin dish */
   --cell-dividing: #FFFFFF;            /* always with a dark centre dot (--cell-wound) */
   /* outside a box selection: matte greyscale steps (linear RGB in three.js: 0 / .010 / .045 / .11 / .16) */
   --ghost-wound: #000000; --ghost-intact: #1A1A1A; --ghost-edge: #3B3B3B; --ghost-new: #5C5C5C; --ghost-dividing: #6E6E6E;
