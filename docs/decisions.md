@@ -72,3 +72,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 ## 2026-11-15 01:30 [randodeh] NCA v2/v3 and calibration v4 (R28 in design.md)
 - RESULT: NCA real-data v3 (headline) beats every model at 1.9 h and 9.5 h on unseen wounds; within 3-8% of edge speed at 3.8/5.7 h.
 - DECIDED: calibrate held-out conditions on all other known conditions; band inflation + `uncalibrated_condition` flag only for unknown conditions in uploads.
+
+## 2026-11-15 02:00 [randodeh] Upload/agent forecaster = real-data NCA (R29 in design.md)
+- DECIDED: data/upload.py uses the NCA v3 (fallback edge speed). Agent and demo samples pick it up automatically.

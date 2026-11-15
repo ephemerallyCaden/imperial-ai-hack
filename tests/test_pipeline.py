@@ -102,3 +102,12 @@ def test_uncalibrated_condition_is_flagged_and_widened(tmp_path):
     width = lambda f: np.mean(np.array(f["area_q95"]) - np.array(f["area_q05"]))
     assert not any(x["type"] == "uncalibrated_condition" for x in known["flags"])
     assert any(x["type"] == "uncalibrated_condition" for x in new["flags"]) and width(new) >= width(known)
+
+
+def test_upload_uses_the_nca_on_the_demo_sample(tmp_path):
+    pytest.importorskip("torch")
+    import upload
+    frames = [os.path.join(ROOT, "web", "data", "samples", f"sample_frame{k}.png") for k in (1, 2, 3)]
+    doc = upload.run(frames, 1, 0.908, str(tmp_path), "nca", exclude_wound="exp1_pos2033", forecaster="nca")
+    assert doc["model"] == "nca_realft3" and "never trained on exp1_pos2033" in doc["notes"]
+    assert validate.problems(doc) == []

@@ -10,7 +10,7 @@ Scratch (wound-healing) assays are used across cancer migration, fibrosis, wound
 
 ## What we built
 
-- **Forecaster**: from the first few hours of a time-lapse (1 to 5 frames are enough to start), Stitch forecasts the rest of the closure curve with a **90% band**, time to 50% and 90% closed with ranges, and P(closed by the end of the run).
+- **Forecaster**: from the first few hours of a time-lapse (1 to 5 frames are enough to start), the real-data NCA forecasts the rest of the closure curve with a **90% band**, time to 50% and 90% closed with ranges, and P(closed by the end of the run).
 - **Honest calibration**: every band is calibrated leave-one-wound-out, so a wound's own outcome never shapes its own forecast. On 27 unseen WHAD wounds the 90% band contains 92% of what actually happens.
 - **Stall flag**: warns when a wound is unlikely to close much further (AUC 0.78-0.90, thresholds tuned on other wounds only).
 - **Stop-early advice**: on held-out wounds, 82% get a call at the first check (1.9 h); 91% of those calls are right, against 75% for always saying "won't close". Every early call is "won't reach 90% closure by 19 h"; we never confidently call early closure.
@@ -21,7 +21,7 @@ Scratch (wound-healing) assays are used across cancer migration, fibrosis, wound
 ## How it works
 
 1. **Data -> curves.** Wound masks (authors' or our texture segmenter) give wound area per frame, relative to the first frame.
-2. **Forecast.** The shipped forecaster is a constant-edge-speed model (the wound edge moves at a fitted speed: 2 parameters), chosen because it beat every alternative on held-out wounds at early cut-offs.
+2. **Forecast.** The shipped forecaster is a neural cellular automaton (NCA) fine-tuned on real WHAD frames: per-wound speed parameters are fitted from the uploaded frames, then 50 stochastic rollouts from three models. A constant-edge-speed model (2 parameters) is the automatic fallback, and the baseline every model is scored against.
 3. **Calibrate.** For each wound, the forecast errors of all *other* wounds are added to its forecast to form an ensemble; its quantiles are the 90% band (leave-one-wound-out conformal). Times to 50%/90% closure use the same idea on time ratios.
 4. **Flag and advise.** Stall probability from the calibrated ensemble; stop-early advice from P(90% closed by 19 h).
 5. **Cell layer.** A lattice cell-agent simulator (Migliaccio et al. 2023 rules plus density-dependent movement) is fitted to each wound's early frames; a mass-conserving NCA trained on 3000 simulator runs emulates it fast enough for the browser.
