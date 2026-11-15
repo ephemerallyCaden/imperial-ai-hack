@@ -40,21 +40,25 @@ export function createTimeline(el, { onPlay, onStep, onSpeed, onSeek }) {
   rib.addEventListener("pointerup", () => { drag = false; });
   rib.addEventListener("keydown", e => { if (e.key === "Home") onSeek(0); if (e.key === "End") onSeek(HORIZON_H); });
 
+  // update() runs every frame while playing: each part is written only when its value changed
+  const last = {}, put = (k, v, write) => { if (last[k] !== v) { last[k] = v; write(v); } };
   return {
     update({ t, playing, speed, t0, checks = [], msg = "" }) {
       const p = h => `${(h / HORIZON_H) * 100}%`;
-      $(".tl-t").innerHTML = `${t.toFixed(1)} h <span>/ ${HORIZON_H} h</span>`;
-      const pb = $('[data-tl="play"]'); pb.innerHTML = playing ? I.pause : I.play;
-      pb.setAttribute("aria-label", playing ? "Pause (Space)" : "Play (Space)"); pb.title = playing ? "Pause · Space" : "Play · Space";
-      el.querySelectorAll("[data-speed]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === speed));
-      $(".tl-sped").hidden = !(speed > 1);
-      const o = t0 ?? 0;
-      $(".tl-obs").style.width = p(o); $(".tl-fc").style.left = p(o); $(".tl-t0").style.left = p(o);
-      $(".tl-t0").hidden = t0 == null;
-      $(".tl-head").style.left = p(t);
-      rib.setAttribute("aria-valuenow", t.toFixed(1));
+      put("t", t.toFixed(1), v => { $(".tl-t").innerHTML = `${v} h <span>/ ${HORIZON_H} h</span>`; rib.setAttribute("aria-valuenow", v); });
+      put("playing", playing, () => {
+        const pb = $('[data-tl="play"]'); pb.innerHTML = playing ? I.pause : I.play;
+        pb.setAttribute("aria-label", playing ? "Pause (Space)" : "Play (Space)"); pb.title = playing ? "Pause · Space" : "Play · Space";
+      });
+      put("speed", speed, () => { el.querySelectorAll("[data-speed]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === speed)); $(".tl-sped").hidden = !(speed > 1); });
+      put("t0", t0, () => {
+        const o = t0 ?? 0;
+        $(".tl-obs").style.width = p(o); $(".tl-fc").style.left = p(o); $(".tl-t0").style.left = p(o);
+        $(".tl-t0").hidden = t0 == null;
+      });
+      put("head", p(t), v => { $(".tl-head").style.left = v; });
       const ticks = checks.map(c => `<i class="tl-tick tl-tick--${c.kind || "go"} ${c.pending ? "is-pending" : ""}" style="left:${p(c.h)}" title="${c.h} h">${ICON[c.kind] || ""}</i>`).join("");
-      if ($(".tl-ticks").innerHTML !== ticks) $(".tl-ticks").innerHTML = ticks;
+      put("ticks", ticks, v => { $(".tl-ticks").innerHTML = v; });
     },
   };
 }
