@@ -113,7 +113,7 @@ function realView(worker) {
   const slider = el('input', { type: 'range', min: 3, max: 19, step: 0.1, value: 3, 'aria-label': 'Time (hours)' });
   const readT = el('span', { class: 'num' }, '3.0 h'), readS = el('span', { class: 'num' }), readN = el('span', { class: 'num' }), readO = el('span', { class: 'num' });
   const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Observed, simulated and NCA wound area for exp1_partII_C61_P2' });
-  const status = el('p', { class: 'st-caption' }, 'Loading the wound…');
+  const status = el('p', { class: 'st-caption' }, 'Loading…');
   let sim, nca, band = null, timer = null, edgeOn = false, stallV = null, occF = null;
   const play = btn('Play', () => (timer ? stop() : go()), 'st-btn--primary');
   const edgeBtn = btn('Edge speed', () => { edgeOn = !edgeOn; edgeBtn.setAttribute('aria-pressed', edgeOn); edgeBox.hidden = !edgeOn; render(); });
@@ -122,7 +122,7 @@ function realView(worker) {
   const scale = el('div', { class: 'dr-scale' }), edgeBox = el('div', {},
     el('div', { class: 'st-row' }, el('span', {}, 'Mean edge speed'), readE),
     el('div', { class: 'st-row' }, el('span', {}, 'Slowest segment'), readSlow), scale,
-    el('p', { class: 'st-caption' }, 'Edge speed: how far the front moved over the last 2 h along its normal (distance transform, no cell tracking), smoothed over ±3 px of front, on simulation frames. Slow = hot; hatched = slower than the stall pace, the existing stall rule (closing under 10% more of the 3.8 h area by 19 h) as a speed. Check on this wound (5-9 h): mean speed × perimeter = 0.91 × the area loss rate.'),
+    el('p', { class: 'st-caption' }, 'Edge speed · slow = hot · hatched = below stall pace'),
     el('div', { class: 'dr-chips' }, chip('uncalibrated (simulation frames)')));
   edgeBox.hidden = true;
   const V_MAX = 20;   // µm/h at the cool end of the scale (mean front speed on this wound is 4-8 µm/h)
@@ -150,7 +150,7 @@ function realView(worker) {
         if (e.slowest) fs.ring(e.slowest.x, e.slowest.y, b.fine.scale, 14);
         readE.textContent = e.meanUmH == null ? 'no edge' : e.meanUmH.toFixed(1) + ' µm/h';
         readSlow.textContent = e.slowest ? e.slowest.v.toFixed(1) + ' µm/h' : '—';
-      } else { readE.textContent = readSlow.textContent = '— (first frame)'; }
+      } else { readE.textContent = readSlow.textContent = '—'; }
     }
     readT.textContent = t.toFixed(1) + ' h'; readS.textContent = pct(sim.wound_frac[i]); readN.textContent = pct(nca.wound_frac[j]);
     readO.textContent = Math.abs(ob.t_hours[k] - t) < 0.06 ? pct(ob.wound_frac[k]) : '— (imaged hourly)';
@@ -171,23 +171,23 @@ function realView(worker) {
   Promise.all(['whad_partII_C61_P2_sim38_follow.json', 'whad_partII_C61_P2_nca_follow.json'].map((n) => fetch(new URL(n, SIM)).then((r) => r.json())))
     .then(([s, n]) => {
       sim = s; nca = n; render();
-      status.textContent = 'Computing the NCA band in the browser (20 members)…';
+      status.textContent = 'NCA band · 20 members…';
       const onBand = ({ data: m }) => {
         if (m.type === 'nca-ready') worker.postMessage({ type: 'band', Tm: n.meta.Tm, bias: n.meta.bias, hours: 16, members: 20, seed: 1, start: { occ: agentFrame(s, 0), h: s.H, w: s.W } });
-        else if (m.type === 'band') { band = { t: m.t_hours.map((x) => x + s.t_hours[0]), q05: m.q05, q95: m.q95 }; status.textContent = 'NCA band: 20-member emulator spread, computed live from the 3.0 h mask and the 3.8 h fit.'; worker.removeEventListener('message', onBand); render(); }
+        else if (m.type === 'band') { band = { t: m.t_hours.map((x) => x + s.t_hours[0]), q05: m.q05, q95: m.q95 }; status.textContent = 'NCA band · 20 members'; worker.removeEventListener('message', onBand); render(); }
         else if (m.type === 'band-error') { const b = n.meta.band; band = { t: b.t_hours, q05: b.q05, q95: b.q95 }; status.textContent = `Live band failed (${m.error}); showing the precomputed ${b.members}-member band.`; worker.removeEventListener('message', onBand); render(); }
       };
       worker.addEventListener('message', onBand);
       worker.postMessage({ type: 'nca-load' }); // default: v2 follower emulator, matches the follow fits
     })
-    .catch((e) => (status.textContent = 'Could not load the playback files: ' + e.message));
+    .catch((e) => (status.textContent = 'Playback unavailable'));
 
   root.append(
     el('div', { class: 'dr-pair' },
-      el('figure', {}, cs, el('figcaption', { class: 'st-kicker' }, 'Cell agents (simulation)')),
-      el('figure', {}, cn, el('figcaption', { class: 'st-kicker' }, 'NCA emulator (density)'))),
+      el('figure', {}, cs, el('figcaption', { class: 'st-kicker' }, 'Cell agents')),
+      el('figure', {}, cn, el('figcaption', { class: 'st-kicker' }, 'NCA'))),
     el('aside', { class: 'dr-side st-panel--solid' },
-      el('div', { class: 'st-kicker' }, 'Held-out WHAD wound · exp1_partII_C61_P2'),
+      el('div', { class: 'st-kicker' }, 'Held-out · partII C61 P2'),
       el('div', { class: 'dr-tools' }, play, edgeBtn, slider),
       el('div', { class: 'st-row' }, el('span', {}, 'Time'), readT),
       el('div', { class: 'st-row' }, el('span', {}, 'Observed'), readO),
@@ -195,10 +195,9 @@ function realView(worker) {
       el('div', { class: 'st-row' }, el('span', {}, 'NCA'), readN),
       edgeBox,
       svg,
-      legend([['var(--chart-observed)', 'observed'], ['var(--dim)', 'cell-agent simulation'], ['var(--chart-median)', 'NCA rollout', 1], ['var(--chart-member)', 'NCA ensemble spread (uncalibrated)', 1]]),
+      legend([['var(--chart-observed)', 'observed'], ['var(--dim)', 'simulation'], ['var(--chart-median)', 'NCA', 1], ['var(--chart-member)', 'NCA spread', 1]]),
       status,
-      el('div', { class: 'dr-chips' }, chip('uncalibrated (simulator/NCA spread)'), chip('simulated cells, not tracked cells')),
-      el('p', { class: 'st-caption' }, 'Both start from the observed mask at 3.0 h and use the fit from frames up to 3.8 h (follow rule). One wound only, so do not generalise. The spread is not a 90% interval; the calibrated band is in Assay mode.')));
+      el('div', { class: 'dr-chips' }, chip('uncalibrated spread'))));
   return root;
 }
 

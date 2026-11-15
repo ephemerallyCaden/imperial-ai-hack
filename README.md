@@ -59,7 +59,7 @@ Full tables, every split and cut-off: [`docs/results.md`](docs/results.md). Head
 | Drosophila embryo laser wounds, Zenodo [10.5281/zenodo.7660424](https://doi.org/10.5281/zenodo.7660424) | CC BY 4.0 | Secondary calibration check (62 wounds) |
 | Jin et al. 2016 PC-3 density profiles, via [jlager/BINNs](https://github.com/jlager/BINNs) | not stated; cited, not re-hosted | Simulator priors |
 
-Derived curves in `data/processed/` are redistributed under each source's licence with attribution above. Raw data is downloaded by `data/fetch.py` and never committed.
+Code: MIT licence ([`LICENSE`](LICENSE)). Data keeps its own licence (table above). Derived curves in `data/processed/` are redistributed under each source's licence with attribution above. Raw data is downloaded by `data/fetch.py` and never committed.
 
 ## Repo layout
 

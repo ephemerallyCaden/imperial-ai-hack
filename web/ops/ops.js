@@ -1,5 +1,5 @@
 // Ops mode: a live replay of the recorded agent runs (wound status, headline, pipeline, event log), the stop-early and
-// band-coverage evidence, and the older run log / scoreboard / attack / Investigator tables under "Agent details".
+// band-coverage evidence, and the older run log / scoreboard / attack / Investigator tables in the "Agent details" panel.
 // Forecast evidence has its own mode (web/stats). Every number shown is read from a repo file; nothing is invented here.
 
 import { lineChart, reliabilityChart, responsive, legend, colorOf, ensureEvidenceCss } from "./evidence.js";
@@ -273,7 +273,7 @@ function spark(w, c) {
 function pipeline(w, c) {
   const cuts = w.fcs.map(f => f.cut), i = cuts.filter(k => k <= c).length - 1;
   const checks = `<span class="pc-lab">Check</span>${CHECKS.map(k => { const has = cuts.includes(k);
-    const s = !has ? "na" : k < (cuts[i] ?? -1) ? "ok" : k === cuts[i] ? (w.stopT != null && c >= w.stopT ? "ok" : "run") : "wait";
+    const s = !has ? "na" : k < (cuts[i] ?? -1) ? "ok" : k === cuts[i] ? ((w.stopT != null && c >= w.stopT) || c >= w.doneT ? "ok" : "run") : "wait";
     return `<span class="pc pc-${s}">${k}${s === "ok" ? " ✓" : s === "run" ? " ●" : s === "wait" ? " ○" : ""}</span>`; }).join("")}`;
   if (i < 0) return `<div class="pipe-checks">${checks}</div><ol class="pipe">${NODES.map(([n, who]) => `<li class="ps ps-wait"><i></i>${n}<em>${who}</em></li>`).join("")}</ol>`;
   const from = cuts[i], to = cuts[i + 1] ?? Infinity;
@@ -332,10 +332,11 @@ async function renderOverview(pane, ctx, isDead) {
   let c = qt ?? (reduce ? H : 0), playing = qt == null && !reduce, speed = Object.keys(SPEEDS)[0], hold = 0, emitted = 0;
   const want = q.get("wound") || "exp1_partII_C61_P1";
   let sel = Math.max(0, W.findIndex(w => w.run.wound_id === want));
+  let pinned = q.has("wound"), lastSwitch = 0, skipping = false;   // follow the latest decision unless a wound is pinned
 
   pane.innerHTML = `<div class="cr">
     <header class="cr-top">
-      <div class="cr-clock"><span class="live">● Replay</span><b class="num" data-clock>T+00.0 h</b>
+      <div class="cr-clock"><span class="live">● Replay</span><b class="num" data-clock>T+00.0 h</b><span class="cr-skip" data-skip hidden data-tip="Skipping quiet time between steps">»</span>
         <span class="st-seg"><button class="st-btn st-btn--icon" data-play aria-label="Play or pause (Space)"></button>
         ${Object.keys(SPEEDS).map(k => `<button class="st-btn" data-speed="${k}" aria-pressed="${k === speed}" data-tip="${SPEEDS[k]} h of assay per second">${k}</button>`).join("")}
         <button class="st-btn st-btn--icon" data-restart aria-label="Restart">⟲</button></span>
@@ -345,7 +346,7 @@ async function renderOverview(pane, ctx, isDead) {
     <aside class="cr-list" aria-label="Wound status"><h2>Wound status · ${W.length} recorded runs</h2><div data-list></div></aside>
     <section class="cr-hero"><p class="hero-line" data-hline></p><div class="hero-pipe" data-hpipe></div><div data-hchart></div>
       <div class="hero-foot"><div class="ov-legend"><i class="lg-obs"></i>observed <i class="lg-med"></i>forecast <i class="lg-band"></i>90% band <i class="lg-truth"></i>what happened</div>
-        <span data-hverdict></span><button class="st-btn" data-open>Open in Assay ↗</button></div></section>
+        <span data-hverdict></span><button class="st-btn" data-follow aria-pressed="true"></button><button class="st-btn" data-open>Open in Assay ↗</button></div></section>
     <aside class="cr-stream" aria-label="Agent events">
       <div class="cr-needs"><b class="num" data-needs>0</b><span>Needs you</span></div>
       <ul class="cr-stats"><li><b data-freed>0.0 h</b> imaging saved<span class="dim" data-wrongstop></span></li><li><b data-traced>0</b> numbers traced · <span data-removed>0</span> removed</li>
@@ -355,26 +356,53 @@ async function renderOverview(pane, ctx, isDead) {
     <section class="cr-b"><h2>90% band coverage by test set</h2><p class="cap">NCA on WHAD · best statistical baseline on WHiM-BC</p>
       <div class="evidence ev-embed"><div class="ev-chart" data-c="rel"></div></div></section>
     <section class="cr-c">${audit(runs, logs, advSrc)}
-      <details class="ov-details"><summary>Agent details · run log, scoreboard, attacks, Investigator</summary><div data-s="details"></div></details></section>
-  </div>`;
+      <button class="st-btn" data-details>Agent details ↗</button></section>
+  </div>
+  <div class="ops-modal" data-modal hidden role="dialog" aria-modal="true" aria-label="Agent details">
+    <div class="ops-modal-box"><header><h2>Agent details · run log, scoreboard, attacks, Investigator</h2><button class="st-btn st-btn--icon" data-close aria-label="Close (Esc)">✕</button></header>
+      <div data-s="details"></div></div></div>`;
   const $ = s => pane.querySelector(s);
   ensureEvidenceCss();
   if (ev?.reliability) responsive($('[data-c="rel"]'), reliabilityChart(ev.reliability.filter(r => r.label !== "Unseen condition, wider calibration")));
-  const det = $(".ov-details");
-  det.addEventListener("toggle", () => { if (det.open && !det.dataset.done) { det.dataset.done = 1; renderRuns(det.querySelector('[data-s="details"]'), ctx, isDead); } });
+  const modal = $("[data-modal]");
+  const openDetails = () => { modal.hidden = false; if (!modal.dataset.done) { modal.dataset.done = 1; renderRuns(modal.querySelector('[data-s="details"]'), ctx, isDead); } modal.querySelector("[data-close]").focus(); };
+  const closeDetails = () => { modal.hidden = true; $("[data-details]").focus(); };
+  $("[data-details]").addEventListener("click", openDetails);
+  modal.querySelector("[data-close]").addEventListener("click", closeDetails);
+  modal.addEventListener("click", e => { if (e.target === modal) closeDetails(); });
   $("[data-open]").addEventListener("click", () => { ctx.openItem = W[sel].run.run_id; document.querySelector('[data-mode="assay"]')?.click(); });
   const setPlay = p => { playing = p; $("[data-play]").textContent = p ? "⏸" : "▶"; $(".live").classList.toggle("on", p); };
-  const restart = () => { c = 0; hold = 0; emitted = 0; $("[data-stream]").replaceChildren(); };
-  $("[data-play]").addEventListener("click", () => setPlay(!playing));
+  const restart = () => { c = 0; hold = 0; emitted = 0; lastSwitch = 0; $("[data-stream]").replaceChildren(); };
+  $("[data-play]").addEventListener("click", () => { if (!playing && c >= H) restart(); setPlay(!playing); });
+  const setFollow = f => { pinned = !f; const b = $("[data-follow]"); b.setAttribute("aria-pressed", f); b.textContent = f ? "Following latest" : "Follow latest"; };
+  $("[data-follow]").addEventListener("click", () => { setFollow(pinned); lastSwitch = 0; draw(); });
+  setFollow(!pinned);
   $("[data-restart]").addEventListener("click", () => { restart(); setPlay(true); });
   pane.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { speed = b.dataset.speed; pane.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
-  const onKey = e => { if (isDead()) return ctx.bus.removeEventListener("key", onKey); if (e.detail.action === "play") setPlay(!playing); };
+  const onKey = e => {
+    if (isDead()) return ctx.bus.removeEventListener("key", onKey);
+    if (e.detail.action === "escape" && !modal.hidden) return closeDetails();
+    if (e.detail.action === "play" && modal.hidden) { if (!playing && c >= H) restart(); setPlay(!playing); }
+  };
   ctx.bus.addEventListener("key", onKey);
   setPlay(playing);
 
   const stream = $("[data-stream]");
+  const FOLLOW = new Set(["Forecast", "Propose", "Policy", "You", "Done"]);
   const draw = () => {
+    while (emitted < all.length && all[emitted].t <= c) {
+      const e = all[emitted++], who = NODES.find(n => n[0] === e.node)?.[1] ?? "";
+      stream.insertAdjacentHTML("afterbegin", `<li class="${e.node === "You" ? "you" : ""}"><span class="num">T+${e.t.toFixed(1)}</span><b>${esc(condName(e.w))} <i>${esc(e.w.id)}</i></b><span></span><span><em>${esc(e.node)}${who && who !== "code" ? " · " + esc(who) : ""}</em> ${esc(e.text)}</span></li>`);
+      while (stream.children.length > 14) stream.lastElementChild.remove();
+    }
+    if (!pinned) {   // the hero follows the wound with the latest decision step, at most one switch every 1.5 s
+      const last = [...all.slice(0, emitted)].reverse().find(e => FOLLOW.has(e.node)), k = last ? W.indexOf(last.w) : -1, now = performance.now();
+      if (k >= 0 && k !== sel && now - lastSwitch > 1500) { sel = k; lastSwitch = now; }
+    }
     $("[data-clock]").textContent = `T+${c.toFixed(1).padStart(4, "0")} h`;
+    const done = c >= H;
+    $("[data-skip]").hidden = !skipping; $(".live").textContent = done ? "Replay complete" : "● Replay";
+    $("[data-restart]").classList.toggle("st-btn--primary", done); $("[data-restart]").setAttribute("aria-label", done ? "Replay again" : "Restart");
     $("[data-list]").innerHTML = W.map((w, i) => { const [cls, ic, lab] = statusAt(w, c), fc = fcAt(w, c);
       return `<button class="cl-row ${i === sel ? "sel" : ""} ${lab === "Needs you" ? "need" : ""}" data-w="${i}">
         <span class="cl-name">${esc(condName(w))}<i>${esc(w.id)}</i></span>${spark(w, c)}
@@ -391,18 +419,18 @@ async function renderOverview(pane, ctx, isDead) {
     $("[data-wrongstop]").textContent = wrong ? ` · incl. ${wrong} wrong stop` : "";
     $("[data-traced]").textContent = crit.reduce((a, e) => a + e.r.traced, 0); $("[data-removed]").textContent = crit.reduce((a, e) => a + e.r.untraced, 0);
     $("[data-asked]").textContent = all.filter(e => e.r.kind === "approval" && e.t <= c).length;
-    while (emitted < all.length && all[emitted].t <= c) {
-      const e = all[emitted++], who = NODES.find(n => n[0] === e.node)?.[1] ?? "";
-      stream.insertAdjacentHTML("afterbegin", `<li class="${e.node === "You" ? "you" : ""}"><span class="num">T+${e.t.toFixed(1)}</span><b>${esc(condName(e.w))} <i>${esc(e.w.id)}</i></b><span></span><span><em>${esc(e.node)}${who && who !== "code" ? " · " + esc(who) : ""}</em> ${esc(e.text)}</span></li>`);
-      while (stream.children.length > 14) stream.lastElementChild.remove();
-    }
   };
-  $("[data-list]").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) { sel = +b.dataset.w; draw(); } });
+  $("[data-list]").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) { sel = +b.dataset.w; setFollow(false); draw(); } });
   let lastDraw = 0, prev = performance.now();
   const tick = now => {
     if (isDead()) return;
     const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
-    if (playing) { if (c < H) c = Math.min(H, c + dt * SPEEDS[speed]); else if ((hold += dt) > 6) restart(); }
+    if (playing) {
+      const next = all[emitted]?.t ?? H, gap = next - c;
+      skipping = gap > 0.4;   // nothing happens for a while: run 6x faster, but land just before the next step
+      if (c < H) c = Math.min(H, skipping ? Math.min(next - 0.2, c + dt * SPEEDS[speed] * 6) : c + dt * SPEEDS[speed]);
+      if (c >= H) { skipping = false; setPlay(false); }
+    }
     if (now - lastDraw > 66) { lastDraw = now; draw(); }
     requestAnimationFrame(tick);
   };

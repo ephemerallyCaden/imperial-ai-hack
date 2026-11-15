@@ -114,8 +114,6 @@ svg g[tabindex]:focus-visible { outline: none; } svg g[tabindex]:focus-visible .
 .lg-band { background: var(--chart-band); } .lg-truth { border-top: 2px dotted rgba(232,236,239,.5); height: 0 !important; }
 .ov-audit { display: flex; flex-direction: column; gap: var(--s2); }
 .ab { font-size: var(--fs-small); color: var(--ink); } .ab.warn { color: var(--accent); }
-.ov-details summary { cursor: pointer; color: var(--dim); font-size: var(--fs-small); }
-.ov-details[open] { grid-column: 1 / -1; }
 @media (max-width: 1280px) { .cr { grid-template-columns: 260px minmax(0, 1fr); grid-template-areas: "top top" "list hero" "stream hero" "a a" "b b" "c c"; } }
 
 /* Shared evidence look (panels, tiles, titles) lives in web/ops/evidence.js so Ops and Stats match. */
@@ -159,3 +157,13 @@ svg .stop { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 2; }
 .stream li b i { font-style: normal; color: var(--dim); font-weight: 400; margin-left: 4px; }
 svg .bar.right { fill: var(--ink); } svg .bar.wrong { fill: var(--accent); } svg .bar.nocall { fill: var(--faint); }
 .k-right { background: var(--ink); height: 8px !important; } .k-wrong { background: var(--accent); height: 8px !important; } .k-none { background: var(--faint); height: 8px !important; }
+
+/* replay: quiet-time skip, end of replay, follow toggle; agent details in a full-screen panel (no inline drop-down) */
+.cr-skip { color: var(--dim); font: 500 18px/1 var(--font-mono); margin-left: -6px; }
+.cr-skip[hidden] { display: none; }
+.hero-foot [data-follow][aria-pressed="true"] { border-color: var(--line); color: var(--dim); }
+.ops-modal { position: fixed; inset: 0; z-index: 40; background: rgba(5, 6, 7, 0.72); display: grid; place-items: stretch; padding: 56px 32px 32px; }
+.ops-modal[hidden] { display: none; }
+.ops-modal-box { background: var(--panel-solid); border: 1px solid var(--hair); overflow: auto; padding: var(--s3) var(--s4); box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+.ops-modal-box > header { display: flex; align-items: center; justify-content: space-between; position: sticky; top: calc(-1 * var(--s3)); background: var(--panel-solid); padding: var(--s2) 0; z-index: 1; }
+.ops-modal-box > header h2 { margin: 0; }

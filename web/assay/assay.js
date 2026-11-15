@@ -44,7 +44,7 @@ export async function mount(el, ctx) {
       <button class="st-btn st-btn--primary" data-act="upload" title="1-5 phase-contrast frames (forecast) or one skin-wound photo (live NCA, no forecast)"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
       <input type="file" accept="image/*" multiple hidden id="as-file">
       <span class="as-qc" hidden></span>
-      <span class="as-honesty"></span>
+      <span class="as-honesty" hidden></span>
     </div>
     <div class="as-main">
       <div class="as-centre">
