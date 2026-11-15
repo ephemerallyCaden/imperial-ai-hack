@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stitch · Forecast evidence</title>
+  <link rel="stylesheet" href="../../design/style-guide/tokens.css">
+  <style>html, body { margin: 0; background: #050607; }</style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    // Standalone: serve the repo root (python -m http.server 8000) and open /web/ops/evidence.html
+    import { renderEvidence } from "./evidence.js";
+    renderEvidence(document.querySelector("#app"), { root: "../../" });
+  </script>
+</body>
+</html>
