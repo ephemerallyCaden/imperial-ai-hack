@@ -116,7 +116,7 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
         if k not in base:
             continue
         s, b = S[k], base[k]
-        others = [base[c] for c in pool if c in base and S[c]["wound"] != s["wound"]]
+        others = [base[c] for c in sorted(pool) if c in base and S[c]["wound"] != s["wound"]]  # sorted: reproducible order
         if len(others) < 3:
             continue
         R = np.stack([o["res"] for o in others])
@@ -142,7 +142,7 @@ def forecast_file(dataset, split, model, cut, S, test, pool, G, G_long, T):
             ev[key + "_samples"] = samp
         a_cut = s["a"][s["t"] <= cut + 1e-9][-1]
         p_stall = float(np.mean(E[:, keep][:, -1] >= STALL_KEEP * a_cut))  # members closing < 10% more after the cut-off
-        order = np.argsort(E[:, keep][:, -1])
+        order = np.argsort(E[:, keep][:, -1], kind="stable")  # stable: ties (many members at 0) pick the same members every run
         pick = order[np.linspace(0, len(order) - 1, min(5, len(order))).astype(int)]
         r4 = lambda x: [round(float(v), 4) for v in x]
         out.append({
