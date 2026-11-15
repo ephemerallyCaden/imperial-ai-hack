@@ -8,6 +8,7 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 S = pd.read_csv(f"{HERE}/results/scorecard.csv")
 F = pd.read_csv(f"{HERE}/results/flags.csv")
+S_ = F[F.flag == "stall"]
 OUT = os.path.join(HERE, "..", "docs", "results.md")
 NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz",
          "lvcf": "typical-wound curve", "nca_ensemble": "NCA ensemble (calibrated)",
@@ -84,6 +85,9 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "- **Calibration does not transfer to a faster-closing cell type.** Bands calibrated on ordinary MCF-7 wells cover only 15-58% of the stem-cell wells' future (target 90%); 97% of their observations fall below the forecast median.",
           "- **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage is lowest at the earliest cut-off and recovers with more history.",
           f"- **No 'measure again' signal**: band width, history-fit error and stall ambiguity give AUC {F[F.flag == 'measure_again'].auc.min():.2f}-{F[F.flag == 'measure_again'].auc.max():.2f} for predicting a bad forecast, inconsistent across cut-offs.",
+          f"- **The stall flag is a prompt to look, not a verdict**: when it fires it is right only {S_.precision.min():.0%}-{S_.precision.max():.0%} of the time "
+          "across the checks (it ranks stalls well, AUC above 0.77, but stalls are rare). The agent replay agrees: about half of all "
+          "stall stops are wrong (agent/results/scoreboard.md). That is why a fired flag means 'ask a human', never an automatic stop.",
           "- **Simple models are strong**: a 2-parameter constant-edge-speed model is the best forecaster on WHAD; more history helps every model.",
           "- **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).",
           "- **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.",

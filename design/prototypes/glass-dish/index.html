@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stitch · 3D tissue graph look-dev</title>
+<style>
+  :root { --ink: #e8ecef; --dim: #8a949c; --line: rgba(232,236,239,.5); --accent: #e0a458; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #050607; color: var(--ink);
+    font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow: hidden; }
+  #scene { position: fixed; inset: 0; }
+  .hud { position: fixed; background: rgba(5,6,7,.62); backdrop-filter: blur(6px); }
+  .k { color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
+  .v { color: var(--accent); }
+  /* wordmark from M6 night plate: condensed caps + italic serif subtitle */
+  .title { top: 28px; left: 32px; padding: 4px 8px 6px 0; display: flex; align-items: center; gap: 16px; }
+  .title h1 { margin: 0; font: 600 22px/1 "Avenir Next Condensed", "Helvetica Neue Condensed", "Arial Narrow", sans-serif; letter-spacing: .2em; text-transform: uppercase; }
+  .title p { margin: 0; font: italic 13px Charter, "Iowan Old Style", Georgia, serif; color: #AEB4C8; padding-left: 16px; border-left: 1px solid #3A4160; }
+  .panel { top: 96px; left: 32px; width: 330px; border-left: 1px solid var(--line); padding: 8px 12px; }
+  .panel h2 { margin: 0 0 2px; font-size: 13px; font-weight: 500; letter-spacing: .12em; }
+  .src { color: var(--dim); font-size: 10px; margin-bottom: 8px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; margin: 7px 0; }
+  .bar { height: 5px; background: rgba(255,255,255,.08); } .bar > i { display: block; height: 100%; background: linear-gradient(90deg,#cfd6db,#fff); width: 0; }
+  .flag { margin-top: 10px; padding: 6px 8px; border: 1px solid var(--line); display: flex; justify-content: space-between; }
+  .tools { top: 28px; right: 32px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; background: none; backdrop-filter: none; }
+  .seg { display: flex; } .seg button { background: rgba(5,6,7,.62); border: 1px solid var(--line); color: var(--dim); font: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .12em; }
+  .seg button + button { border-left: 0; } .seg button.on { color: #050607; background: var(--ink); }
+  .chip { border: 1px solid var(--line); padding: 6px 10px; letter-spacing: .08em; color: var(--dim); background: rgba(5,6,7,.62); }
+  .selpanel { top: 196px; right: 32px; width: 300px; border-right: 1px solid var(--accent); padding: 8px 12px; }
+  .legend { left: 32px; bottom: 96px; padding: 8px 12px; border-left: 1px solid var(--line); }
+  .st { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .st i { width: 12px; height: 12px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); display: inline-block; }
+  .chartbox { right: 32px; bottom: 84px; width: 380px; border: 1px solid rgba(232,236,239,.25); padding: 8px 10px 6px; }
+  .chartbox .k { display: flex; justify-content: space-between; }
+  #chart { width: 360px; height: 150px; display: block; }
+  #chart .band { fill: rgba(224,164,88,.18); } #chart .med { fill: none; stroke: var(--accent); stroke-dasharray: 4 3; stroke-width: 1.3; }
+  #chart .obs { fill: none; stroke: var(--ink); stroke-width: 1.7; }
+  #chart .cut { stroke: rgba(232,236,239,.5); stroke-dasharray: 2 3; } #chart .now { stroke: var(--ink); }
+  #chart .axis { stroke: rgba(232,236,239,.3); } #chart .lbl { fill: var(--dim); font-size: 9px; }
+  .timeline { left: 50%; bottom: 24px; transform: translateX(-50%); width: min(720px, 56vw); display: flex; gap: 12px; align-items: center; padding: 8px 12px; }
+  .timeline button { background: none; border: 1px solid var(--line); color: var(--ink); font: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .1em; }
+  .timeline input { flex: 1; accent-color: #e8ecef; } .timeline .t { width: 120px; white-space: nowrap; text-align: right; color: var(--dim); }
+  .bare .hud { display: none; }
+  .photo { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 360px; padding: 12px; border: 1px solid var(--line); z-index: 5; }
+  .photo canvas { display: block; margin: 8px 0; max-width: 100%; } .photo p { margin: 6px 0; } .photo button:disabled { opacity: .35; cursor: not-allowed; }
+  .photo-on { display: none !important; } .photo-mode .photo-on { display: inherit !important; } .photo-mode .photo-off { display: none !important; }
+  .photo-mode .panel, .photo-mode .chartbox { display: none; }
+  .help { left: 32px; bottom: 24px; color: var(--dim); max-width: 300px; font-size: 10px; padding: 4px 8px 4px 0; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="hud title"><h1>Stitch</h1><p>Early wound-closure forecast</p></div>
+
+<div class="hud panel">
+  <h2 id="r-id"></h2>
+  <div class="src" id="r-src"></div>
+  <div class="row"><span class="k">Wound area</span><span class="v"><span id="r-area"></span> · <span id="r-mode"></span></span></div>
+  <div class="bar"><i id="r-bar"></i></div>
+  <div class="row"><span class="k">50% closed</span><span class="v" id="r-t50"></span></div>
+  <div class="row"><span class="k">90% closed</span><span class="v" id="r-t90"></span></div>
+  <div class="row"><span class="k">P(closes)</span><span class="v" id="r-p"></span></div>
+  <div class="flag"><span class="k">Flag</span><span class="v" id="r-flag"></span></div>
+</div>
+
+<div class="hud tools">
+  <div class="seg"><button data-view="overview">OVERVIEW</button><button data-view="close">CLOSE</button><button data-view="cells">CELLS</button></div>
+  <div class="seg"><button id="btn-select">SELECT AREA</button><button id="btn-clear">CLEAR</button></div>
+  <div class="seg"><button id="btn-heat">AGE HEATMAP</button></div>
+  <div class="seg photo-off"><button id="btn-photo">DRAW FROM PHOTO</button></div>
+  <div class="seg photo-on"><button id="btn-exit-photo">EXIT PHOTO</button></div>
+  <input type="file" id="photo-in" accept="image/*" hidden>
+  <div class="chip photo-on">SIMULATION, PRESET PARAMETERS</div>
+  <div class="chip photo-on">SHAPE FROM PHOTO · HEALING IS A CELL-CULTURE MODEL, NOT THIS WOUND</div>
+  <div class="chip photo-on">RESEARCH USE ONLY, NOT FOR DIAGNOSIS OR TREATMENT</div>
+  <div class="chip photo-off">SAMPLE DATA · FLY EMBRYO WOUND</div>
+  <div class="chip">SIMULATED CELLS · NOT TRACKED CELLS</div>
+</div>
+
+<div class="hud selpanel" id="selpanel" style="display:none">
+  <div class="k" style="margin-bottom:6px;color:var(--accent)">Selected area</div>
+  <div class="row"><span class="k">Size</span><span id="s-size"></span></div>
+  <div class="row"><span class="k">Cells</span><span id="s-cells"></span></div>
+  <div class="row"><span class="k">Wound</span><span class="v" id="s-wound"></span></div>
+  <div class="row"><span class="k">Mean density</span><span class="v" id="s-dens"></span></div>
+  <div class="row"><span class="k">States</span><span id="s-mix" style="color:var(--dim)"></span></div>
+</div>
+
+<div class="hud legend">
+  <div class="k" style="margin-bottom:6px">Cell states · height = local density</div>
+  <div class="st"><i style="background:#1F4F5C"></i>Intact</div>
+  <div class="st"><i style="background:#EE7F2D"></i>Leading edge</div>
+  <div class="st"><i style="background:#F9D6FB"></i>New tissue (rising)</div>
+  <div class="st"><i style="background:radial-gradient(circle,#0B1116 0 28%,#FFFFFF 30%)"></i>Dividing (dark centre dot)</div>
+  <div class="st"><i style="background:#0B1116;outline:1px solid #3A3F52"></i>Wound (floor)</div>
+  <div id="age-leg" style="display:none;margin-top:8px"><div class="k" id="age-title"></div>
+    <div id="age-bar" style="height:8px;margin:5px 0 3px;width:200px"></div>
+    <div style="display:flex;justify-content:space-between;width:200px;color:var(--dim);font-size:10px"><span>new</span><span>old</span></div></div>
+</div>
+
+<div class="hud photo" id="photo" style="display:none">
+  <div class="k" style="color:var(--accent)">Draw from photo · <span id="photo-kind"></span></div>
+  <canvas id="photo-cv"></canvas>
+  <p id="photo-msg"></p>
+  <div class="src" id="photo-stats"></div>
+  <div class="seg"><button id="photo-run">RUN SIMULATION ON THIS SHAPE</button><button id="photo-cancel">CANCEL</button></div>
+  <div class="src" style="margin-top:8px">Stays in this browser; nothing is uploaded. Shape only: the dish is not this wound's size, and no times are shown.</div>
+</div>
+
+<div class="hud chartbox">
+  <div class="k"><span>Closure curve</span><span>90% band</span></div>
+  <svg id="chart" viewBox="0 0 360 150"></svg>
+</div>
+
+<div class="hud help photo-on">Drag to orbit · scroll to zoom. The wound shape was traced from your photo and rescaled to the dish; the simulation fills it in with preset cell-culture rules, counted in steps, not hours. Colours: skin tone sampled from the photo.</div>
+<div class="hud help photo-off">Drag to orbit · scroll to zoom · SELECT AREA then drag on the floor. Simulated cells are matched to the wound's area curve. Flag thresholds are illustrative.</div>
+<div class="hud timeline">
+  <button id="play">PLAY</button>
+  <input id="time" type="range" min="0" max="1" value="0">
+  <span class="t" id="t-label">t = 0</span>
+</div>
+<script type="module">import(`./main.js?v=${Date.now()}`);</script>  <!-- cache-bust while iterating -->
+</body>
+</html>

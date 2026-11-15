@@ -57,6 +57,7 @@ Stall across cut-offs: AUC 0.77-0.90, precision 0.48-0.75, recall 0.62-0.71.
 - **Calibration does not transfer to a faster-closing cell type.** Bands calibrated on ordinary MCF-7 wells cover only 15-58% of the stem-cell wells' future (target 90%); 97% of their observations fall below the forecast median.
 - **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage is lowest at the earliest cut-off and recovers with more history.
 - **No 'measure again' signal**: band width, history-fit error and stall ambiguity give AUC 0.61-0.72 for predicting a bad forecast, inconsistent across cut-offs.
+- **The stall flag is a prompt to look, not a verdict**: when it fires it is right only 48%-75% of the time across the checks (it ranks stalls well, AUC above 0.77, but stalls are rare). The agent replay agrees: about half of all stall stops are wrong (agent/results/scoreboard.md). That is why a fired flag means 'ask a human', never an automatic stop.
 - **Simple models are strong**: a 2-parameter constant-edge-speed model is the best forecaster on WHAD; more history helps every model.
 - **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).
 - **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.

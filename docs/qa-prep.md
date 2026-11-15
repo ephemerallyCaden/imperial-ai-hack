@@ -35,7 +35,7 @@ Small. Coverage CIs are about +/-0.05 to +/-0.15. That is why we bootstrap over 
 - Time to 90% closed is often beyond the 19 h series, so many t90 ranges are open-ended.
 
 **Why should I trust the stall flag?**
-Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series).
+Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series). So it is a prompt to look, not a verdict: across the checks it is right 48-75% of the time it fires, and in the agent replay about half of all stall stops were wrong (agent 8 of 17, simple rules 10 of 21). That is why a fired flag forces "ask a human" and never stops the plate on its own.
 
 **How did you pick the cut-offs?**
 After 1.9, 3.8, 5.7 and 9.5 hours (10/20/30/50% of the 19 h series). Every WHAD series has the same hourly frames, so a fixed time cannot leak the outcome. On the embryo and Zaritsky sets series end near closure, so there we use fixed fractions of the median closure time instead.
