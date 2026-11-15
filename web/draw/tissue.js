@@ -2,9 +2,17 @@
 // design/prototypes/glass-dish/index.html?pal=C68B6E,B3122E,FFD2C6,FFFFFF,24120F&bg=120A09&mat=toon&age=skin&hshift=8).
 // 2D port: palette, skin age ramp (ageSkin), cool hue shift (coolShift, 8 deg x darkness toward 240), and a 3-step toon
 // shade (70/150/255, as the prototype's MeshToon gradientMap). Lighting has no 2D equivalent. Colours are illustrative.
-export const PAL = { intact: [0xC6, 0x8B, 0x6E], edge: [0xB3, 0x12, 0x2E], fresh: [0xFF, 0xD2, 0xC6], dividing: [255, 255, 255],
-  wound: [0x24, 0x12, 0x0F], bg: [0x12, 0x0A, 0x09] };
-export const EDGE_CSS = '#B3122E', BG_CSS = '#120A09';
+// Colours come from the design/style-guide/tokens.css --cell-* / --scene-bg tokens on :root, read once at import;
+// the hex after each name is the fallback when the token is missing (no document, tokens.css not loaded, not #RRGGBB).
+const HEX = /^#[0-9a-f]{6}$/i;
+const tok = (name, hex) => {
+  let v = ''; try { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch { /* no DOM */ }
+  return HEX.test(v) ? v.toUpperCase() : hex;
+};
+const rgbOf = (hex) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
+export const EDGE_CSS = tok('--cell-edge', '#B3122E'), BG_CSS = tok('--scene-bg', '#120A09');
+export const PAL = { intact: rgbOf(tok('--cell-intact', '#C68B6E')), edge: rgbOf(EDGE_CSS), fresh: rgbOf(tok('--cell-new', '#FFD2C6')),
+  dividing: rgbOf(tok('--cell-dividing', '#FFFFFF')), wound: rgbOf(tok('--cell-wound', '#24120F')), bg: rgbOf(BG_CSS) };
 const TOON = [70 / 255, 150 / 255, 1];
 
 const lerp = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
