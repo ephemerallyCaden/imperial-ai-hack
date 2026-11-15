@@ -347,10 +347,10 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (k >= 0 && painting && k !== lastK) brush.onPaint({ k, u: hu[k], v: hv[k], radius: brush.radius });
     lastK = k; return k;
   }
-  let zoomDrag = null;
+  let zoomDrag = null, prevSel = null;
   const onDown = e => {
     if (brush && e.button === 0) { painting = true; lastK = -1; canvas.setPointerCapture(e.pointerId); paint(e); return; }
-    if (!brush && e.button === 2) { zoomDrag = floorHit(e); return; }
+    if (!brush && e.button === 2) { zoomDrag = floorHit(e); prevSel = sel; return; }
     if (tool === "select") dragStart = floorHit(e);
   };
   const onMove = e => {
@@ -368,7 +368,11 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   };
   const onUp = () => {
     painting = false;
-    if (zoomDrag) { zoomDrag = null; const b = sel; sel = null; drawSelBox(); if (b && b.x1 - b.x0 >= 0.5 && b.z1 - b.z0 >= 0.5) zoomToBox(b); return; }
+    // right-drag box: zoom to it AND keep it as the selection (inside stays in colour, the rest drops to matte greyscale);
+    // a click or a box too small to use leaves the previous selection as it was
+    if (zoomDrag) { zoomDrag = null; const b = sel;
+      if (b && b.x1 - b.x0 >= 0.5 && b.z1 - b.z0 >= 0.5) { setSel(b); emitSel(); zoomToBox(b); } else { sel = prevSel; drawSelBox(); }
+      return; }
     if (tool !== "select" || !dragStart) return; dragStart = null; setTool(null);
     setSel(sel && (sel.x1 - sel.x0 < 0.5 || sel.z1 - sel.z0 < 0.5) ? null : sel); emitSel();
   };
