@@ -1,0 +1,31 @@
+/* Draw mode layout. Components come from tokens.css (st-*); this file only places them. */
+.dr { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto; }
+.dr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--hair); background: var(--panel-solid); }
+.dr-bar .st-kicker { margin-left: var(--s2); }
+.dr-bar .dr-chips { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.dr-stage { position: relative; overflow: hidden; min-height: 0; }
+.dr-field { position: absolute; inset: 0; }
+.dr-scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.dr-draw { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); }
+.dr-draw[hidden] { display: none; }
+.dr-pad { position: relative; border: 1px dashed var(--line); touch-action: none; cursor: crosshair; }
+.dr-pad canvas { display: block; }
+.dr-pad .dr-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; pointer-events: none; }
+.dr-float { position: absolute; z-index: 2; min-width: 180px; max-width: 300px; }
+.dr-float h4 { margin: 0 0 6px; }
+.dr-float p { margin: 4px 0; }
+.dr-float .st-caption { display: block; margin-top: 6px; }
+.dr-tl { top: var(--s4); left: var(--s4); display: grid; gap: 6px; justify-items: start; }
+.dr-tr { top: var(--s4); right: var(--s4); min-width: 240px; }
+.dr-mr { top: 210px; right: var(--s4); }
+.dr-bl { bottom: var(--s4); left: var(--s4); }
+.dr-br { bottom: var(--s4); right: var(--s4); }
+.dr-honesty { position: absolute; z-index: 2; top: var(--s4); left: 50%; transform: translateX(-50%); }
+.dr-legend p { display: flex; align-items: center; gap: 8px; }
+.dr-legend i { width: 12px; height: 12px; border: 1px solid var(--hair); flex: none; }
+.dr-transport { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: var(--s2) var(--s3); padding: var(--s2) var(--s4); border-top: 1px solid var(--hair); background: var(--panel-solid); }
+.dr-progress { grid-column: 1 / -1; height: 6px; background: var(--raise); }
+.dr-progress > div { height: 100%; width: 0; background: var(--dim); }
+.dr-status { color: var(--dim); }
+.dr-status b { color: var(--ink); font-weight: 400; }
+.dr [hidden] { display: none !important; }
