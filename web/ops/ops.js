@@ -246,10 +246,11 @@ function heroChart(w, c) {
   const after = w.obs.filter(([t]) => t >= (last?.[0] ?? 0));
   let g = "";
   if (fc) {
-    const f = fc.f, b = f.t_hours.map((t, k) => [t, f.area_q95[k]]).concat(f.t_hours.map((t, k) => [t, f.area_q05[k]]).reverse());
-    const at = w.obs.filter(([t]) => t <= fc.cut).at(-1);
+    // The forecast starts at the last image the check used (frames are hourly), with zero width there.
+    const f = fc.f, at = w.obs.filter(([t]) => t <= fc.cut + 1e-6).at(-1) ?? [fc.cut, f.area_q50[0]];
+    const b = [at, ...f.t_hours.map((t, k) => [t, f.area_q95[k]]), ...f.t_hours.map((t, k) => [t, f.area_q05[k]]).reverse()];
     g += `<path class="band" d="${path(b)}Z" data-tip="90% band from the ${fc.cut} h check"/>
-      <path class="med" d="${path([[fc.cut, at?.[1] ?? f.area_q50[0]], ...f.t_hours.map((t, k) => [t, f.area_q50[k]])])}"/>
+      <path class="med" d="${path([at, ...f.t_hours.map((t, k) => [t, f.area_q50[k]])])}"/>
       <line class="cut" x1="${x(fc.cut)}" x2="${x(fc.cut)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${x(fc.cut) + 4}" y="${T + 9}">check ${fc.cut} h · P(close) ${f.p_close_by_T}</text>`;
   }
   if (c >= H && w.heldOut && stopH != null && after.length > 1) g += `<path class="truth" d="${path(after)}"/>`;
@@ -322,15 +323,16 @@ async function renderOverview(pane, ctx, isDead) {
         <span class="st-chip st-chip--honesty">Recorded runs · replayed · sped up</span></div>
       ${kpis(schedSrc, ev)}
     </header>
-    <aside class="cr-list" aria-label="Wounds"><h2>Wounds</h2><div data-list></div></aside>
+    <aside class="cr-list" aria-label="Wound status"><h2>Wound status</h2><div data-list></div></aside>
     <section class="cr-hero"><div class="hero-head"><h2 data-hname></h2><span class="dim" data-hcond></span><span data-hverdict></span>
       <button class="st-btn" data-open>Open in Assay ↗</button></div>
       <div data-hchart></div><div class="hero-pipe" data-hpipe></div>
       <div class="ov-legend"><i class="lg-obs"></i>observed <i class="lg-med"></i>forecast <i class="lg-band"></i>90% band <i class="lg-truth"></i>what happened</div></section>
     <aside class="cr-stream" aria-label="Agent events">
-      <div class="cr-counters"><div><b class="num" data-freed>0.0 h</b><span>microscope time freed</span></div>
-        <div><b class="num" data-traced>0</b><span>numbers traced · 0 removed</span></div><div><b class="num" data-asked>0</b><span>asked you</span></div></div>
-      <h2>Agent events</h2><ol class="stream" data-stream aria-live="off"></ol></aside>
+      <h2>This replay · ${W.length} recorded runs</h2>
+      <div class="cr-counters"><div><b class="num" data-freed>0.0 h</b><span>Imaging saved</span></div>
+        <div><b class="num" data-traced>0</b><span>Numbers traced · 0 removed</span></div><div><b class="num" data-asked>0</b><span>Approvals requested</span></div></div>
+      <h2>Agent event log</h2><ol class="stream" data-stream aria-live="off"></ol></aside>
     <section class="cr-a">${chartNarrowing(ev)}</section>
     <section class="cr-b">${chartCoverage(ev)}</section>
     <section class="cr-c">${audit(runs, logs, advSrc)}
@@ -363,7 +365,7 @@ async function renderOverview(pane, ctx, isDead) {
     const crit = all.filter(e => e.r.kind === "critic" && e.t <= c);
     $("[data-freed]").textContent = freed.toFixed(1) + " h";
     $("[data-traced]").textContent = crit.reduce((a, e) => a + e.r.traced, 0);
-    $("[data-traced]").nextElementSibling.textContent = `numbers traced · ${crit.reduce((a, e) => a + e.r.untraced, 0)} removed`;
+    $("[data-traced]").nextElementSibling.textContent = `Numbers traced · ${crit.reduce((a, e) => a + e.r.untraced, 0)} removed`;
     $("[data-asked]").textContent = all.filter(e => e.r.kind === "approval" && e.t <= c).length;
     while (emitted < all.length && all[emitted].t <= c) {
       const e = all[emitted++];
@@ -392,18 +394,18 @@ function kpis(schedSrc, ev) {
   const rel = ev?.reliability?.[0];
   const tile = (big, label, tip) => `<div class="kpi" tabindex="0" data-tip="${esc(tip)}"><b class="num">${big}</b><span>${label}</span></div>`;
   if (!s) return `<div class="cr-kpis">${NA}: eval/results/scheduler.csv</div>`;
-  return `<div class="cr-kpis">
-    ${tile(pct(+s.share_called), "called at the first check", `${s.called_early} of ${s.n} held-out wounds called by ${s.median_stop_h_if_called} h (replay on recorded data)`)}
-    ${tile((+s.hours_saved_mean).toFixed(1) + " h", `freed per wound, of ${H} h`, "Mean imaging hours not needed after the call (replay on recorded data)")}
-    ${tile(pct(+s.accuracy_of_calls), `calls right · guess ${pct(+s.base_rate_not_closed)}`, `${s.wrong_calls} wrong calls: wounds that did close. Guess = always "won't close"`)}
-    ${rel ? tile(pct(rel.coverage), "inside the 90% band", `${rel.n_wounds} unseen wounds · ${rel.model_label} at ${rel.cut} h · 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}`) : ""}
+  return `<div class="cr-kpis"><span class="kpi-src">Held-out evaluation<br>${s.n} series · ${rel?.n_wounds ?? "–"} wounds</span>
+    ${tile(pct(+s.share_called), "Early-call rate", `Series with a call (P(90% closed by ${H} h) ≤ 0.1 or ≥ 0.9) at any check up to 9.5 h: ${s.called_early} of ${s.n}. Source: eval/results/scheduler.csv`)}
+    ${tile((+s.hours_saved_mean).toFixed(1) + " h", "Imaging saved / series", `Mean over all ${s.n} series of ${H} h minus the stop time (0 when no call). Source: eval/results/scheduler.csv`)}
+    ${tile(pct(+s.accuracy_of_calls), `Call accuracy · baseline ${pct(+s.base_rate_not_closed)}`, `${s.called_early - s.wrong_calls} of ${s.called_early} calls right (${s.wrong_calls} wounds called "won't close" did close). Baseline: always "won't close", right for ${pct(+s.base_rate_not_closed)} of all series.`)}
+    ${rel ? tile(pct(rel.coverage), "90% band coverage", `Share of later observed frames inside the 90% band, forecast at ${rel.cut} h, ${rel.model_label}. 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}. Source: web/ops/evidence.json`) : ""}
   </div>`;
 }
 
 // "When can I call it?": band width per check, shipped model highlighted, baseline in grey (emphasis form).
 function chartNarrowing(ev) {
   const series = (ev?.narrowing || []).slice(0, 2);
-  if (!series.length) return `<h2>When can I call it?</h2><p>${NA}: web/ops/evidence.json</p>`;
+  if (!series.length) return `<h2>90% band width by check</h2><p>${NA}: web/ops/evidence.json</p>`;
   const W = 420, Ht = 200, L = 40, R = 96, T = 12, B = 28;
   const maxW = Math.max(...series.flatMap(s => s.points.map(p => p.width))) * 1.1;
   const x = t => L + (t / 10) * (W - L - R), y = v => T + (1 - v / maxW) * (Ht - T - B);
@@ -418,14 +420,14 @@ function chartNarrowing(ev) {
       ${s.points.map(p => `<circle class="pt ${cls}" cx="${x(p.cut)}" cy="${y(p.width)}" r="4" tabindex="0" data-tip="${esc(s.label)} · ${p.cut} h · band width ${p.width.toFixed(2)}"/>`).join("")}
       <text class="dl ${cls}" x="${x(lastP.cut) + 8}" y="${labY[i]}">${esc(s.kind === "shipped" ? "Stitch (NCA)" : s.label)}</text>`;
   }).join("");
-  return `<h2>When can I call it?</h2>
+  return `<h2>90% band width by check · held-out series</h2>
     <div class="ov-key"><span><i class="k-hi"></i>Stitch (NCA, shipped)</span><span><i class="k-lo"></i>${esc(series[1]?.label ?? "")}</span></div>
     <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="90% band width by hours imaged: ${series.map(s => s.label + " " + s.points.map(p => p.cut + " h " + p.width.toFixed(2)).join(", ")).join("; ")}">
       ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}</text>`).join("")}
       <line class="axis" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>
       ${CHECKS.map(c => `<text class="ax" x="${x(c)}" y="${Ht - 12}" text-anchor="middle">${c}</text>`).join("")}
       <text class="ax" x="${(L + W - R) / 2}" y="${Ht - 1}" text-anchor="middle">hours imaged</text>
-      <text class="ax" x="${L - 34}" y="${T + 2}">band width</text>
+      <text class="ax" x="${L - 34}" y="${T + 2}">width (share of wound area)</text>
       ${svg}
     </svg>`;
 }
@@ -433,14 +435,14 @@ function chartNarrowing(ev) {
 // "Can I trust the band?": coverage of the 90% band per test, target line at 90%, failures marked.
 function chartCoverage(ev) {
   const rows = ev?.reliability || [];
-  if (!rows.length) return `<h2>Can I trust the band?</h2><p>${NA}: web/ops/evidence.json</p>`;
+  if (!rows.length) return `<h2>90% band coverage by test set</h2><p>${NA}: web/ops/evidence.json</p>`;
   const short = { "Unseen wounds, same cells": "Unseen wounds", "Unseen condition (pre-registered)": "Unseen condition",
     "Unseen condition, wider calibration": "…wider calibration", "Unseen wells, same cells": "MCF-7 wells", "New cell type": "New cell type" };
-  const W = 420, rowH = 30, L = 132, R = 44, T = 8, Ht = T + rows.length * rowH + 22;
+  const W = 460, rowH = 30, L = 220, R = 44, T = 8, Ht = T + rows.length * rowH + 22;
   const x = v => L + v * (W - L - R);
   const bars = rows.map((r, i) => {
     const yc = T + i * rowH + rowH / 2, fail = r.coverage < 0.85, h = 14;
-    const lab = short[r.label] ?? r.label;
+    const lab = `${short[r.label] ?? r.label} · ${r.model === "nca_realft3" ? "NCA" : r.model_label}`;
     return `<g tabindex="0" data-tip="${esc(r.label)} · ${esc(r.detail)} · ${pct(r.coverage)} (95% CI ${pct(r.cov_lo)}–${pct(r.cov_hi)}) · ${r.n_wounds} ${/wells/.test(r.label) || /cell type/.test(r.label) ? "wells" : "wounds"}">
       <text class="cat" x="${L - 8}" y="${yc + 4}" text-anchor="end">${fail ? "▲ " : ""}${esc(lab)}</text>
       <path class="bar ${fail ? "fail" : ""}" d="M${x(0)},${yc - h / 2}H${x(r.coverage) - 4}a4,4 0 0 1 4,4v${h - 8}a4,4 0 0 1 -4,4H${x(0)}Z"/>
@@ -448,8 +450,8 @@ function chartCoverage(ev) {
       <text class="val ${fail ? "warn" : ""}" x="${x(Math.max(r.coverage, r.cov_hi)) + 6}" y="${yc + 4}">${pct(r.coverage)}</text>
     </g>`;
   }).join("");
-  return `<h2>Can I trust the band?</h2>
-    <div class="ov-key"><span><i class="k-target"></i>target 90%</span><span class="warn">▲ recalibrate per cell type</span></div>
+  return `<h2>90% band coverage by test set</h2>
+    <div class="ov-key"><span><i class="k-target"></i>target 90%</span><span>NCA = Stitch · others = best statistical baseline</span><span class="warn">▲ below 85%</span></div>
     <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Share of outcomes inside the 90% band: ${rows.map(r => (short[r.label] ?? r.label) + " " + pct(r.coverage)).join(", ")}">
       <line class="axis" x1="${x(0)}" x2="${x(0)}" y1="${T}" y2="${Ht - 22}"/>
       ${bars}
