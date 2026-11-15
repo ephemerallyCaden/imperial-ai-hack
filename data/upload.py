@@ -73,7 +73,28 @@ def check_frame(img, scale):
     return m, reasons
 
 
-def run(frames, interval, scale, out, name, exclude_wound=None):
+CALIBRATED = {"CC", "C61", "N61", "NC"}  # WHAD MCF10A conditions in the calibration pool
+
+
+def condition_guard(f, condition, cut):
+    """v4 (R28): an uploaded condition outside the calibration set gets the band widened by the factor measured on
+    known conditions (eval/results/condition_shift.json, edge_speed) and an uncalibrated_condition flag."""
+    p = os.path.join(HERE, "..", "eval", "results", "condition_shift.json")
+    if condition is None or condition in CALIBRATED or not os.path.exists(p):
+        return
+    fac = json.load(open(p)).get("edge_speed", {})
+    if not fac:
+        return
+    lam = fac[min(fac, key=lambda k: abs(float(k) - cut))]["lambda"]
+    lo, med, hi = (np.array(f[k]) for k in ("area_q05", "area_q50", "area_q95"))
+    f["area_q05"] = np.round(np.maximum(med - lam * (med - lo), 0), 4).tolist()
+    f["area_q95"] = np.round(med + lam * (hi - med), 4).tolist()
+    f["flags"].append({"type": "uncalibrated_condition",
+                       "reason": f"'{condition}' is not in the calibration set (WHAD MCF10A CC/C61/N61/NC): band widened x{lam:g}; "
+                                 "calibration did not transfer to a new cell type in our tests."})
+
+
+def run(frames, interval, scale, out, name, exclude_wound=None, condition=None):
     os.makedirs(out, exist_ok=True)
     if not interval or not scale:
         doc = {"version": "1.0", "refused": True, "reasons": ["frame interval and pixel scale are required"]}
@@ -128,6 +149,7 @@ def run(frames, interval, scale, out, name, exclude_wound=None):
     if f["p_stall"] is not None and th is not None and f["p_stall"] >= th:
         f["flags"].append({"type": "stall", "reason": f"{100 * f['p_stall']:.0f}% of plausible futures close less than 10% more "
                            f"by {HORIZON_H:g} h (flag threshold {th:.2f}, tuned leave-one-wound-out on WHAD)."})
+    condition_guard(f, condition, cut)
     doc["schedule"] = schedule_advice(f["p_close_by_T"], cut)
     doc["notes"] = (doc.get("notes", "") + f" | frames={len(masks)}, interval={interval} h, scale={scale} um/px, "
                     f"wound at first frame {100 * w[0]:.1f}% of field").strip(" |")
@@ -168,10 +190,10 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", nargs="+"); ap.add_argument("--interval", type=float); ap.add_argument("--scale", type=float)
-    ap.add_argument("--out", default="upload_out"); ap.add_argument("--name", default="upload"); ap.add_argument("--samples", action="store_true")
+    ap.add_argument("--condition", default=None, help="e.g. CC; outside CC/C61/N61/NC -> widened band + flag"); ap.add_argument("--out", default="upload_out"); ap.add_argument("--name", default="upload"); ap.add_argument("--samples", action="store_true")
     a = ap.parse_args()
     if a.samples:
         samples()
     else:
-        d = run(a.frames[:5], a.interval, a.scale, a.out, a.name)
+        d = run(a.frames[:5], a.interval, a.scale, a.out, a.name, condition=a.condition)
         print(json.dumps({k: d[k] for k in ("refused", "reasons") if k in d}) if d.get("refused") else f"forecast -> {a.out}/{a.name}.json")

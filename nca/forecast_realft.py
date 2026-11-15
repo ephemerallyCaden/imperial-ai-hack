@@ -34,15 +34,18 @@ def main():
     ap.add_argument("--fits", nargs="+", default=[os.path.join(ROOT, "sim/fits/whad_fits.json"), os.path.join(ROOT, "sim/fits/whad_auto_fits.json")])
     ap.add_argument("--weights-pattern", default="nca/weights_real_fold{k}.pt", help="fold weights, {k} = fold 0..3")
     ap.add_argument("--model", default="nca_realft")
+    ap.add_argument("--seeds", type=int, default=1, help="seed models per fold; pattern needs {s}; members split round-robin")
     ap.add_argument("--out", default=os.path.join(ROOT, "eval", "forecasts"))
     a = ap.parse_args()
     import warnings; warnings.filterwarnings("ignore")
     import torch; torch.set_num_threads(4)
-    wpath = {k: resolve(a.weights_pattern.format(k=k)) for k in range(N_FOLDS)}
-    missing = [p for p in wpath.values() if not os.path.exists(p)]
+    assert a.seeds == 1 or "{s}" in a.weights_pattern, "--seeds > 1 needs {s} in --weights-pattern"
+    wlist = {k: [resolve(a.weights_pattern.format(k=k, s=s)) for s in range(a.seeds)] for k in range(N_FOLDS)}
+    missing = [p for ps in wlist.values() for p in ps if not os.path.exists(p)]
     if missing:
         sys.exit(f"missing fold weights: {missing}")
-    nets = {k: load(p) for k, p in wpath.items()}
+    nets = {k: [load(p) for p in ps] for k, ps in wlist.items()}
+    wpath = wlist
     fits = {}
     for fn in a.fits:
         fits.update(json.load(open(fn))["fits"])
@@ -53,7 +56,8 @@ def main():
     by_fold = {j: sorted({S[k]["wound"] for k in S if fold[k] == j}) for j in range(N_FOLDS)}
     rel = lambda p: os.path.relpath(p, ROOT).replace("\\", "/") if os.path.abspath(p).startswith(os.path.abspath(ROOT)) else p
     fold_note = ("folds = crc32(wound) % 4; series rolled out with the weights of their own fold (trained without it): "
-                 + "; ".join(f"fold {j} -> {rel(wpath[j])}: {', '.join(by_fold[j])}" for j in range(N_FOLDS)))
+                 + "; ".join(f"fold {j} -> {' + '.join(rel(p) for p in wpath[j])}: {', '.join(by_fold[j])}" for j in range(N_FOLDS))
+                 + (f"; seed ensemble: {a.seeds} models per fold, 50 members split round-robin" if a.seeds > 1 else ""))
     G_all = np.unique(np.concatenate([s["t"] for s in S.values()]))
     T = 19.0
     for cut in [1.9, 3.8, 5.7, 9.5]:
@@ -79,7 +83,14 @@ def main():
             Rz = Z[f"{zi[k]}__R"]
             rho, R = Z[f"{zi[k]}__density"][i], (Rz[i] if Rz.ndim == 3 else Rz)
             n = int(np.ceil(H_LONG - ts))
-            wf = rollout(nets[fold[k]], rho, R, mem[np.arange(N_MEM) % len(mem)], n, stochastic=True, seed=zlib.crc32(f"{k}{cut}".encode()))
+            M = mem[np.arange(N_MEM) % len(mem)]
+            ns = nets[fold[k]]  # seed ensemble: member i rolled out by seed model i % len(ns)
+            if len(ns) > 1:  # roll out each seed model's share, then restore member order (i -> model i % len(ns))
+                wf = np.concatenate([rollout(ns[j], rho, R, M[j::len(ns)], n, stochastic=True, seed=zlib.crc32(f"{k}{cut}{j}".encode()))
+                                     for j in range(len(ns))])
+                wf = wf[np.argsort(np.concatenate([np.arange(j, N_MEM, len(ns)) for j in range(len(ns))]))]
+            else:
+                wf = rollout(ns[0], rho, R, M, n, stochastic=True, seed=zlib.crc32(f"{k}{cut}".encode()))
             traj[k] = dict(grid=ts + np.arange(n + 1), A=a0 * wf / wf[:, :1], src="fit" if k in own else "preset")
         fp = {S[k]["a"][S[k]["t"] <= cut + 1e-9].round(8).tobytes(): k for k in traj}
 

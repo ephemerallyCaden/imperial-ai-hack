@@ -13,9 +13,10 @@ NAMES = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic",
          "lvcf": "typical-wound curve", "nca_ensemble": "NCA ensemble (calibrated)",
          "sim_ensemble": "cell-agent simulator ensemble (calibrated)"}
 STAT = ["lvcf", "linear", "edge_speed", "logistic", "gompertz"]
-VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator", "nca_realft": "NCA real-data",
-       "nca_realplus": "NCA real + Zaritsky"}
-NAMES.update({"nca_realft": "NCA fine-tuned on real frames (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)"})
+VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator", "nca_realft": "NCA real-data v1",
+       "nca_realplus": "NCA real + Zaritsky", "nca_realft2": "NCA real-data v2", "nca_realft3": "NCA real-data v3 (headline)"}
+NAMES.update({"nca_realft": "NCA real-data v1 (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)",
+              "nca_realft3": "NCA real-data v3 (calibrated)"})
 MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
 SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
@@ -118,6 +119,20 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "(CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step "
           "is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained "
           "on that wound (its own forecast never does).", "",
+          "## Held-out condition: what fixes the under-coverage? (v4, design.md R28)", "",
+          "The pre-registered test (calibrate on CC, test on C61) under-covers. Tested mitigations, reported next to it, not instead of it: "
+          "**rest** = calibrate on all non-C61 conditions (CC + N61 + NC); **rest + inflate** = also widen the band by a factor "
+          "measured on known conditions only (leave-one-condition-out among CC/N61/NC, largest factor, cap 3x; fixed before "
+          "looking at C61). Coverage of the 90% band on C61 wounds (target 0.90) / quantile score:", "",
+          "| Model | Calibration | 1.9 h | 3.8 h | 5.7 h | 9.5 h |", "|---|---|---|---|---|---|"] + [
+          f"| {NAMES.get(m, m)} | {lab} | " + " | ".join(
+              (lambda r: f"{r.coverage.iloc[0]:.2f} / {r.qscore.iloc[0]:.4f}" if len(r) else "-")(
+                  S[(S.dataset == "whad") & (S.split == sp) & (S.model == m) & (S.cutoff_h.round(2) == c)]) for c in (1.9, 3.8, 5.7, 9.5)) + " |"
+          for m in ("edge_speed", "nca_realft3") for sp, lab in (("CC_to_C61", "CC only (pre-registered)"), ("rest_to_C61", "rest"),
+                                                                ("rest_to_C61_infl", "rest + inflate"))] + ["",
+          "Inflation lifts the earliest cut-off towards nominal but over-widens later ones (coverage up to 1.00, worse quantile "
+          "score): it is a safety fallback for a truly unknown condition, which is how the upload path uses it "
+          "(`uncalibrated_condition` flag), not a free fix.", "",
           "## Can closure curves separate movement from division? (Jin 2016 PC-3, Fisher-KPP)", "",
           "Fisher-KPP (u_t = D u_xx + r u(1 - u/K), K = 1.7e-3 cells/um^2) fitted over a grid of (D, r) at each of 6 initial "
           "densities, once to the full density profiles and once to the closure curve derived from the same profiles. "

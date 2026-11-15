@@ -63,11 +63,11 @@ def calibration(S):
 def error_vs_history(S):
     g = S[(S.dataset == "whad") & (S.split == "loo_all")]
     names = {"edge_speed": "edge speed", "linear": "linear", "logistic": "logistic", "gompertz": "Gompertz", "lvcf": "typical-wound curve",
-             "nca_ensemble": "NCA sim-trained (calibrated)", "nca_realft": "NCA real-data (calibrated)"}
+             "nca_ensemble": "NCA sim-trained (calibrated)", "nca_realft3": "NCA real-data (calibrated)"}
     SL = SLOTS + ["#008300", "#6250d6"]
     fig, ax = plt.subplots(figsize=(7, 4))
     ends = []
-    for i, m in enumerate([m for m in ["edge_speed", "linear", "logistic", "gompertz", "lvcf", "nca_ensemble", "nca_realft"] if (g.model == m).any()]):
+    for i, m in enumerate([m for m in ["edge_speed", "linear", "logistic", "gompertz", "lvcf", "nca_ensemble", "nca_realft3"] if (g.model == m).any()]):
         d = g[g.model == m].sort_values("cutoff_h")
         ax.plot(d.cutoff_h, d.qscore, color=SL[i], marker="o", mec=SURF, mew=1.5, label=names[m],
                 ls=(0, (5, 2)) if m.startswith("nca") else "-")
