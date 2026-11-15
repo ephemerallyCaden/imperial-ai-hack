@@ -22,8 +22,8 @@ WHAD part II is the same wounds as part I filmed later (same position ids, mask 
 | NCA real-data v1 (calibrated) | 0.0403 [0.0356, 0.0447] | 0.93 [0.89, 0.96] | 0.35 | 0.081 | 0.166 |
 | NCA real + Zaritsky (calibrated) | 0.0446 [0.0385, 0.0512] | 0.93 [0.89, 0.96] | 0.41 | 0.087 | 0.168 |
 | linear | 0.0447 [0.0399, 0.0500] | 0.93 [0.89, 0.96] | 0.38 | 0.090 | 0.173 |
-| cell-agent simulator ensemble (calibrated) | 0.0495 [0.0446, 0.0548] | 0.93 [0.90, 0.95] | 0.45 | 0.099 | 0.172 |
-| NCA ensemble (calibrated) | 0.0499 [0.0444, 0.0551] | 0.93 [0.89, 0.96] | 0.44 | 0.100 | 0.172 |
+| cell-agent simulator ensemble (calibrated) | 0.0498 [0.0449, 0.0552] | 0.93 [0.90, 0.95] | 0.45 | 0.100 | 0.173 |
+| NCA ensemble (calibrated) | 0.0502 [0.0451, 0.0553] | 0.93 [0.89, 0.96] | 0.44 | 0.101 | 0.175 |
 | logistic | 0.0583 [0.0509, 0.0678] | 0.93 [0.89, 0.96] | 0.54 | 0.110 | 0.176 |
 | Gompertz | 0.0664 [0.0569, 0.0772] | 0.93 [0.89, 0.97] | 0.65 | 0.121 | 0.190 |
 | typical-wound curve | 0.0732 [0.0663, 0.0791] | 0.93 [0.89, 0.95] | 0.63 | 0.150 | 0.264 |
@@ -57,6 +57,7 @@ Stall across cut-offs: AUC 0.77-0.90, precision 0.48-0.75, recall 0.62-0.71.
 - **Calibration does not transfer to a faster-closing cell type.** Bands calibrated on ordinary MCF-7 wells cover only 15-58% of the stem-cell wells' future (target 90%); 97% of their observations fall below the forecast median.
 - **Held-out condition on WHAD is tighter than nominal early on**: CC to C61 coverage is lowest at the earliest cut-off and recovers with more history.
 - **No 'measure again' signal**: band width, history-fit error and stall ambiguity give AUC 0.61-0.72 for predicting a bad forecast, inconsistent across cut-offs.
+- **The stall flag is a prompt to look, not a verdict**: when it fires it is right only 48%-75% of the time across the checks (it ranks stalls well, AUC above 0.77, but stalls are rare). The agent replay agrees: about half of all stall stops are wrong (agent/results/scoreboard.md). That is why a fired flag means 'ask a human', never an automatic stop.
 - **Simple models are strong**: a 2-parameter constant-edge-speed model is the best forecaster on WHAD; more history helps every model.
 - **On homogeneous sets the typical-wound curve wins early**: on WHiM-BC, fly embryo and Zaritsky, the population-average curve beats extrapolating the wound's own rate at ~20% of history. Per-wound rates only pay off where wounds differ a lot (WHAD).
 - **Small numbers**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.
@@ -79,26 +80,26 @@ NCA variants: **sim-trained** (Caden's, trained on 3000 simulator runs only), **
 
 | Split | Cut-off | Model | Quantile score | Coverage | Best statistical | Ratio to best | Gate |
 |---|---|---|---|---|---|---|---|
-| loo_all | 1.9 h | NCA sim-trained | 0.0715 | 0.94 | edge speed 0.0562 | 1.27 | fail |
-| loo_all | 1.9 h | cell-agent simulator | 0.0708 | 0.94 | edge speed 0.0562 | 1.26 | fail |
+| loo_all | 1.9 h | NCA sim-trained | 0.0705 | 0.93 | edge speed 0.0562 | 1.26 | fail |
+| loo_all | 1.9 h | cell-agent simulator | 0.0709 | 0.93 | edge speed 0.0562 | 1.26 | fail |
 | loo_all | 1.9 h | NCA real-data v1 | 0.0605 | 0.93 | edge speed 0.0562 | 1.08 | PASS |
 | loo_all | 1.9 h | NCA real + Zaritsky | 0.0700 | 0.92 | edge speed 0.0562 | 1.25 | fail |
 | loo_all | 1.9 h | NCA real-data v2 | 0.0532 | 0.93 | edge speed 0.0562 | 0.95 | PASS |
 | loo_all | 1.9 h | NCA real-data v3 (headline) | 0.0530 | 0.93 | edge speed 0.0562 | 0.94 | PASS |
-| loo_all | 3.8 h | NCA sim-trained | 0.0499 | 0.93 | edge speed 0.0386 | 1.29 | fail |
-| loo_all | 3.8 h | cell-agent simulator | 0.0495 | 0.93 | edge speed 0.0386 | 1.28 | fail |
+| loo_all | 3.8 h | NCA sim-trained | 0.0502 | 0.93 | edge speed 0.0386 | 1.30 | fail |
+| loo_all | 3.8 h | cell-agent simulator | 0.0498 | 0.93 | edge speed 0.0386 | 1.29 | fail |
 | loo_all | 3.8 h | NCA real-data v1 | 0.0403 | 0.93 | edge speed 0.0386 | 1.04 | PASS |
 | loo_all | 3.8 h | NCA real + Zaritsky | 0.0446 | 0.93 | edge speed 0.0386 | 1.15 | fail |
 | loo_all | 3.8 h | NCA real-data v2 | 0.0402 | 0.93 | edge speed 0.0386 | 1.04 | PASS |
 | loo_all | 3.8 h | NCA real-data v3 (headline) | 0.0397 | 0.92 | edge speed 0.0386 | 1.03 | PASS |
-| loo_all | 5.7 h | NCA sim-trained | 0.0402 | 0.92 | edge speed 0.0327 | 1.23 | fail |
+| loo_all | 5.7 h | NCA sim-trained | 0.0403 | 0.92 | edge speed 0.0327 | 1.23 | fail |
 | loo_all | 5.7 h | cell-agent simulator | 0.0412 | 0.92 | edge speed 0.0327 | 1.26 | fail |
 | loo_all | 5.7 h | NCA real-data v1 | 0.0356 | 0.93 | edge speed 0.0327 | 1.09 | PASS |
 | loo_all | 5.7 h | NCA real + Zaritsky | 0.0361 | 0.92 | edge speed 0.0327 | 1.10 | fail |
 | loo_all | 5.7 h | NCA real-data v2 | 0.0347 | 0.93 | edge speed 0.0327 | 1.06 | PASS |
 | loo_all | 5.7 h | NCA real-data v3 (headline) | 0.0353 | 0.92 | edge speed 0.0327 | 1.08 | PASS |
-| loo_all | 9.5 h | NCA sim-trained | 0.0307 | 0.92 | linear 0.0316 | 0.97 | PASS |
-| loo_all | 9.5 h | cell-agent simulator | 0.0305 | 0.92 | linear 0.0316 | 0.97 | PASS |
+| loo_all | 9.5 h | NCA sim-trained | 0.0306 | 0.92 | linear 0.0316 | 0.97 | PASS |
+| loo_all | 9.5 h | cell-agent simulator | 0.0304 | 0.92 | linear 0.0316 | 0.96 | PASS |
 | loo_all | 9.5 h | NCA real-data v1 | 0.0291 | 0.92 | linear 0.0316 | 0.92 | PASS |
 | loo_all | 9.5 h | NCA real + Zaritsky | 0.0293 | 0.92 | linear 0.0316 | 0.93 | PASS |
 | loo_all | 9.5 h | NCA real-data v2 | 0.0286 | 0.92 | linear 0.0316 | 0.91 | PASS |
@@ -152,7 +153,7 @@ NCA variants: **sim-trained** (Caden's, trained on 3000 simulator runs only), **
 | CC_to_C61 | 9.5 h | NCA real-data v2 | 0.0271 | 0.73 | linear 0.0305 | 0.89 | fail |
 | CC_to_C61 | 9.5 h | NCA real-data v3 (headline) | 0.0282 | 0.72 | linear 0.0305 | 0.92 | fail |
 
-**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (29% worse than edge speed at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition (CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained on that wound (its own forecast never does).
+**Gate decisions.** R18: the simulator-trained NCA was not passable at the headline cut-off (30% worse than edge speed at 3.8 h). **R26: fine-tuned on real WHAD frames (4 wound-level folds, final weights, no test-fold selection) the NCA passes 9 of 12 and every cut-off on unseen wounds: 3.8 h quantile score 0.0403 vs edge speed 0.0386 (+4%), and it is the best model of all at 9.5 h.** Adding Zaritsky wells made it worse (3/12). It still fails the held-out condition (CC to C61) at 1.9 h and 9.5 h (coverage 0.78-0.79). Raw NCA bands cover only 10-17% of the future; the conformal step is what makes them honest. Caveat: the calibration pool for a wound uses other folds' models, which may have trained on that wound (its own forecast never does).
 
 ## Held-out condition: what fixes the under-coverage? (v4, design.md R28)
 

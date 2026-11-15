@@ -35,7 +35,7 @@ Small. Coverage CIs are about +/-0.05 to +/-0.15. That is why we bootstrap over 
 - Time to 90% closed is often beyond the 19 h series, so many t90 ranges are open-ended.
 
 **Why should I trust the stall flag?**
-Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series).
+Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series). So it is a prompt to look, not a verdict: across the checks it is right 48-75% of the time it fires, and in the agent replay about half of all stall stops were wrong (agent 8 of 17, simple rules 10 of 21). That is why a fired flag forces "ask a human" and never stops the plate on its own.
 
 **How did you pick the cut-offs?**
 After 1.9, 3.8, 5.7 and 9.5 hours (10/20/30/50% of the 19 h series). Every WHAD series has the same hourly frames, so a fixed time cannot leak the outcome. On the embryo and Zaritsky sets series end near closure, so there we use fixed fractions of the median closure time instead.
@@ -48,7 +48,7 @@ Frames -> texture segmenter (wound = low-texture region) -> wound area curve -> 
 **What does the NCA add?** (gate results, design.md R18 and R26)
 "Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes. Our cleanest version beats every model at the earliest cut-off (1.9 h: 0.0530 vs 0.0562 for edge speed) and at 9.5 h, and is within a few percent in between. What made it work: training on real frames, giving it the same early parameter estimates it gets at forecast time, and averaging three training runs. Adding a second dataset (Zaritsky) made it worse, so we didn't."
 _Earlier answer (simulator-only NCA):_
-"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0499 vs 0.0386), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
+"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 30% worse than the 2-parameter edge-speed model (quantile score 0.0502 vs 0.0386), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
 **Which model does the product use?** "The real-data NCA. When a scientist uploads frames, we fit the wound's speed parameters from those frames, roll out the NCA 50 times and calibrate the band with its own errors on held-out wounds. If anything fails, it falls back to the simple edge-speed model and says so in the output."
 
 **Why not just trust the NCA's own spread?** "Uncalibrated, its 90% band covers 14% of what happens (the simulator's 21%): member spread is too small. The same conformal step brings both to 93%."

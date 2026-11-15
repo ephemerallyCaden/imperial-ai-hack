@@ -36,12 +36,12 @@ Full tables, every split and cut-off: [`docs/results.md`](docs/results.md). Head
 |---|---|---|
 | **Edge speed + calibration** | **0.0386** | 0.92 |
 | **NCA fine-tuned on real WHAD frames + calibration** | **0.0397** (+3%; best of all models at 1.9 h and 9.5 h) | 0.92 |
-| NCA trained on the simulator only + calibration | 0.0499 (+29%, fails) | 0.93 |
+| NCA trained on the simulator only + calibration | 0.0502 (+30%, fails) | 0.93 |
 | Typical-wound curve | 0.0732 | 0.93 |
 
 ![Calibration](eval/figures/calibration.png)
 
-- **Training on real frames is what made the NCA competitive.** Trained only on simulator output it failed our pre-set gate (29% worse than edge speed at 3.8 h). Fine-tuned on real WHAD frames, with 4 wound-level folds so every wound is forecast by a model that never trained on it, it passes every cut-off on unseen wounds and is the best model of all at the earliest (1.9 h) and latest (9.5 h) cut-offs. Adding Zaritsky wells made it worse. On a held-out condition (control to CYR61 knockdown) its band under-covered when calibrated on controls only; calibrating on all other known conditions fixes the late cut-offs, and uploads of an uncalibrated condition get a widened band and a flag.
+- **Training on real frames is what made the NCA competitive.** Trained only on simulator output it failed our pre-set gate (30% worse than edge speed at 3.8 h). Fine-tuned on real WHAD frames, with 4 wound-level folds so every wound is forecast by a model that never trained on it, it passes every cut-off on unseen wounds and is the best model of all at the earliest (1.9 h) and latest (9.5 h) cut-offs. Adding Zaritsky wells made it worse. On a held-out condition (control to CYR61 knockdown) its band under-covered when calibrated on controls only; calibrating on all other known conditions fixes the late cut-offs, and uploads of an uncalibrated condition get a widened band and a flag.
 - **Calibration does not transfer across cell types**: bands calibrated on ordinary MCF-7 cells cover only 15-58% of cancer-stem-cell wells, which close about twice as fast. Bands must be calibrated per cell line.
 - **No "measure again" flag**: no signal we tried, including the NCA's own ensemble spread, predicts which forecasts will go wrong consistently (AUC 0.61-0.72, varying by cut-off), so we don't ship one.
 - **Small data**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.
