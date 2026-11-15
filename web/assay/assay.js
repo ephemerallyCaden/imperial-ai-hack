@@ -58,6 +58,7 @@ export async function mount(el, ctx) {
               <input class="as-zoomr" type="range" min="0" max="1" step="0.01" value="0" aria-label="Zoom">
               <button class="as-ibtn" data-act="zoom-out" aria-label="Zoom out (−)" title="Zoom out · −">−</button>
             </div>
+            <button class="as-ibtn" data-act="orbit" aria-pressed="true" aria-label="Idle orbit (I)" title="Idle orbit · I"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/><circle cx="12" cy="12" r="1.6"/></svg></button>
             <button data-act="select" hidden></button><button data-act="clear" hidden></button>
           </div>
           <div class="as-hud as-hud-bl">
@@ -300,6 +301,7 @@ export async function mount(el, ctx) {
       if (isFinite(cut)) { delete S.approvals[cut]; if (cut === branchCut()) S.active = "main"; Object.keys(S.approvals).forEach(k => +k > cut && delete S.approvals[k]); seek(cut); return; }
     } else if (a === "zoom-in") return tissue?.zoom(1);
     else if (a === "zoom-out") return tissue?.zoom(-1);
+    else if (a === "orbit") return setOrbit(!tissue?.isIdleOrbit());
     else if (a === "upload") return $("#as-file").click();
     else if (a === "sample") return select("sample_3frame");
     else if (a === "draw") return useTool("brush");
@@ -511,6 +513,14 @@ export async function mount(el, ctx) {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
   }
+  // idle orbit (button, I, View menu): tissue.js turns the camera slowly about its target after a few seconds without input on the
+  // 3D view; on by default, the choice kept for the session; no button under prefers-reduced-motion (it never runs then)
+  const ORBIT_KEY = "assay.idleOrbit";
+  function setOrbit(on) {
+    if (!tissue) return;
+    tissue.setIdleOrbit(on); $('[data-act="orbit"]').setAttribute("aria-pressed", on);
+    try { sessionStorage.setItem(ORBIT_KEY, on ? "1" : "0"); } catch { /* storage blocked: the default applies next time */ }
+  }
   const rootCss = getComputedStyle(document.documentElement), cv = (n, h) => rootCss.getPropertyValue(n).trim() || h;
   const COLORS = { wound: cv("--cell-wound", "#24120F"), intact: cv("--cell-intact", "#C68B6E"), edge: cv("--cell-edge", "#B3122E"), fresh: cv("--cell-new", "#FFD2C6") };
   // minimaps of the same display hexes (positions in lattice sites from tissue.grid), field / wound / edge crops
@@ -576,6 +586,7 @@ export async function mount(el, ctx) {
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
     else if (a.startsWith("camera:")) { tissue?.goTo(a.slice(7)); markView(); }
+    else if (a === "idle-orbit") setOrbit(!tissue?.isIdleOrbit());
     else if (a === "export-forecast") exportForecast();
     else if (a === "export-runlog") exportRunlog();
   };
@@ -588,6 +599,7 @@ export async function mount(el, ctx) {
     else if (a === "step-forward") step(1);
     else if (a === "zoom-in") tissue?.zoom(1);
     else if (a === "zoom-out") tissue?.zoom(-1);
+    else if (a === "idle-orbit") setOrbit(!tissue?.isIdleOrbit());
     else if (a === "select-area") act("select");
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
@@ -595,6 +607,8 @@ export async function mount(el, ctx) {
   };
   ctx.bus.addEventListener("action", onAction);
   ctx.bus.addEventListener("key", onKey);
+  $('[data-act="orbit"]').style.display = tissue?.canIdleOrbit ? "" : "none";
+  { let on = true; try { on = sessionStorage.getItem(ORBIT_KEY) !== "0"; } catch { /* storage blocked */ } setOrbit(on); }
 
   markView(); setHeat(new URLSearchParams(location.search).has("heat"));
   const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === DEFAULT_WOUND) || S.items[0];
