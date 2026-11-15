@@ -47,3 +47,8 @@
 .dr-legend i { display: inline-block; width: 16px; margin-right: 5px; vertical-align: middle; }
 .dr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s2); }
 @media (max-width: 860px) { .dr-view { grid-template-columns: 1fr; } .dr-pair { grid-template-columns: 1fr; } }
+.dr-scale { position: relative; height: 44px; margin: 6px 0 2px; font-size: 9px; color: var(--dim); }
+.dr-scale b { position: absolute; left: 0; right: 0; top: 0; height: 10px; border: 1px solid var(--hair); }
+.dr-scale i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--accent); }
+.dr-scale span { position: absolute; top: 15px; color: var(--accent); white-space: nowrap; }
+.dr-scale em { position: absolute; top: 30px; font-style: normal; }

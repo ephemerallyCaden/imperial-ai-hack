@@ -8,6 +8,7 @@
 // the raw agents take over at deep zoom (handoff rendering rule).
 import { PRESETS_FOLLOW, PRESET_LABEL_FOLLOW, PRESET_CAPTION_FOLLOW, FIELD_H as H, FIELD_W as W, SITE_UM } from '../public/sim/js/engine.js';
 import { viewFrame, agentFrame, densityFrame } from '../public/sim/js/playback.js';
+import { edgeSpeed, stallSpeed, speedColour } from '../edge/edge_speed.js';
 
 const SIM = new URL('../public/sim/', import.meta.url);
 const T_MAX = 24, HPF = 0.1, DEEP_ZOOM = 2.5, BRUSH = 2.2;
@@ -57,6 +58,23 @@ class Field {
     for (let y = Math.ceil(v.y0); y <= v.y0 + v.vh; y++) { const p = (y - v.y0) * v.s; this.g.moveTo(0, p); this.g.lineTo(this.c.width, p); }
     this.g.stroke();
   }
+  edges(sites, perSite, vMax, stallV) {   // edge-speed ring (#117): sites in fine px, perSite fine px per lattice site
+    const v = this.view(), sz = v.s / perSite;
+    this.g.save(); this.g.globalAlpha = 0.55; this.g.fillStyle = '#050607'; this.g.fillRect(0, 0, this.c.width, this.c.height); this.g.restore();
+    for (const p of sites) {
+      const [r, g, b] = speedColour(p.v, vMax), x = (p.x / perSite - v.x0) * v.s, y = (p.y / perSite - v.y0) * v.s;
+      this.g.fillStyle = `rgb(${r},${g},${b})`; this.g.fillRect(x, y, sz + 0.5, sz + 0.5);
+      if (stallV != null && p.v < stallV) {   // never colour alone: stalled sites also get the amber flag hatch
+        this.g.strokeStyle = css('--accent') || '#E0A458'; this.g.lineWidth = 1;
+        this.g.beginPath(); this.g.moveTo(x, y + sz); this.g.lineTo(x + sz, y); this.g.stroke();
+      }
+    }
+  }
+  ring(px, py, perSite, r) {               // marks the slowest segment
+    const v = this.view(), x = (px / perSite - v.x0) * v.s, y = (py / perSite - v.y0) * v.s;
+    this.g.strokeStyle = css('--accent') || '#E0A458'; this.g.lineWidth = 2; this.g.setLineDash([3, 2]);
+    this.g.beginPath(); this.g.arc(x, y, r, 0, 2 * Math.PI); this.g.stroke(); this.g.setLineDash([]);
+  }
   lines(lines, alpha) {
     if (!lines || !alpha) return;
     const v = this.view(); this.g.save(); this.g.globalAlpha = alpha; this.g.strokeStyle = css('--cell-edge') || '#EE7F2D'; this.g.lineWidth = 2;
@@ -78,6 +96,11 @@ function chart(svg, { tMax, yMax, series, cut }) {
     s += `<path d="${path(se.t, se.v)}" fill="none" stroke="${se.color}" stroke-width="${se.width || 1.3}" ${se.dash ? `stroke-dasharray="${se.dash}"` : ''}/>`;
   }
   svg.setAttribute('viewBox', `0 0 ${Wd} ${Hd}`); svg.innerHTML = s;
+}
+function scaleBar(vMax, stallV) {   // gradient legend with units and the stall-pace tick
+  const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => { const [r, g, b] = speedColour(t * vMax, vMax); return `rgb(${r},${g},${b}) ${t * 100}%`; }).join(',');
+  const tick = stallV != null ? `<i style="left:${Math.min(100, (100 * stallV) / vMax)}%"></i><span style="left:${Math.min(100, (100 * stallV) / vMax)}%">stall pace ${stallV.toFixed(2)} µm/h</span>` : '';
+  return `<b style="background:linear-gradient(90deg,${stops})"></b>${tick}<em>0 (slow)</em><em style="right:0">${vMax} µm/h (fast)</em>`;
 }
 const legend = (items) => el('div', { class: 'dr-legend' }, ...items.map(([c, t, dash]) => el('span', {}, el('i', { style: `border-top:2px ${dash ? 'dashed' : 'solid'} ${c}` }), t)));
 
@@ -171,8 +194,18 @@ function realView(worker) {
   const readT = el('span', { class: 'num' }, '3.0 h'), readS = el('span', { class: 'num' }), readN = el('span', { class: 'num' }), readO = el('span', { class: 'num' });
   const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Observed, simulated and NCA wound area for exp1_partII_C61_P2' });
   const status = el('p', { class: 'st-caption' }, 'Loading the wound…');
-  let sim, nca, band = null, timer = null;
+  let sim, nca, band = null, timer = null, edgeOn = false, stallV = null;
   const play = btn('Play', () => (timer ? stop() : go()), 'st-btn--primary');
+  const edgeBtn = btn('Edge speed', () => { edgeOn = !edgeOn; edgeBtn.setAttribute('aria-pressed', edgeOn); edgeBox.hidden = !edgeOn; render(); });
+  edgeBtn.setAttribute('aria-pressed', 'false'); edgeBtn.title = 'Edge speed heatmap (H)';
+  const readE = el('span', { class: 'num' }, '—'), readSlow = el('span', { class: 'num' }, '—');
+  const scale = el('div', { class: 'dr-scale' }), edgeBox = el('div', {},
+    el('div', { class: 'st-row' }, el('span', {}, 'Mean edge speed'), readE),
+    el('div', { class: 'st-row' }, el('span', {}, 'Slowest segment'), readSlow), scale,
+    el('p', { class: 'st-caption' }, 'Edge speed: how far the front moved over the last 2 h along its normal (distance transform, no cell tracking), smoothed over ±3 px of front, on simulation frames. Slow = hot; hatched = slower than the stall pace, the existing stall rule (closing under 10% more of the 3.8 h area by 19 h) as a speed. Check on this wound (5-9 h): mean speed × perimeter = 0.91 × the area loss rate.'),
+    el('div', { class: 'dr-chips' }, chip('uncalibrated (simulation frames)')));
+  edgeBox.hidden = true;
+  const V_MAX = 20;   // µm/h at the cool end of the scale (mean front speed on this wound is 4-8 µm/h)
   const near = (ts, t) => ts.reduce((b, x, i) => (Math.abs(x - t) < Math.abs(ts[b] - t) ? i : b), 0);
 
   function go() { play.textContent = 'Pause'; if (+slider.value >= 19) slider.value = 3; timer = setInterval(() => { slider.value = Math.min(19, +slider.value + 0.1); render(); if (+slider.value >= 19) stop(); }, 60); }
@@ -183,6 +216,20 @@ function realView(worker) {
     const v = viewFrame(sim, i);
     fs.zoom >= DEEP_ZOOM ? fs.agents(agentFrame(sim, i)) : fs.smooth(v.fine, v.outline.display.lines, v.outline.display.opacity);
     fn.density(densityFrame(nca, j), nca.density.h, nca.density.w);
+    if (edgeOn) {
+      const back = near(sim.t_hours, t - 2), mk = (f) => { const { fine, outline } = viewFrame(sim, f), m = new Uint8Array(fine.h * fine.w);
+        for (let q = 0; q < m.length; q++) m[q] = outline.level != null && fine.data[q] / 255 < outline.level ? 1 : 0; return { m, fine }; };
+      const a = mk(back), b = mk(i), um = SITE_UM / b.fine.scale;
+      if (stallV == null) { const c = mk(near(sim.t_hours, nca.meta.cutoff_hours)), e0 = edgeSpeed(c.m, c.m, c.fine.h, c.fine.w, 1, um);
+        stallV = stallSpeed(e0.areaUm2, e0.perimeterUm, nca.meta.cutoff_hours, 19); scale.innerHTML = scaleBar(V_MAX, stallV); }
+      if (back < i) {
+        const e = edgeSpeed(a.m, b.m, b.fine.h, b.fine.w, sim.t_hours[i] - sim.t_hours[back], um);
+        fs.edges(e.sites, b.fine.scale, V_MAX, stallV);
+        if (e.slowest) fs.ring(e.slowest.x, e.slowest.y, b.fine.scale, 14);
+        readE.textContent = e.meanUmH == null ? 'no edge' : e.meanUmH.toFixed(1) + ' µm/h';
+        readSlow.textContent = e.slowest ? e.slowest.v.toFixed(1) + ' µm/h' : '—';
+      } else { readE.textContent = readSlow.textContent = '— (first frame)'; }
+    }
     readT.textContent = t.toFixed(1) + ' h'; readS.textContent = pct(sim.wound_frac[i]); readN.textContent = pct(nca.wound_frac[j]);
     readO.textContent = Math.abs(ob.t_hours[k] - t) < 0.06 ? pct(ob.wound_frac[k]) : '— (imaged hourly)';
     const series = [];
@@ -196,6 +243,8 @@ function realView(worker) {
   const zs = (k) => { fs.zoom = fn.zoom = Math.min(6, Math.max(1, fs.zoom * k)); render(); };
   for (const c of [cs, cn]) c.addEventListener('wheel', (e) => { e.preventDefault(); const f = c === cs ? fs : fn; const [x, y] = f.toSite(e); fs.cx = fn.cx = x; fs.cy = fn.cy = y; zs(e.deltaY < 0 ? 1.25 : 0.8); }, { passive: false });
   slider.addEventListener('input', () => { stop(); render(); });
+  root.tabIndex = 0;
+  root.addEventListener('keydown', (e) => { if (e.key === 'h' || e.key === 'H') edgeBtn.click(); else if (e.key === ' ') { e.preventDefault(); play.click(); } });
 
   Promise.all(['whad_partII_C61_P2_sim38_follow.json', 'whad_partII_C61_P2_nca_follow.json'].map((n) => fetch(new URL(n, SIM)).then((r) => r.json())))
     .then(([s, n]) => {
@@ -217,11 +266,12 @@ function realView(worker) {
       el('figure', {}, cn, el('figcaption', { class: 'st-kicker' }, 'NCA emulator (density)'))),
     el('aside', { class: 'dr-side st-panel--solid' },
       el('div', { class: 'st-kicker' }, 'Held-out WHAD wound · exp1_partII_C61_P2'),
-      el('div', { class: 'dr-tools' }, play, slider),
+      el('div', { class: 'dr-tools' }, play, edgeBtn, slider),
       el('div', { class: 'st-row' }, el('span', {}, 'Time'), readT),
       el('div', { class: 'st-row' }, el('span', {}, 'Observed'), readO),
       el('div', { class: 'st-row' }, el('span', {}, 'Simulation'), readS),
       el('div', { class: 'st-row' }, el('span', {}, 'NCA'), readN),
+      edgeBox,
       svg,
       legend([['var(--chart-observed)', 'observed'], ['var(--dim)', 'cell-agent simulation'], ['var(--chart-median)', 'NCA rollout', 1], ['var(--chart-member)', 'NCA ensemble spread (uncalibrated)', 1]]),
       status,
