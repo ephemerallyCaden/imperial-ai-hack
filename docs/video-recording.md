@@ -127,9 +127,9 @@ Times match `docs/video-script-draft.md`. "Label" is the honesty chip that must 
 ### Shot 2. Draw (0:10-0:22)
 
 - **URL:** http://127.0.0.1:8010/web/index.html#draw
-- **Clicks:** press the **CC** preset. Drag a freehand wound across the field. Press **Run**. Let it close. Use **+** to zoom in on single cells, then **−** to zoom out to the whole wound. If the stroke looks messy, press **Clear** and redraw, or press **Sample wound**.
-- **Length:** draw 3 s, heal 5 s, zoom 4 s. Capture about 30 s and speed up.
-- **On-screen text:** "Simulated cells, not tracked cells" · "Simulation, preset parameters (WHAD part II fits)" · "Not a forecast · no band".
+- **Clicks:** `#draw` opens Assay's 3D view in live drawing ("Draw a wound · live NCA"). Press the **CC** preset and pick a brush size (S/M/L). Drag on the tissue to cut a wound: the NCA keeps running and fills the gap live, and you can keep cutting while it heals. Set speed (1/2/4/8 h/s). Wheel to zoom in on single hexes, then out to the whole field; right-drag orbits. **Reset to intact tissue** starts over. It stops by itself once every cell is back to at least 95% density.
+- **Length:** cut 3 s, heal 5 s, zoom 4 s. Capture about 30 s and speed up.
+- **On-screen text:** "Simulation (NCA emulator, follower rule; preset parameters)" · "Simulated cells · not tracked cells" · "No forecast". Hexes are 10 µm display samples of the NCA density, not cells.
 - **Label:** simulated · sped up.
 
 ### Shot 3a. Real pipeline in the terminal (inside 0:22-0:34, about 4 s)
