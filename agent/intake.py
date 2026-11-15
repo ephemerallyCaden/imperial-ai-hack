@@ -11,7 +11,7 @@ Backend, from env:
       default: adapter if STITCH_INTAKE_ADAPTER is an existing folder or .tgz/.tar.gz, else llm.
   STITCH_INTAKE_ADAPTER = local LoRA adapter folder or the Adaption best.tgz (adapter_config.json inside)
   STITCH_INTAKE_BASE    = base model id or local path (default: base_model_name_or_path from adapter_config.json,
-                          else Qwen/Qwen3.5-0.8B)
+                          else Qwen/Qwen3.5-2B)
   STITCH_INTAKE_OFFLINE = 1 to load the base from the local Hugging Face cache only (no download)
   STITCH_INTAKE_PROMPT_STYLE = chat (default: tokenizer chat template, thinking off) | raw (prompt text as is)
       OPEN ITEM (P2): the Adaption docs do not say whether AutoScientist applies the base model's chat template to
@@ -45,7 +45,7 @@ from agent.runlog import short_error
 
 REPO = config.REPO
 ADAPTION = os.path.join(REPO, "data", "adaption")
-DEFAULT_BASE = "Qwen/Qwen3.5-0.8B"
+DEFAULT_BASE = "Qwen/Qwen3.5-2B"  # the #90 fine-tune base (docs/adaption-results.md)
 MAX_INPUT_CHARS = 20_000       # longer protocol text is cut before it reaches a model
 MAX_SOURCE_CHARS = 4_000       # source text returned for the side-by-side view
 MAX_NEW_TOKENS = 256           # one canonical JSON object is ~60 tokens
@@ -263,7 +263,7 @@ def _adapter_dir(path):
 
 
 def _model_name(base):
-    """Model name for logs: a local base path becomes its folder name; a hub id (Qwen/Qwen3.5-0.8B) stays."""
+    """Model name for logs: a local base path becomes its folder name; a hub id (Qwen/Qwen3.5-2B) stays."""
     if os.path.isabs(base) or base.startswith(("~", ".")) or os.path.exists(base):
         return os.path.basename(os.path.normpath(os.path.expanduser(base)))
     return base
@@ -275,6 +275,26 @@ def _base_id(adir=None):
         with open(os.path.join(adir, "adapter_config.json")) as f:
             cfg = json.load(f)
     return os.environ.get("STITCH_INTAKE_BASE", "").strip() or cfg.get("base_model_name_or_path") or DEFAULT_BASE
+
+
+def _text_only_adapter(adir):
+    """Adaption trains Qwen3.5 through its multimodal wrapper (keys model.language_model.layers.N...); the text-only
+    model names them model.layers.N... and PEFT silently attaches nothing on a mismatch (data/adaption/predict.py).
+    Returns adir, or a private temp copy with the keys renamed."""
+    import shutil, tempfile
+    from safetensors.torch import load_file, save_file
+    src = os.path.join(adir, "adapter_model.safetensors")
+    if not os.path.exists(src):
+        return adir
+    w = load_file(src)
+    if not any(".language_model." in k for k in w):
+        return adir
+    dst = tempfile.mkdtemp(prefix="stitch-intake-")
+    for f in os.listdir(adir):
+        if f != "adapter_model.safetensors" and os.path.isfile(os.path.join(adir, f)):
+            shutil.copy(os.path.join(adir, f), dst)
+    save_file({k.replace("model.language_model.", "model."): v for k, v in w.items()}, os.path.join(dst, "adapter_model.safetensors"))
+    return dst
 
 
 def _load_adapter(path):
@@ -290,7 +310,9 @@ def _load_adapter(path):
     has_tok = any(os.path.exists(os.path.join(adir, n)) for n in ("tokenizer.json", "tokenizer_config.json"))
     tok = AutoTokenizer.from_pretrained(adir if has_tok else base, local_files_only=offline)
     model = AutoModelForCausalLM.from_pretrained(base, local_files_only=offline)
-    model = PeftModel.from_pretrained(model, adir, local_files_only=True)
+    model = PeftModel.from_pretrained(model, _text_only_adapter(adir), local_files_only=True)
+    if not any(n.endswith("lora_A") for n, _ in model.named_modules()):
+        raise ValueError("Intake adapter attached to 0 modules: LoRA key names do not match the base model")
     model.eval()
     _adapter_cache[adir] = (model, tok, base)
     return _adapter_cache[adir]

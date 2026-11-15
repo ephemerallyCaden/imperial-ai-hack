@@ -411,3 +411,22 @@ def test_eval_scores_stub(monkeypatch, tmp_path, capsys):
     table = capsys.readouterr().out
     assert f"100% ({len(gold)}/{len(gold)})" in table and "stub:stub" in table
     assert len(out.read_text().splitlines()) == len(gold)
+
+
+def test_text_only_adapter_renames_multimodal_keys(tmp_path):
+    import torch
+    from safetensors.torch import load_file, save_file
+    (tmp_path / "adapter_config.json").write_text("{}")
+    save_file({"base_model.model.model.language_model.layers.0.q_proj.lora_A.weight": torch.zeros(2, 2)},
+              str(tmp_path / "adapter_model.safetensors"))
+    out = intake._text_only_adapter(str(tmp_path))
+    assert out != str(tmp_path)
+    assert list(load_file(os.path.join(out, "adapter_model.safetensors"))) == ["base_model.model.model.layers.0.q_proj.lora_A.weight"]
+    assert os.path.exists(os.path.join(out, "adapter_config.json"))
+
+
+def test_text_only_adapter_leaves_text_keys(tmp_path):
+    import torch
+    from safetensors.torch import save_file
+    save_file({"base_model.model.model.layers.0.q_proj.lora_A.weight": torch.zeros(2, 2)}, str(tmp_path / "adapter_model.safetensors"))
+    assert intake._text_only_adapter(str(tmp_path)) == str(tmp_path)
