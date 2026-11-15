@@ -126,6 +126,15 @@ export function makeAgeRamp(PAL, span, name = 'pale') {
   return r.rebuild();
 }
 
+// ---------- age heatmap overlay (?heat / AGE HEATMAP): cell age on a 6-stop ramp, newest = bright end ----------
+// inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow.
+// Same age as the skin ramp (ramp.ageT); callers keep wound cells in their normal colour.
+export const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
+export function heatColour(c, age, ramp) {
+  const u = (1 - ramp.ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
+  return c.copy(HEAT_STOPS[i]).lerp(HEAT_STOPS[i + 1], u - i);
+}
+
 // ---------- per-cell colour: state colour, age ramp for intact / new tissue (x 0.92-1.08 jitter), then darker -> cooler ----------
 // c: THREE.Color (written), st: 'intact' | 'edge' | 'fresh' | 'dividing' | 'wound', rnd: fixed per-cell random 0..1
 const cRef = new THREE.Color();

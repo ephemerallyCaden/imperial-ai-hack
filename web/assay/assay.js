@@ -49,11 +49,13 @@ export async function mount(el, ctx) {
             <div class="st-seg as-views">${["field", "wound", "cells"].map(v => `<button class="st-btn" data-view="${v}">${v}</button>`).join("")}</div>
             <button class="st-btn" data-act="draw" title="Draw a wound on the tissue · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>Draw</button>
             <button class="st-btn" data-act="select" title="Select area · S"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" stroke-dasharray="3 3"/></svg>Select area</button>
+            <button class="st-btn" data-act="heat" aria-pressed="false" title="Age heatmap: colour = simulated cell age, the time since a hex was last re-covered (not a measurement) · A"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Age heatmap</button>
             <button class="st-btn" data-act="clear" title="Clear selection · Esc" hidden>Clear</button>
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
-            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = state (wound floor, leading edge, new tissue rising)</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span></div>
+            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span class="as-st"><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = state (wound floor, leading edge, new tissue rising)</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span>
+              <div class="as-ageleg" hidden><div class="st-kicker">Cell age · heatmap overlay</div><i class="as-agebar" style="background:${T?.HEAT_GRADIENT || "none"}"></i><div class="as-ageends"><span>new</span><span>old</span></div><span class="as-dim">age = simulated time since the hex was last re-covered (never-wounded tissue = oldest); not a measurement</span></div></div>
           </div>
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
@@ -282,6 +284,7 @@ export async function mount(el, ctx) {
     else if (a === "draw") return useTool("brush");
     else if (a === "select") return useTool("select");
     else if (a === "clear") return tissue?.clearSelection();
+    else if (a === "heat") return setHeat(!tissue?.isHeat());
     refresh();
   }
   el.addEventListener("click", e => {
@@ -460,6 +463,13 @@ export async function mount(el, ctx) {
     tip.hidden = false; tip.style.left = `${h.px + 14}px`; tip.style.top = `${h.py + 14}px`;
     tip.textContent = `hex (${h.i},${h.j}) · x ${h.x_um} y ${h.y_um} µm · ${STATE_LABEL[h.state]} · density ${h.density.toFixed(2)} (simulated)`;
   }
+  // age heatmap overlay (button, A, ?heat): recolours the 3D field only, so playback and the live run carry on untouched;
+  // legend as in the glass-dish mockup (title, gradient of the stops, state entries dimmed)
+  function setHeat(on) {
+    if (!tissue) return;
+    tissue.setHeat(on); $('[data-act="heat"]').setAttribute("aria-pressed", on);
+    $(".as-legend3d").classList.toggle("is-heat", on); $(".as-ageleg").hidden = !on;
+  }
   function markView() {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
@@ -524,6 +534,7 @@ export async function mount(el, ctx) {
     else if (a === "open-images") $("#as-file").click();
     else if (a === "select-area") act("select");
     else if (a === "clear-selection") tissue?.clearSelection();
+    else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
     else if (a.startsWith("camera:")) { tissue?.goTo(a.slice(7)); markView(); }
     else if (a === "export-forecast") exportForecast();
@@ -539,13 +550,14 @@ export async function mount(el, ctx) {
     else if (a === "zoom-in") tissue?.zoom(1);
     else if (a === "zoom-out") tissue?.zoom(-1);
     else if (a === "select-area") act("select");
+    else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
   };
   ctx.bus.addEventListener("action", onAction);
   ctx.bus.addEventListener("key", onKey);
 
-  markView();
+  markView(); setHeat(new URLSearchParams(location.search).has("heat"));
   const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
   delete ctx.openItem;
   if (first) await select(first.id);

@@ -2,6 +2,7 @@
 // design/prototypes/glass-dish/look.js: toon rig + material, cool hue shift, skin age ramp): hex columns, colour = state
 // and cell age, height = state as in the mockup (wound 0.08 floor, leading edge <= 0.6, new tissue 0.7 -> 1, intact ~1).
 // Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
+// setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes; colour = simulated cell age, not a measurement.
 // The cells are SIMULATED (P2's cell-agent playback, web/public/sim), never tracked cells: the frame shown is the
 // playback frame whose wound area matches the area curve at time t. Live drawing (web/assay/live.js) feeds the same
 // columns from the live NCA instead (showLive) and paints through setBrush.
@@ -13,7 +14,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { viewFrame } from "../public/sim/js/playback.js";
-import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour } from "../vendor-design/look.js";
+import { FINAL, HMAX as HMAX_MOCKUP, HEIGHT, colHeight, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from "../vendor-design/look.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
 export const DISPLAY_K = 2;                              // display hexes per lattice site along x
@@ -29,6 +30,8 @@ const STATES = ["wound", "intact", "edge", "fresh"];     // state codes 0..3
 const HY = Math.sqrt(3) / 2, S = 0.5;                    // S = world units per lattice site
 // height of density 1: the mockup's column proportions (look.js HMAX per 0.5 world units of hex spacing) at this hex spacing
 const HMAX = HMAX_MOCKUP * (S / DISPLAY_K) / 0.5;
+// age heatmap legend swatch: look.js HEAT_STOPS left = newest (bright) -> right = oldest, as in the mockup's legend
+export const HEAT_GRADIENT = `linear-gradient(90deg, ${HEAT_STOPS.slice().reverse().map(c => "#" + c.getHexString()).join(",")})`;
 
 export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // ---------- display hex grid over the true W x H site field (pointy-top hexes, odd rows shifted half a hex) ----------
@@ -194,7 +197,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (best) outlineLabel.position.set(best.x, HMAX * 1.15, best.z - 0.3);
   }
 
-  let sel = null, cur = null, moving = true;
+  let sel = null, cur = null, moving = true, heat = false;   // heat: age heatmap overlay on non-wound hexes (look.js heatColour)
   const liveFd = { dens: new Float32Array(COUNT), wound: new Uint8Array(COUNT), state: new Uint8Array(COUNT) };   // reused per live step
   // full write: instance placement + membership (colour mesh inside the selection, grey mesh outside) + colours
   function writeAll() {
@@ -208,14 +211,15 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     dull.visible = !!sel; cols.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
     writeColours();
   }
-  // colours (look.js cellColour), only for hexes whose state or age changed since they were last written
+  // colours (look.js cellColour, or heatColour under the age heatmap), only for hexes whose state or age changed since
+  // they were last written (setHeat clears lastAge so every hex is rewritten once)
   function writeColours() {
     const st = cur.state;
     for (let k = 0; k < COUNT; k++) {
       const s = st[k], a = age[k]; if (s === lastS[k] && a === lastAge[k]) continue;
       lastS[k] = s; lastAge[k] = a;
       const o = 3 * k, g = GREY[s] * (s === 1 ? 0.85 + 0.3 * rnd[k] : 1);
-      cellColour(col, STATES[s], a, rnd[k], ramp);
+      if (heat && s !== 0) heatColour(col, a, ramp); else cellColour(col, STATES[s], a, rnd[k], ramp);
       cc[o] = col.r; cc[o + 1] = col.g; cc[o + 2] = col.b; dc[o] = dc[o + 1] = dc[o + 2] = g;
     }
     cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
@@ -415,6 +419,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
     onFrame(cb) { onFrameCb = cb; },
+    // age heatmap overlay: recolours only (no change to heights, playback or the live run)
+    setHeat(on) { heat = !!on; lastAge.fill(NaN); if (cur) writeColours(); }, isHeat: () => heat,
     snapshot: () => canvas.toDataURL("image/png"),
     dispose() {
       renderer.setAnimationLoop(null); ro.disconnect(); controls.dispose();
