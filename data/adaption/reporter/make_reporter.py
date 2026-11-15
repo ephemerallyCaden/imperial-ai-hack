@@ -38,7 +38,7 @@ def build_prompt(decision, data):
 
 
 def fmt(x):
-    return "none" if x is None else (f"{x:g}" if isinstance(x, float) else str(x))
+    return "none" if x is None else str(x)   # exactly as in the data block (0.0 stays a fraction for the Critic)
 
 
 def report(rng, decision, data, calibrated):

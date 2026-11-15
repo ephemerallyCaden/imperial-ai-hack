@@ -4,6 +4,7 @@
   python -I data/adaption/launch.py --models                        # list trainable base models
   python -I data/adaption/launch.py --cancel                        # cancel that run, keep its IDs as run_ids.cancelled-*.json
   python -I data/adaption/launch.py --download                      # best LoRA -> data/adaption/best.tgz (gitignored)
+  ... add --task reporter | triage to any command for those runs (own data file, run_ids_<task>.json, best_<task>.tgz)
   python -I data/adaption/launch.py --status                        # poll the run in run_ids.json
 
 The key is read from the environment only and never written anywhere. run_ids.json holds IDs only (safe to commit).
@@ -13,7 +14,11 @@ import json, os, sys
 from adaption import Adaption
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-IDS = os.path.join(HERE, "run_ids.json")
+# --task intake (default) | reporter | triage: each task has its own data file and run_ids file
+TASK = sys.argv[sys.argv.index("--task") + 1] if "--task" in sys.argv else "intake"
+DATA = {"intake": os.path.join(HERE, "train.jsonl"), "reporter": os.path.join(HERE, "reporter", "train.jsonl"),
+        "triage": os.path.join(HERE, "reporter", "triage_train.jsonl")}[TASK]
+IDS = os.path.join(HERE, "run_ids.json" if TASK == "intake" else f"run_ids_{TASK}.json")
 DATASET_ID = "8d3f3b8e-4896-4339-940e-28420f4456fb"  # train.jsonl already uploaded raw (01:3x Sun); reused, not re-uploaded
 
 
@@ -32,7 +37,7 @@ def size_b(m):
 
 c = Adaption()
 if "--download" in sys.argv:  # best LoRA of the run in run_ids.json -> data/adaption/best.tgz (gitignored)
-    rid, out = json.load(open(IDS))["run_id"], os.path.join(HERE, "best.tgz")
+    rid, out = json.load(open(IDS))["run_id"], os.path.join(HERE, "best.tgz" if TASK == "intake" else f"best_{TASK}.tgz")
     print("downloading", rid, flush=True)
     n = 0
     with c.with_options(timeout=1800).autoscientist.with_streaming_response.download(rid) as r:
@@ -73,6 +78,13 @@ if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.jso
 if os.path.exists(IDS):
     sys.exit(f"{IDS} exists: a run was already launched. Use --status.")
 
+if TASK != "intake":
+    rows = sum(1 for _ in open(DATA))
+    d = c.datasets.upload_file(DATA, name=f"closurecall-{TASK}-train-{rows}", processing_mode="raw",
+                               column_mapping={"prompt": "prompt", "completion": "completion"})
+    print("uploaded", TASK, rows, "rows -> dataset_id", d.dataset_id, flush=True)
+    print("dataset status", c.datasets.wait_for_completion(d.dataset_id).status, flush=True)
+    DATASET_ID = d.dataset_id
 ds = c.datasets.get(DATASET_ID)
 print("dataset", ds.to_dict() if hasattr(ds, "to_dict") else ds, flush=True)
 try:
@@ -81,8 +93,8 @@ except Exception as e:  # dry look only; never block the launch
     print("recommend_hyperparams failed:", e, flush=True)
 run = c.autoscientist.create(dataset_id=DATASET_ID, model=MODEL, training_method="instruction",
                              # no column_mapping: the raw upload canonicalised prompt/completion, AutoScientist infers
-                             target_win_rate=0.7, max_iterations=1, idempotency_key="closurecall-90-run1-" + MODEL)
-json.dump({"dataset_id": DATASET_ID, "run_id": run.id, "model": MODEL, "training_method": "instruction",
-           "data_format": "chat", "max_iterations": 1, "target_win_rate": 0.7, "rows": 1500,
+                             target_win_rate=0.7, max_iterations=1, idempotency_key=f"closurecall-{TASK}-run1-{MODEL}")
+json.dump({"task": TASK, "dataset_id": DATASET_ID, "run_id": run.id, "model": MODEL, "training_method": "instruction",
+           "data_format": "chat", "max_iterations": 1, "target_win_rate": 0.7, "rows": sum(1 for _ in open(DATA)),
            "created_at": str(run.created_at)}, open(IDS, "w"), indent=2)
 print("run_id", run.id, "status", run.status, "-> wrote", IDS)
