@@ -40,7 +40,7 @@ const pb = {
     model: 'nca', version: cfg ? cfg.version : 'v1', rule: cfg && cfg.follow ? 'follow' : 'free', fits: c.fits,
     mode: 'deterministic rollout (no noise), point fit', position: c.position,
     cutoff_hours: c.cutoff, start_frame: c.frame, t_start: c.t_start, Tm: c.Tm, bias: c.bias,
-    fit: 'sim/fits/whad_fits.json fits[position][cutoff] (Agent 1; frames <= cutoff only)',
+    fit: `${c.fits ? c.fits.file : 'sim/fits/whad_fits.json'} fits[position][cutoff] (Agent 1; frames <= cutoff only)`,
     weights: { file: cfg ? 'nca/v2/weights.json' : 'nca/weights.json', sha256_12: createHash('sha256').update(wRaw).digest('hex').slice(0, 12) },
     start: 'observed mask at the last frame <= cutoff -> 32x44 lattice (start_state.mask_to_lattice) -> density, grain 2',
     band: { calibrated: false, note: 'raw NCA ensemble spread: fit bootstrap members x NCA noise; NOT a 90% interval',
