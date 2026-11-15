@@ -121,7 +121,8 @@ def forecast(masks, t, a, wound_frac, exclude_wound=None):
     f = {"wound_id": "upload", "t_hours": r4(G), "area_q05": r4(lo), "area_q50": r4(med), "area_q95": r4(hi),
          "t50": ev["t50"], "t90": ev["t90"],
          "p_close_by_T": round(float(np.mean(hit90.any(1))), 3),
-         "p_stall": round(float(np.mean(E[:, -1] >= 0.9 * a[-1])), 3), "flags": [],
+         # one frame: no closure rate measured (prior params), so no stall estimate, as on the edge-speed path
+         "p_stall": round(float(np.mean(E[:, -1] >= 0.9 * a[-1])), 3) if len(masks) >= 2 else None, "flags": [],
          "segmentation_quality": {"status": "ok", "reasons": []},
          "observed": {"t_hours": r4(t), "area": r4(a)},
          "members": [r4(np.interp(G, grid, m)) for m in A[:5]]}
