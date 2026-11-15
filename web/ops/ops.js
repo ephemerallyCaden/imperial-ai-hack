@@ -129,7 +129,6 @@ export function mount(el, ctx) {
   el.innerHTML = `<div class="ops">
     <div class="st-seg" role="tablist" aria-label="Ops views">
       <button class="st-btn" data-tab="runs" aria-pressed="true">Agent runs</button>
-      <button class="st-btn" data-tab="evidence" aria-pressed="false">Forecast evidence</button>
     </div>
     <div data-pane="runs"></div>
     <div data-pane="evidence" hidden></div>
