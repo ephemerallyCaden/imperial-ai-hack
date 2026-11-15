@@ -30,9 +30,12 @@ stops. With record_both_branches, <run_id>.reject.jsonl is created before the fi
 file fails before any stop (the parent log still gets run_end); run_end lists branch_run_ids.
 
 Intake (design.md 9b): an upload of frames whose wound dict has `protocol_text` gets one `intake` tool call before the
-first check (logged as a tool_call, so the Critic can trace its extracted numbers; `source_text` is metadata, never
-evidence). A missing interval_h or scale is filled from Intake's code-checked `feeds_code`; a given value that disagrees
-with Intake by more than INTAKE_TOL is kept and a `warning` is logged. If Intake finds the protocol outside the validated
+first check (logged as a tool_call). Intake output is NOT Critic evidence: its fields are read from protocol text, so
+only the interval_h / scale values Intake actually filled in for the run (the `intake_applied` record, source "intake")
+can trace (critic_outputs). A missing interval_h or scale is filled from Intake's code-checked `feeds_code`, a missing
+condition from its CC / C61 code (used by the Investigator's simulator); a given value that disagrees with Intake by more
+than INTAKE_TOL is kept and a `warning` is logged. Intake's hosted-model calls (llm backend) are logged as `model_call`
+records (purpose "intake") and count against TOKEN_BUDGET, as does the Reporter's call (purpose "report"). If Intake finds the protocol outside the validated
 scope, its scope notes are added to every decision's evidence and to the Reporter caveats; it never changes a decision.
 If Intake fails or returns ok false, the given values are used; a still-missing interval or scale is refused by QC.
 
@@ -62,7 +65,7 @@ import time
 import numpy as np
 
 from agent import config, critic, llm, policy, prompts, reporter, tools
-from agent.runlog import RunLog, fingerprint
+from agent.runlog import RunLog, fingerprint, short_error
 
 LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
 HANDOVER = {policy.ASK_HUMAN_REFUSED}   # ends the run with no stop
@@ -146,8 +149,8 @@ class _Source:
         """Frames: one check at the last frame's time. With no usable interval, 0 h (QC then refuses the upload)."""
         f = self.frames
         try:
-            self.checks = [round((len(f["frames"]) - 1) * float(f["interval_h"]), 3)]
-        except (TypeError, ValueError):
+            self.checks = [round((len(f["frames"]) - 1) * float(f.get("interval_h")), 3)]
+        except (TypeError, ValueError):   # no interval key, None or not a number
             self.checks = [0.0]
 
     def describe(self):
@@ -224,10 +227,10 @@ class _Run:
         return self.tok_in + self.tok_out
 
     def _outputs(self):
-        """Critic sources (critic_sources): tool outputs with metadata subtrees (META_KEYS) removed and long numeric
-        series dropped. Numbers in names, notes or protocol text come from files, not tools, so they are never
-        evidence; a long curve would let almost any made-up value trace by rounding."""
-        return [critic_sources(o) for o in self.inherited_outputs + self.log.tool_outputs()]
+        """Critic sources (critic_outputs): tool outputs with metadata subtrees (META_KEYS) removed and long numeric
+        series dropped; Intake output only as the values it applied. Numbers in names, notes or protocol text come
+        from files, not tools, so they are never evidence; a long curve would let almost any made-up value trace."""
+        return critic_outputs(self.inherited_records + list(self.log.records))
 
     # -- fixed steps
     def _tool(self, name, inp, fn, **extra):
@@ -239,7 +242,7 @@ class _Run:
         try:
             out = fn(inp)
         except Exception as e:  # noqa: BLE001 - tool errors are logged as data
-            out = {"error": f"{type(e).__name__}: {e}"}
+            out = {"error": short_error(e)}
         self.log.log("tool_call", step=self.steps, tool=name, input_fp=fingerprint(inp), input=inp, output=out,
                      elapsed_s=round(time.time() - t0, 3), **extra)
         return out
@@ -253,6 +256,15 @@ class _Run:
         if not isinstance(text, str) or not text.strip():
             return
         out = self._tool("intake", {"protocol_text": text}, lambda i: tools.run_tool("intake", i))
+        for c in out.get("model_calls") or []:   # Intake's hosted-model calls: run token totals and cost
+            u = c.get("usage") or {}
+            self.tok_in += int(u.get("input_tokens") or 0)
+            self.tok_out += int(u.get("output_tokens") or 0)
+            self.log.log("model_call", purpose="intake", step=self.steps, model=c.get("model"),
+                         stop_reason=c.get("stop_reason"), usage=u, cost_usd=c.get("cost_usd"),
+                         tokens_total=self._tokens())
+        if self._tokens() >= self.token_budget:
+            self.budget_out = True
         if out.get("error") or not out.get("ok"):
             why = out.get("error") or out.get("fallback_reason") or "could not extract"
             self.log.log("warning", tool="intake",
@@ -271,6 +283,12 @@ class _Run:
                 self.log.log("warning", tool="intake", field=key, given=given, intake=got,
                              message=f"Intake reads {key} {got} from the protocol but {given} was given; "
                                      "the given value is used")
+        code = (feeds.get("condition") or {}).get("value")
+        if f.get("condition") is None and code in ("CC", "C61"):   # the simulator path (Investigator) uses it
+            f["condition"] = code
+            applied["condition"] = {"value": code, "source": "intake"}
+        elif f.get("condition") is not None:
+            applied["condition"] = {"value": f["condition"], "source": "given", "intake": code}
         if not out.get("scope_ok"):
             self.scope_notes = [n for n in out.get("scope_notes") or [] if "outside the validated scope" in n]
         self.src.refresh_checks()
@@ -290,8 +308,10 @@ class _Run:
         if not any(t > 1e-9 for t, _ in pts):
             return None
         self.investigated = True
+        given = self.src.frames.get("condition") if self.src.kind == "frames" else None   # upload: given or Intake's
+        cond = next((c for c in (f.get("condition"), given) if c in ("CC", "C61")), "CC")
         inp = {"observed": {"t_hours": [t for t, _ in pts], "area": [a for _, a in pts]}, "check_h": cut,
-               "condition": f.get("condition") if f.get("condition") in ("CC", "C61") else "CC"}
+               "condition": cond}
         return self._tool("investigate", inp, lambda i: tools.run_tool("investigate", i), trigger=trigger)
 
     # -- the model's open choice
@@ -314,7 +334,7 @@ class _Run:
         try:
             resp, err = llm.call_model(messages, system=system, tools=[tool], max_tokens=MODEL_MAX_TOKENS), None
         except Exception as e:  # noqa: BLE001 - a failed call falls back like an invalid proposal
-            resp, err = None, f"{type(e).__name__}: {e}"
+            resp, err = None, short_error(e)
         rec = {"step": self.steps, "input_fp": fingerprint({"system": system, "messages": messages, "tools": [tool]}),
                "elapsed_s": round(time.time() - t0, 3), "estimated_tokens": est, "data": data}
         if resp is None:
@@ -471,13 +491,16 @@ class _Run:
             rep = reporter.summarise(recs, steps_left=self.max_steps - self.steps,
                                      tokens_left=self.token_budget - self._tokens())
         except Exception as e:  # noqa: BLE001 - the run must still end with run_end
-            self.log.log("report", source="error", error=f"{type(e).__name__}: {e}")
+            self.log.log("report", source="error", error=short_error(e))
             return
         if rep.get("model_called"):
             self.steps += 1
             self.tok_in += rep["usage"]["input_tokens"]
             self.tok_out += rep["usage"]["output_tokens"]
             rep["step"] = self.steps
+            self.log.log("model_call", purpose="report", step=self.steps, model=rep.get("model"),
+                         stop_reason=rep.get("stop_reason"), usage=rep["usage"], cost_usd=rep.get("cost_usd"),
+                         tokens_total=self._tokens(), **({"error": rep["error"]} if "error" in rep else {}))
         self.log.log("report", **rep)
 
     def _end(self, reason, stop_h=None, stop_kind=None, **extra):
@@ -614,6 +637,29 @@ def scope_guard(text, item):
     if not hits:
         return text, []
     return f"{item['label']}: {item['evidence']}.", hits
+
+
+def critic_outputs(records):
+    """Critic sources from run-log records: every tool output through critic_sources, except Intake's. Intake reads its
+    numbers from protocol text (data written by whoever wrote the file), so its output is replaced by the interval_h /
+    scale it actually applied to the run (intake_applied, source "intake"); anything else it extracted (duration, the
+    protocol's own numbers) never traces."""
+    applied = {}
+    for r in records:
+        if r.get("kind") == "intake_applied":
+            applied = {k: v["value"] for k, v in (r.get("applied") or {}).items()
+                       if k in ("interval_h", "scale") and isinstance(v, dict) and v.get("source") == "intake"
+                       and _num(v.get("value"))}
+    out = []
+    for r in records:
+        if r.get("kind") != "tool_call" or "output" not in r:
+            continue
+        if r.get("tool") == "intake":
+            if applied:
+                out.append({"intake_applied": dict(applied)})
+            continue
+        out.append(critic_sources(r["output"]))
+    return out
 
 
 def critic_sources(obj):

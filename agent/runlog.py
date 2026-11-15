@@ -34,6 +34,18 @@ def scrub(obj):
     return obj
 
 
+_PATH = re.compile(r"(?<![\w.\-])(?:[A-Za-z]:[\\/]|~[\\/]|\.{0,2}/)[^\s'\"(),;]*")   # not "Qwen/Qwen3.5", "um/px"
+ERR_MAX = 200
+
+
+def short_error(e):
+    """"<ExceptionType>: <message>" for a log, with every local path cut to its basename and the message cut to
+    ERR_MAX characters (an exception message often names the file it failed on)."""
+    msg = _PATH.sub(lambda m: re.split(r"[\\/]", m.group(0).rstrip("/\\"))[-1] or m.group(0), str(e))
+    msg = " ".join(msg.split())
+    return f"{type(e).__name__}: {msg[:ERR_MAX] + '...' if len(msg) > ERR_MAX else msg}"
+
+
 def fingerprint(obj):
     blob = json.dumps(obj, sort_keys=True, default=str).encode()
     return "sha256:" + hashlib.sha256(blob).hexdigest()

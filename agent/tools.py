@@ -24,6 +24,7 @@ import tempfile
 import warnings
 
 from agent import config
+from agent.runlog import short_error
 
 REPO = config.REPO
 FRAME_EXTS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
@@ -416,4 +417,4 @@ def run_tool(name, input):
         json.dumps(out, allow_nan=False)  # guarantee plain JSON
         return out
     except Exception as e:  # noqa: BLE001 - tool errors go back to the agent as data
-        return {"error": f"{type(e).__name__}: {e}"}
+        return {"error": short_error(e)}   # paths cut to basenames: no local paths in logs

@@ -44,20 +44,36 @@ scale, condition), `informational`, `unit_notes`, `scope_ok`, `scope_notes`, `ba
 
 - Backend: `STITCH_INTAKE_BACKEND=adapter|llm|stub`; default adapter when `STITCH_INTAKE_ADAPTER` is an existing folder
   or `.tgz`, else llm (`call_model`). Adapter = transformers + peft on the base in `adapter_config.json`
-  (`STITCH_INTAKE_BASE` overrides, `STITCH_INTAKE_OFFLINE=1` uses the local cache only), greedy decoding, chat template
-  with thinking off (`STITCH_INTAKE_PROMPT_STYLE=raw` to send the prompt as is).
+  (`STITCH_INTAKE_BASE` overrides, `STITCH_INTAKE_OFFLINE=1` uses the local cache only), greedy decoding. A `.tgz` is
+  checked (regular files and folders only: links, devices, absolute and `..` paths are refused), unpacked once into a
+  per-user cache (`STITCH_INTAKE_CACHE`, default `~/.cache/stitch`, 0700, refused if another user owns it) and looked
+  up by path + mtime + size, so it is hashed once per process. Log messages carry the exception type and a short
+  message with paths cut to basenames; a local base path is logged by its folder name only.
+- Prompt style (OPEN ITEM for P2): `STITCH_INTAKE_PROMPT_STYLE=chat` (default: the tokenizer's chat template, one user
+  turn, thinking off) or `raw` (the training prompt as is). The Adaption docs do not say how AutoScientist formats
+  `prompt`/`completion` rows for `training_method="instruction"` (they only say it "Maps `prompt` and `completion` for
+  SFT"), so we do not know which style matches training. The style is an explicit setting: it is in every Intake
+  result (`prompt_style`, so in the run log), printed by `--eval`, and `--eval --backend base` runs the base model with
+  the same style, so the fine-tune vs base comparison is like for like. `chat` with a tokenizer that has no chat
+  template is an error, never a silent switch to `raw`. P2: ask Adaption (support or Discord) and score both styles.
 - Fallback: adapter or stub -> llm -> "could not extract" (`ok: false`); each skipped step is in `fallback_reason`.
 - In the loop (`run.py`): only for frame uploads whose wound dict has `protocol_text`, one `intake` tool call before
-  the first check, logged as a `tool_call` (its extracted numbers are Critic evidence; its `source_text` echo of the
-  protocol is metadata and never evidence). A missing `interval_h` or `scale` is filled from `feeds_code` (code-checked
-  values only). A given value that differs from Intake by more than 2% is kept and a `warning` is logged. An
+  the first check, logged as a `tool_call`. Intake output is not Critic evidence (its fields come from protocol text,
+  so "imaged for 37.3 h" in a protocol must not trace): only the `interval_h` / `scale` values Intake filled in for the
+  run count (`run.critic_outputs`, also used by the Reporter). A missing `interval_h` or `scale` is filled from
+  `feeds_code` (code-checked values only), a missing `condition` from its CC / C61 code (the Investigator's simulator
+  uses it). Intake's hosted-model calls (llm backend) are logged as `model_call` records (`purpose: intake`, usage,
+  `cost_usd`) and count against `TOKEN_BUDGET`; so is the Reporter's call (`purpose: report`), so the cost sums in
+  `agent.record`, `agent.evaluate` and `index.json` include them. A given value that differs from Intake by more than 2% is kept and a `warning` is logged. An
   `intake_applied` record lists each value and where it came from. If `scope_ok` is false, the out-of-scope notes are
   added to every decision's evidence and to the Reporter caveats; the decision never changes because of Intake. If
   Intake fails or returns `ok: false`, a `warning` is logged and the given values are used; a still-missing interval
   or scale is refused by QC ("data refused, ask a human"). `agent.record`'s video upload carries a short Methods
   paragraph (MCF10A, mitomycin C, hourly, 0.908 um/px) so the demo shows Intake.
-- Eval: `python -m agent.intake --eval [--preds out.jsonl]` scores the configured backend (no fallback) on
-  `data/adaption/test_real.jsonl` with `score.py`. It calls the configured model, so it is not run in tests.
+- Scope: "mitomycin" counts only when it is not negated in the same clause ("not used", "no", "without", "omitted",
+  "wasn't added"); a negated mention makes `scope_ok` false.
+- Eval: `python -m agent.intake --eval [--backend adapter|base|llm|stub] [--preds out.jsonl]` scores one backend (no
+  fallback) on `data/adaption/test_real.jsonl` with `score.py` and prints the prompt style. It calls the configured model, so it is not run in tests.
 
 ## Reporter (end of run)
 

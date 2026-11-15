@@ -27,6 +27,7 @@ import json
 import re
 
 from agent import config, critic, llm, policy, prompts
+from agent.runlog import short_error
 
 FACTS_MAX = 3000          # characters of fact-block JSON
 FACT_STR_MAX = 200        # characters per string in the fact block
@@ -126,10 +127,11 @@ def facts(records):
 
 
 def _sources(records, f):
-    """Critic sources: the run's tool outputs (metadata and long series removed, as for decisions) plus the end facts
+    """Critic sources: the run's tool outputs (as for decisions: metadata and long series removed, Intake only as the
+    values it applied) plus the end facts
     and the code-written evidence / refusal reasons (computed by code from the tool outputs)."""
-    from agent.run import critic_sources   # late import: run.py imports this module
-    outs = [critic_sources(r["output"]) for r in records if r.get("kind") == "tool_call" and "output" in r]
+    from agent.run import critic_outputs   # late import: run.py imports this module
+    outs = critic_outputs(records)   # Intake output only as the values it applied (never the protocol's numbers)
     e = f["end"]
     run_facts = {"stop_h": e.get("stop_h"), "ended_at_h": e.get("ended_at_h"), "horizon_h": e.get("horizon_h"),
                  "plate_hours_saved": e.get("plate_hours_saved"), "n_checks": len(f["checks"]),
@@ -258,7 +260,7 @@ def _ask_model(f, steps_left, tokens_left):
     try:
         resp = llm.call_model(messages, system=prompts.REPORT_SYSTEM, tools=[tool], max_tokens=REPORT_MAX_TOKENS)
     except Exception as e:  # noqa: BLE001 - a failed call falls back to the template
-        info["error"] = f"{type(e).__name__}: {e}"
+        info["error"] = short_error(e)
         return None, f"model call failed: {info['error']}", info
     u = resp.get("usage") or {}
     info.update(model=resp.get("model"), stop_reason=resp.get("stop_reason"), cost_usd=resp.get("cost_usd"),

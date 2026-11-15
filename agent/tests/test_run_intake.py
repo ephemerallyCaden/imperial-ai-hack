@@ -68,8 +68,9 @@ def test_protocol_fills_missing_scale(tmp_path):
     ap = _kind(recs, "intake_applied")[0]
     assert ap["applied"]["scale"] == {"value": 0.908, "source": "intake"} and ap["applied"]["interval_h"]["source"] == "given"
     assert not _kind(recs, "warning")
-    src = run.critic_sources(_kind(recs, "tool_call")[0]["output"])   # Intake numbers are evidence, protocol text is not
-    assert src["feeds_code"]["pixel_um"]["value"] == 0.908 and "source_text" not in src
+    src = run.critic_outputs(recs)   # Intake counts only as the values it applied, never its other fields
+    assert {"intake_applied": {"scale": 0.908}} in src
+    assert not any("feeds_code" in o or "fields" in o or "source_text" in o for o in src)
     assert out["numbers_untraced"] == 0
 
 
@@ -152,3 +153,102 @@ def test_record_video_upload_has_protocol():
     t = record.VIDEO_UPLOAD["protocol_text"]
     assert "MCF10A" in t and "mitomycin C" in t and "every hour" in t and "0.908" in t
     assert record.leaks(t) == []
+
+
+def _says(extra):
+    """replay_stub with `extra` added to each decision explanation (a model repeating what it read)."""
+    def h(m, s_, t):
+        out = run.replay_stub(m, s_, t)
+        for c in out["tool_calls"]:
+            if c["name"] == prompts.TOOL_NAME:
+                c["input"]["explanation"] += " " + extra
+        return out
+    return h
+
+
+def test_protocol_numbers_never_trace(tmp_path):
+    """Regression: Intake's extracted duration (37.3 h, from the protocol) was Critic evidence. Only the applied
+    interval / scale trace now; in the decision and in the Reporter."""
+    _need()
+    intake.set_stub(lambda p: reply(duration_h=37.3))
+    llm.set_stub(_says("Imaged for 37.3 h at 0.908 um per pixel."))
+    out, recs = _go(tmp_path, _wound(scale=None, protocol_text=record.VIDEO_PROTOCOL + " Imaged for 37.3 h."))
+    cr = _kind(recs, "critic")[0]
+    assert "37.3 h" in cr["removed"] and "37.3" not in cr["text_out"] and "0.908 um" in cr["text_out"]
+    srcs = run.critic_outputs(recs)
+    from agent import reporter
+    rep_srcs = reporter._sources(recs, reporter.facts(recs)[0])
+    assert {"intake_applied": {"scale": 0.908}} in srcs and {"intake_applied": {"scale": 0.908}} in rep_srcs
+    from agent import critic
+    assert critic.trace("The wound was imaged for 37.3 h.", rep_srcs)["removed"] == ["37.3 h"]
+
+
+def test_given_values_mean_intake_adds_no_evidence(tmp_path):
+    _need()
+    intake.set_stub(lambda p: reply(duration_h=37.3))
+    _, recs = _go(tmp_path, _wound())
+    assert not any("intake_applied" in o for o in run.critic_outputs(recs))
+
+
+def test_intake_llm_usage_counts_and_is_logged(tmp_path, monkeypatch):
+    _need()
+    monkeypatch.setenv("STITCH_INTAKE_BACKEND", "llm")
+    def h(m, s_, t):
+        if not t:   # Intake's call (no tools)
+            return {"text": reply(), "model": "stub-claude", "cost_usd": 0.02,
+                    "usage": {"input_tokens": 900, "output_tokens": 60}}
+        out = run.replay_stub(m, s_, t)
+        out["usage"], out["cost_usd"] = {"input_tokens": 10, "output_tokens": 5}, 0.001
+        return out
+    llm.set_stub(h)
+    out, recs = _go(tmp_path, _wound())
+    mc = _kind(recs, "model_call")
+    assert [r.get("purpose") for r in mc] == ["intake", None, "report"]
+    assert mc[0]["usage"] == {"input_tokens": 900, "output_tokens": 60} and mc[0]["cost_usd"] == 0.02
+    assert mc[2]["cost_usd"] == 0.001 and mc[2]["model"] == "replay_stub"
+    assert out["tokens"]["input"] == 900 + 10 + 10 and out["tokens"]["output"] == 60 + 5 + 5
+    assert record._cost(recs) == pytest.approx(0.022)
+
+
+def test_intake_usage_over_budget_stops_after_first_check(tmp_path, monkeypatch):
+    _need()
+    monkeypatch.setenv("STITCH_INTAKE_BACKEND", "llm")
+    llm.set_stub(lambda m, s_, t: run.replay_stub(m, s_, t) if t else
+                 {"text": reply(), "usage": {"input_tokens": config.TOKEN_BUDGET, "output_tokens": 0}})
+    out, recs = _go(tmp_path, _wound())
+    assert out["reason"] == "token_budget" and out["tokens"]["total"] >= config.TOKEN_BUDGET
+    assert _kind(recs, "decision")[0]["source"] == "fallback"   # no budget left for the decision call
+
+
+def test_intake_condition_reaches_simulator(tmp_path, monkeypatch):
+    _need()
+    intake.set_stub(lambda p: reply(condition="knockdown:CYR61"))
+    monkeypatch.setattr(run, "off_track", lambda *a: "out_of_band")
+    _, recs = _go(tmp_path, _wound())
+    assert _kind(recs, "intake_applied")[0]["applied"]["condition"] == {"value": "C61", "source": "intake"}
+    inv = [r for r in _kind(recs, "tool_call") if r["tool"] == "investigate"]
+    assert inv and inv[0]["input"]["condition"] == "C61"
+    _, recs = _go(tmp_path, _wound(condition="CC"), run_id="given")   # a given condition wins
+    ap = _kind(recs, "intake_applied")[0]["applied"]["condition"]
+    assert ap == {"value": "CC", "source": "given", "intake": "C61"}
+    assert [r for r in _kind(recs, "tool_call") if r["tool"] == "investigate"][0]["input"]["condition"] == "CC"
+
+
+def test_tool_error_logs_basenames_only(tmp_path):
+    _need()
+    intake.set_stub(lambda p: reply())
+    missing = os.path.join(str(tmp_path), "deep", "dir", "frame_missing.png")
+    _, recs = _go(tmp_path, _wound(frames=[missing, missing]))
+    blob = json.dumps(recs)
+    assert str(tmp_path) not in blob and "deep/dir" not in blob
+
+
+def test_missing_interval_key_filled_from_intake(tmp_path):
+    """Regression: an upload with no interval_h key at all crashed in refresh_checks (KeyError)."""
+    _need()
+    intake.set_stub(lambda p: reply())
+    w = _wound()
+    del w["interval_h"]
+    out, recs = _go(tmp_path, w)
+    qc = next(r for r in _kind(recs, "tool_call") if r["tool"] == "qc_forecast")
+    assert qc["input"]["interval_h"] == 1.0 and _kind(recs, "intake_applied")[0]["checks_h"] == [1.0]

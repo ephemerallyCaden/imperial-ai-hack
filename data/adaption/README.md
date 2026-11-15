@@ -99,3 +99,12 @@ How the data is made:
 {"frame_interval_h": 0.5, "pixel_um": null, "duration_h": 8.0, "cell_type": "HeLa", "assay_type": "scratch", "imaging": "brightfield", "proliferation_blocked": true, "condition": "drug:dasatinib", "in_scope": true, "missing": ["pixel_um"]}
 ```
 
+## Open item for P2: prompt style at inference
+
+The Adaption docs (Running AutoScientist, Overview, Create a dataset, Run on non-adapted data, Download the model,
+Supported models; checked 2026-11-15) do not say whether AutoScientist applies the base model's chat template to the
+`prompt` column for `training_method="instruction"`. The only formatting statement is "Maps `prompt` and `completion`
+for SFT". So `agent/intake.py` makes it an explicit setting, `STITCH_INTAKE_PROMPT_STYLE=chat|raw` (default chat), records
+it in every Intake result and in `--eval` output, and `python -m agent.intake --eval --backend base` runs the base model
+with the same style. To do: ask Adaption which format training used, and score both styles on the real test set
+before the go/no-go (pre-declare which style is primary).

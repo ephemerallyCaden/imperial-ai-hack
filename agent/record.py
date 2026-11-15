@@ -47,8 +47,8 @@ def leaks(text):
 
 
 def check_clean(path):
-    bad = leaks(open(path).read())
-    return bad
+    with open(path) as fh:
+        return leaks(fh.read())
 
 
 def write_index(runs_dir):
@@ -57,7 +57,8 @@ def write_index(runs_dir):
     for f in sorted(os.listdir(runs_dir)):
         if not f.endswith(".jsonl"):
             continue
-        recs = [json.loads(l) for l in open(os.path.join(runs_dir, f)) if l.strip()]
+        with open(os.path.join(runs_dir, f)) as fh:
+            recs = [json.loads(l) for l in fh if l.strip()]
         start = next((r for r in recs if r.get("kind") == "run_start"), {})
         end = next((r for r in recs if r.get("kind") == "run_end"), {})
         rep = next((r for r in recs if r.get("kind") == "report"), {})
@@ -65,10 +66,23 @@ def write_index(runs_dir):
                      "wound_id": (start.get("wound") or {}).get("wound_id") if isinstance(start.get("wound"), dict) else None,
                      "kind": (start.get("wound") or {}).get("kind") if isinstance(start.get("wound"), dict) else None,
                      "stop_kind": end.get("stop_kind"), "stop_h": end.get("stop_h"),
-                     "plate_hours_saved": end.get("plate_hours_saved"), "headline": rep.get("headline")})
+                     "plate_hours_saved": end.get("plate_hours_saved"), "headline": rep.get("headline"),
+                     "cost_usd": _cost(recs)})
     with open(os.path.join(runs_dir, "index.json"), "w") as fh:
         json.dump({"runs": runs}, fh, indent=1)
     return runs
+
+
+def write_clean_index(runs_dir):
+    """write_index, then the same leak check as the run logs on index.json. -> leak hits ([] when clean)."""
+    write_index(runs_dir)
+    return check_clean(os.path.join(runs_dir, "index.json"))
+
+
+def _cost(recs):
+    """Sum of model_call cost_usd (decisions, Intake and the Reporter); None when no call reported a cost."""
+    costs = [r["cost_usd"] for r in recs if r.get("kind") == "model_call" and r.get("cost_usd") is not None]
+    return round(sum(costs), 6) if costs else None
 
 
 def main(argv=None):
@@ -91,12 +105,17 @@ def main(argv=None):
             bad = check_clean(os.path.join(a.out, f))
             if bad:
                 dirty[f] = bad
-    write_index(a.out)
+    bad = write_clean_index(a.out)
+    if bad:
+        dirty["index.json"] = bad
+    cost = 0.0
+    for f in os.listdir(a.out):
+        if f.startswith(stamp) and f.endswith(".jsonl"):
+            with open(os.path.join(a.out, f)) as fh:
+                cost += _cost([json.loads(l) for l in fh if l.strip()]) or 0.0
     out = {"runs": [{k: s.get(k) for k in ("run_id", "stop_kind", "stop_h", "plate_hours_saved",
                                              "numbers_traced", "numbers_untraced")} for s in summary],
-           "cost_usd": sum(r.get("cost_usd") or 0 for f in os.listdir(a.out) if f.startswith(stamp)
-                           for r in map(json.loads, open(os.path.join(a.out, f))) if r.get("kind") == "model_call"),
-           "dirty": dirty}
+           "cost_usd": cost, "dirty": dirty}
     print(json.dumps(out, indent=1))
     return 1 if dirty else 0
 

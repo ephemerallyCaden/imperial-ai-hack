@@ -60,7 +60,7 @@ def test_normal_run_to_a_stop(tmp_path):
     assert out["stop_h"] == 1.9 and out["plate_hours_saved"] == pytest.approx(17.1)
     assert seen and seen[0]["id"] == policy.STOP_UNLIKELY and seen[0]["irreversible"]
     assert [r["kind"] for r in recs] == ["run_start", "tool_call", "tool_call", "model_call", "critic", "decision",
-                                         "approval", "report", "run_end"]
+                                         "approval", "model_call", "report", "run_end"]
     tc = _kind(recs, "tool_call")
     assert all(r["input_fp"].startswith("sha256:") for r in tc)
     assert tc[1]["output"]["results"][0]["schedule"]["p_close_by_T"] == 0.094
@@ -82,7 +82,7 @@ def test_forced_stall_skips_model(tmp_path):
     out, recs = _go(tmp_path, STALL)
     d = _kind(recs, "decision")[0]
     assert d["decision"] == policy.ASK_HUMAN_STALL and d["source"] == "forced" and [x["id"] for x in d["allowed"]] == [policy.ASK_HUMAN_STALL]
-    assert calls == [] and not _kind(recs, "model_call")
+    assert calls == [] and not [r for r in _kind(recs, "model_call") if r.get("purpose") != "report"]
     assert _kind(recs, "approval")[0]["decision"] == policy.ASK_HUMAN_STALL   # approved stall = stop (#83)
     assert out["reason"] == "stopped" and out["stop_kind"] == "stall" and out["stop_h"] == 1.9
 
@@ -269,7 +269,7 @@ def test_budget_out_after_call_finishes_the_check(tmp_path):
     out, recs = _go(tmp_path, NORMAL, approve=lambda d: False)
     assert out["reason"] == "token_budget" and out["ended_at_h"] == 1.9
     assert [r["kind"] for r in recs] == ["run_start", "tool_call", "tool_call", "model_call", "critic", "decision",
-                                         "approval", "report", "run_end"]
+                                         "approval", "report", "run_end"]   # no budget left: template, no report call
     assert _kind(recs, "decision")[0]["source"] == "llm"
 
 

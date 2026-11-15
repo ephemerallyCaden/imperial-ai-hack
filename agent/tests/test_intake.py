@@ -24,7 +24,8 @@ def reply(**over):
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
-    for k in ("STITCH_INTAKE_BACKEND", "STITCH_INTAKE_ADAPTER", "STITCH_INTAKE_BASE", "STITCH_PROVIDER"):
+    for k in ("STITCH_INTAKE_BACKEND", "STITCH_INTAKE_ADAPTER", "STITCH_INTAKE_BASE", "STITCH_PROVIDER",
+              "STITCH_INTAKE_PROMPT_STYLE"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("STITCH_PROVIDER", "stub")
     yield
@@ -157,18 +158,179 @@ def test_adapter_reply_parsed(monkeypatch, tmp_path):
     assert r["backend"] == "adapter" and r["ok"] and r["model"].startswith("Qwen")
 
 
-def test_tgz_unpacked_safely(tmp_path):
-    tgz = tmp_path / "best.tgz"
-    with tarfile.open(tgz, "w:gz") as t:
-        data = b"{}"
-        info = tarfile.TarInfo("run/best/adapter_config.json"); info.size = len(data)
-        t.addfile(info, io.BytesIO(data))
-    d = intake._adapter_dir(str(tgz))
+def _tgz(path, members):
+    """members: (name, kind) with kind "file", "symlink", "hardlink" or "dir"."""
+    with tarfile.open(path, "w:gz") as t:
+        for name, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "file":
+                data = b"{}"
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+                continue
+            info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "dir": tarfile.DIRTYPE}[kind]
+            if kind != "dir":
+                info.linkname = "adapter_config.json"
+            t.addfile(info)
+    return str(path)
+
+
+@pytest.fixture
+def cache(monkeypatch, tmp_path):
+    root = tmp_path / "cache"
+    monkeypatch.setenv("STITCH_INTAKE_CACHE", str(root))
+    monkeypatch.setattr(intake, "_unpacked", {})
+    return root
+
+
+def test_tgz_unpacked_safely(tmp_path, cache, monkeypatch):
+    tgz = _tgz(tmp_path / "best.tgz", [("run/best/adapter_config.json", "file")])
+    d = intake._adapter_dir(tgz)
     assert os.path.isfile(os.path.join(d, "adapter_config.json")) and d.endswith(os.path.join("run", "best"))
-    assert intake._adapter_dir(str(tgz)) == d  # cached
+    assert d.startswith(str(cache)) and (os.stat(cache).st_mode & 0o777) == 0o700
+    assert [p for p in os.listdir(cache) if p.startswith("unpack_")] == []   # no temp folder left behind
+    monkeypatch.setattr(intake.hashlib, "sha256", lambda: (_ for _ in ()).throw(AssertionError("re-hashed")))
+    assert intake._adapter_dir(tgz) == d  # cached by path + mtime + size: not hashed again
     (tmp_path / "empty").mkdir()
     with pytest.raises(FileNotFoundError):
         intake._adapter_dir(str(tmp_path / "empty"))
+
+
+@pytest.mark.parametrize("members, why", [
+    ([("../evil/adapter_config.json", "file")], "'..' path"),
+    ([("/abs/adapter_config.json", "file")], "absolute"),
+    ([("adapter_config.json", "file"), ("link", "symlink")], "link or special file"),
+    ([("adapter_config.json", "file"), ("hard", "hardlink")], "link or special file"),
+])
+def test_tgz_traversal_and_links_refused(tmp_path, cache, members, why):
+    tgz = _tgz(tmp_path / "bad.tgz", members)
+    with pytest.raises(ValueError, match=why):
+        intake._adapter_dir(tgz)
+    assert not (tmp_path / "evil").exists() and not any(n.startswith("intake_adapter_") for n in os.listdir(cache))
+
+
+def test_tgz_refused_member_falls_back_with_basename_only(tmp_path, cache, monkeypatch):
+    tgz = _tgz(tmp_path / "bad.tgz", [("adapter_config.json", "file"), ("link", "symlink")])
+    monkeypatch.setenv("STITCH_INTAKE_BACKEND", "adapter")
+    monkeypatch.setenv("STITCH_INTAKE_ADAPTER", tgz)
+    llm_says(reply())
+    r = intake.extract(TEXT)
+    assert r["backend"] == "llm" and "adapter: ValueError" in r["fallback_reason"]
+    assert str(tmp_path) not in json.dumps(r)
+
+
+def test_cache_owned_by_others_or_shared_refused(tmp_path, cache, monkeypatch):
+    cache.mkdir(mode=0o700)
+    os.chmod(cache, 0o777)
+    tgz = _tgz(tmp_path / "best.tgz", [("adapter_config.json", "file")])
+    with pytest.raises(PermissionError, match="writable by other users"):
+        intake._adapter_dir(tgz)
+    os.chmod(cache, 0o700)
+    me = os.getuid()
+    monkeypatch.setattr(intake.os, "getuid", lambda: me + 1)
+    with pytest.raises(PermissionError, match="not owned by this user"):
+        intake._adapter_dir(tgz)
+
+
+def test_errors_and_model_names_have_no_local_paths(tmp_path, monkeypatch):
+    (tmp_path / "adapter").mkdir()
+    monkeypatch.setenv("STITCH_INTAKE_BACKEND", "adapter")
+    monkeypatch.setenv("STITCH_INTAKE_ADAPTER", str(tmp_path / "adapter"))
+    llm_says(reply())
+    r = intake.extract(TEXT)   # no adapter_config.json in the folder
+    assert "adapter: FileNotFoundError: no adapter_config.json under adapter" in r["fallback_reason"]
+    assert str(tmp_path) not in json.dumps(r)
+    assert intake._model_name(str(tmp_path / "models" / "qwen-base")) == "qwen-base"
+    assert intake._model_name("Qwen/Qwen3.5-0.8B") == "Qwen/Qwen3.5-0.8B"
+
+
+# ---------------------------------------------------------------- prompt style (open item: explicit, recorded)
+
+class FakeTok:
+    def __init__(self, template=True):
+        self.chat_template = "tmpl" if template else None
+        self.pad_token_id, self.eos_token_id, self.seen = 0, 0, []
+
+    def apply_chat_template(self, msgs, tokenize, add_generation_prompt, enable_thinking):
+        assert not tokenize and add_generation_prompt and enable_thinking is False and msgs[0]["role"] == "user"
+        return "<|user|>" + msgs[0]["content"] + "<|assistant|>"
+
+    def __call__(self, text, return_tensors):
+        import torch
+        self.seen.append(text)
+        return {"input_ids": torch.zeros((1, 3), dtype=torch.long)}
+
+    def decode(self, ids, skip_special_tokens):
+        return reply()
+
+
+class FakeModel:
+    def generate(self, input_ids, max_new_tokens, do_sample, num_beams, pad_token_id):
+        import torch
+        assert do_sample is False and num_beams == 1
+        return torch.zeros((1, 5), dtype=torch.long)
+
+
+@pytest.mark.parametrize("style, template, expect", [
+    ("chat", True, "<|user|>{p}<|assistant|>"),
+    (None, True, "<|user|>{p}<|assistant|>"),   # default is chat
+    ("raw", True, "{p}"),
+    ("raw", False, "{p}"),
+])
+def test_adapter_reply_prompt_style(monkeypatch, style, template, expect):
+    tok = FakeTok(template)
+    monkeypatch.setattr(intake, "_load_adapter", lambda path: (FakeModel(), tok, "/local/models/qwen-base"))
+    if style:
+        monkeypatch.setenv("STITCH_INTAKE_PROMPT_STYLE", style)
+    else:
+        monkeypatch.delenv("STITCH_INTAKE_PROMPT_STYLE", raising=False)
+    p = intake.prompt_mod().build_prompt(TEXT)
+    text, model = intake._adapter_reply(p)
+    assert tok.seen == [expect.format(p=p)] and text == reply()
+    assert model == f"qwen-base + LoRA adapter (greedy, {style or 'chat'})"   # base path cut to its name
+
+
+def test_chat_style_without_template_is_an_error_not_raw(monkeypatch, tmp_path):
+    monkeypatch.setattr(intake, "_load_adapter", lambda path: (FakeModel(), FakeTok(template=False), "Qwen/Qwen3.5-0.8B"))
+    with pytest.raises(ValueError, match="no chat template"):
+        intake._adapter_reply("x")
+    (tmp_path / "adapter_config.json").write_text("{}")
+    monkeypatch.setenv("STITCH_INTAKE_ADAPTER", str(tmp_path))
+    llm_says(reply())
+    r = intake.extract(TEXT)
+    assert r["backend"] == "llm" and "no chat template" in r["fallback_reason"] and r["prompt_style"] == "chat"
+
+
+def test_prompt_style_recorded_and_validated(monkeypatch):
+    use_stub(monkeypatch, lambda p: reply())
+    monkeypatch.setenv("STITCH_INTAKE_PROMPT_STYLE", "raw")
+    assert intake.extract(TEXT)["prompt_style"] == "raw"
+    monkeypatch.setenv("STITCH_INTAKE_PROMPT_STYLE", "jinja")
+    assert intake.extract(TEXT)["prompt_style"].startswith("invalid")
+    with pytest.raises(ValueError):
+        intake.prompt_style()
+
+
+def test_eval_base_uses_same_style_and_prints_it(monkeypatch, capsys):
+    gold = intake.score_mod().load(os.path.join(intake.ADAPTION, "test_real.jsonl"))
+    tok = FakeTok()
+    monkeypatch.setattr(intake, "_load_base", lambda: (FakeModel(), tok, "Qwen/Qwen3.5-0.8B"))
+    monkeypatch.setenv("STITCH_INTAKE_PROMPT_STYLE", "chat")
+    intake.main(["--eval", "--backend", "base"])
+    out = capsys.readouterr().out
+    assert "prompt style chat" in out and "base:Qwen/Qwen3.5-0.8B (base, no adapter) (greedy, chat)" in out
+    assert len(tok.seen) == len(gold) and all(t.startswith("<|user|>") for t in tok.seen)
+
+
+def test_llm_usage_and_cost_returned(monkeypatch):
+    llm.set_stub(lambda m, s, t: {"text": "not json", "model": "stub-claude", "cost_usd": 0.01,
+                                  "usage": {"input_tokens": 700, "output_tokens": 20}})
+    r = intake.extract(TEXT)   # unusable reply: its tokens still count
+    assert r["ok"] is False and r["usage"] == {"input_tokens": 700, "output_tokens": 20} and r["cost_usd"] == 0.01
+    assert r["model_calls"][0]["backend"] == "llm" and r["model_calls"][0]["usage"]["input_tokens"] == 700
+    use_stub(monkeypatch, lambda p: reply())
+    r = intake.extract(TEXT)
+    assert r["model_calls"] == [] and r["usage"] == {"input_tokens": 0, "output_tokens": 0} and r["cost_usd"] is None
 
 
 @pytest.mark.parametrize("over, note", [
@@ -200,11 +362,27 @@ def test_control_maps_to_cc(monkeypatch):
     (dict(proliferation_blocked=None), "MCF10A scratch, phase contrast.", "no mitomycin"),
     (dict(proliferation_blocked=True), "MCF10A cells were serum-starved.", "without mitomycin"),
     (dict(in_scope=False, assay_type="other"), TEXT, "outside the validated scope"),
+    (dict(proliferation_blocked=False), "MCF10A cells; mitomycin C was not used.", "mitomycin stated as not used"),
+    (dict(proliferation_blocked=True), "MCF10A cells; mitomycin C was not used.", "mitomycin stated as not used"),
+    (dict(), "MCF10A cells were scratched without mitomycin C. Phase contrast.", "mitomycin stated as not used"),
+    (dict(), "MCF10A cells; no mitomycin was added.", "mitomycin stated as not used"),
+    (dict(), "MCF10A cells. Mitomycin C (0.5 ug/ml) was omitted.", "mitomycin stated as not used"),
 ])
 def test_scope_notes(monkeypatch, over, text, note):
     use_stub(monkeypatch, lambda p: reply(**over))
     r = intake.extract(text)
     assert r["scope_ok"] is False and any(note in n for n in r["scope_notes"]), r["scope_notes"]
+
+
+@pytest.mark.parametrize("text, used", [
+    ("Cells were treated with mitomycin C (0.5 ug/ml) for 2 h.", True),
+    ("Cell division was blocked with 5 ug/ml mitomycin-C.", True),
+    ("We did not use serum. Cells got mitomycin C.", True),
+    ("Mitomycin C (10 ug/ml) wasn't added; cells divided.", False),
+    ("Phase contrast only.", None),
+])
+def test_mitomycin_used(text, used):
+    assert intake.mitomycin_used(text) is used
 
 
 def test_empty_and_long_text(monkeypatch):
