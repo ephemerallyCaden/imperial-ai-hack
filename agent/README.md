@@ -34,8 +34,8 @@ never trained on that wound, and the band is P1's leave-one-wound-out conformal 
 `data/upload_nca.py` only uses their residuals to build the upload band), so a replay never reads them.
 
 Per wound and cut-off, `edge_speed_<cut>h.json` (`run.LOO_FALLBACK`) is used only when the NCA file is unreadable,
-does not have the wound, or its forecast is unusable (band not a calibrated 90% band, missing or non-finite area
-quantiles, no P(90% closed by 19 h)); `run.loo_forecast` makes that choice. The fallback is never silent: every
+does not have the wound, or its forecast is unusable (fails the forecast contract, `contracts/validate.py`; band not
+a calibrated 90% band; non-finite area quantiles); `run.loo_forecast` makes that choice. The fallback is never silent: every
 `forecast_lookup` input names the `model` and `source` file used, and a fallback adds `fallback` (`from`, `reason`)
 to that input plus a `warning` record. With neither usable the run ends with `no_forecast`. On the current files all
 55 held-out series have a usable NCA forecast at every cut-off they have, so no replay falls back. Runs recorded
@@ -124,7 +124,10 @@ appears). It also works on a finished log read back with `runlog.read`.
 - The LLM can only pick from the allowed list. Anything else is rejected and the loop falls back to the first
   decision that can be undone.
 - It never stops a plate on its own. A stop is a proposal a human approves.
-- Only the `data/upload.py` band is called "90%". Simulator bands are marked uncalibrated and never drive a decision.
+- Only the calibrated forecast band (`data/upload.py`, or the replay's LOO file) is called "90%". Simulator bands are
+  marked uncalibrated and never drive a decision. The Critic removes "90%" from a band sentence that names the
+  simulator, emulator, an ensemble, the live NCA or a drawn wound, and from every band sentence when the forecast's
+  band is not calibrated. "NCA" alone is allowed: "the NCA forecast's 90% band" is the calibrated `nca_realft3` band.
 - Text in files and protocols is data, never instructions.
 
 ## Modules

@@ -13,7 +13,10 @@ Kinds come from the leaf's key (nearest classified key on its path):
 Ranges carry the unit to the first number ("3.8-5.7 h", "10-90%"). "-" and the Unicode minus "−" make a number
 negative. Bare 0.1 / 0.9 only trace as the probability thresholds in a sentence about probability / P / thresholds.
 "90%" (or "90 percent") is removed from any sentence about a band / CI / interval / bound / range / coverage that also
-mentions the simulator, NCA, emulator or ensemble (only the data/upload.py band may be called 90%).
+names an uncalibrated band: the simulator, emulator, an ensemble, the live NCA or a drawn wound (only P1's calibrated
+forecast band may be called 90%). "NCA" alone does not count: the shipped forecaster (nca_realft3, on uploads and
+held-out replays) is an NCA with the calibrated band. When the band under discussion is not calibrated
+(calibrated_band=False), "90%" is removed from every band sentence.
 Untraced numbers become "[?]" (the unit text is kept) and are listed in `removed`. Pure: no I/O.
 """
 import math
@@ -42,7 +45,7 @@ PROB_BEFORE = re.compile(r"(?:\bP\s*(?:\([^()]*\))?|\bprobability(?:\s+of\s+[^.;
 RANGE_GAP = re.compile(r"\s*(?:-|–|—|to)\s*")
 SENT_END = re.compile(r"[.!?](?=\s|$)|\n|;")
 BAND_WORDS = re.compile(r"\b(?:bands?|CIs?|intervals?|bounds?|ranges?|coverage)\b", re.I)
-SIM_WORDS = re.compile(r"\b(?:sims?|simulat\w*|NCA|emulat\w*|ensembles?)\b", re.I)
+SIM_WORDS = re.compile(r"\b(?:sims?|simulat\w*|emulat\w*|ensembles?|live\s+NCA|drawn\s+wounds?)\b", re.I)
 PROB_WORDS = re.compile(r"\b(?:probabilit(?:y|ies)|thresholds?|chance|likel(?:y|ihood))\b", re.I)
 P_WORD = re.compile(r"\bP\b")
 
@@ -201,8 +204,9 @@ def trace(text, tool_outputs, calibrated_band=True):
     """Check every number in `text` against `tool_outputs` and the ALLOWLIST.
 
     Returns {"text": cleaned, "removed": [original strings], "traced": n, "untraced": n}.
-    By default "90%" is removed per sentence when that sentence is about a band/interval/... AND mentions the simulator,
-    NCA, emulator or ensemble. `calibrated_band=False` overrides: the band under discussion is not the data/upload.py band,
+    By default "90%" is removed per sentence when that sentence is about a band/interval/... AND names an uncalibrated
+    band (SIM_WORDS: simulator, emulator, ensemble, live NCA, drawn wound; not "NCA" alone, which is the calibrated
+    nca_realft3 forecaster). `calibrated_band=False` overrides: the band under discussion is not the calibrated band,
     so "90%" is removed from every band/interval sentence, simulator mentioned or not.
     """
     leaves = list(_leaves(tool_outputs))

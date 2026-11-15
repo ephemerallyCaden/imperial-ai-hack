@@ -524,6 +524,16 @@ def test_horizon_summary_scalars_still_trace(tmp_path):
                         )["untraced"] == 0
 
 
+def test_replay_nca_band_sentence_traces(tmp_path):
+    """Held-out replay (nca_realft3): "the NCA forecast's 90% band runs from <q05> to <q95>" keeps 90% and traces."""
+    f = run.loo_forecast(1.9, NORMAL)[0]["forecasts"][0]
+    text = f"The NCA forecast's 90% band runs from {f['area_q05'][-1]} to {f['area_q95'][-1]}."
+    llm.set_stub(_fixed_stub(policy.STOP_UNLIKELY, text))
+    _, recs = _go(tmp_path, NORMAL, checks=[1.9], approve=lambda d: False)
+    c = _kind(recs, "critic")[0]
+    assert c["calibrated_band"] is True and c["untraced"] == 0 and c["text_out"] == text
+
+
 # ---------------------------------------------------------------- PR #101 review
 
 @pytest.mark.parametrize("model,level,calibrated,want", [
@@ -541,10 +551,11 @@ def test_calibrated_band_any_data_upload_model(model, level, calibrated, want):
 @pytest.mark.parametrize("model,extra,kept", [("nca_realft3", {}, True), ("whad_population_prior", {}, True),
                                               ("nca_realft3", {"calibrated": False}, False)])
 def test_upload_band_keeps_90_percent(tmp_path, model, extra, kept):
-    """#102: uploads use nca_realft3 (one frame: whad_population_prior); the Critic must keep "90%" for their band."""
+    """#102: uploads use nca_realft3 (one frame: whad_population_prior); the Critic must keep "90%" for their band,
+    also when the text calls it the NCA forecast's band."""
     doc = run._one(run._loo_doc(config.CHECKS_H[0]), NORMAL)
     doc.update(model=model, **extra)
-    llm.set_stub(_schedule_stub(extra=" The 90% band is from the forecast."))
+    llm.set_stub(_schedule_stub(extra=" The NCA forecast's 90% band is from the forecast."))
     _, recs = _go(tmp_path, doc, approve=lambda d: False)
     cr = _kind(recs, "critic")[0]
     assert cr["calibrated_band"] is kept

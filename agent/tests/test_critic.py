@@ -53,6 +53,18 @@ def test_wrong_band_90_percent_removed():
     assert trace("90% closure by 19 h", [], calibrated_band=False)["untraced"] == 0   # not about a band
 
 
+def test_calibrated_nca_band_keeps_90_percent():
+    """The shipped forecaster is an NCA with P1's calibrated band (nca_realft3): "NCA" alone is not a simulator word."""
+    out = [{"area_q05": 0.12, "area_q95": 0.45}]
+    text = "The NCA forecast's 90% band runs from 0.12 to 0.45."
+    r = trace(text, out, calibrated_band=True)
+    assert r["untraced"] == 0 and r["traced"] == 3 and r["text"] == text
+    r = trace(text, out, calibrated_band=False)                       # same sentence, uncalibrated band
+    assert r["removed"] == ["90%"] and r["text"] == "The NCA forecast's [?]% band runs from 0.12 to 0.45."
+    r = trace("The simulator's 90% band runs from 0.12 to 0.45.", out, calibrated_band=True)
+    assert r["removed"] == ["90%"]                                     # simulator band: stripped even in a calibrated run
+
+
 def test_identifiers_and_list_markers_ignored():
     text = "1. Wound CC_P3 frame t00 in run_20261115_ab12 (exp1/part_II, run-42, #80)\n2) done on 2026-11-15 at 09:30"
     r = trace(text, [])
@@ -82,9 +94,10 @@ def test_kind_must_match_field():
 
 def test_per_sentence_band_rule():
     assert trace("The forecast has a 90% band. The simulator agrees.", [])["untraced"] == 0
-    r = trace("The forecast has a 90% band. The NCA 90% interval is wider.", [])
-    assert r["removed"] == ["90%"] and r["text"] == "The forecast has a 90% band. The NCA [?]% interval is wider."
-    for t in ("The sim's 90-percent band", "the emulator 90 percent CI", "ensemble coverage is 90%", "sim 90% range"):
+    r = trace("The forecast has a 90% band. The simulator 90% interval is wider.", [])
+    assert r["removed"] == ["90%"] and r["text"] == "The forecast has a 90% band. The simulator [?]% interval is wider."
+    for t in ("The sim's 90-percent band", "the emulator 90 percent CI", "ensemble coverage is 90%", "sim 90% range",
+              "the live NCA's 90% band", "a drawn wound's 90% band"):
         assert trace(t, [])["untraced"] == 1, t
     assert trace("90% of simulated futures close", [])["untraced"] == 0   # no band word
 
