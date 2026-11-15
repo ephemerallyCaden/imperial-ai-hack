@@ -21,6 +21,8 @@ The files import each other by relative path. Use a module worker; `file://` wil
 
 The worker, the weights fetch and playback have been smoke-tested in headless Chrome (see the browser smoke test).
 
+**Draw mode, ready to mount (#106):** `web/draw/draw.js` exports `mountDraw(el)`, which builds both Draw views on these files: *Draw a wound* (engine, follow presets, no band) and *Real wound* (sim vs NCA vs observed on exp1_partII_C61_P2, with the NCA band computed live in the worker and labelled uncalibrated). Asset paths resolve from the module, so it works from any page. Standalone page: `python -m http.server 8000 --directory web`, then open `/draw/`. Styling uses the `st-*` classes and tokens from `design/style-guide/tokens.css`, with fallbacks in `web/draw/draw.css`.
+
 ## 0. v2 defaults: the follower rule (demo, user decision recorded on #68)
 
 The demo uses the **follower rule everywhere**. This is an *open departure* from the pre-declared criterion (#68). The free rule, which the 00:00 gate used, stays selectable and clearly named.
