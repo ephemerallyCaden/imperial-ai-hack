@@ -1,4 +1,5 @@
-// 3D tissue field for Assay (look from web/vendor-design/glass-dish-main.js): hex columns, height = local density,
+// 3D tissue field for Assay, in the approved glass-dish final look (web/vendor-design/look.js, a byte copy of
+// design/prototypes/glass-dish/look.js: toon rig + material, cool hue shift, skin age ramp): hex columns, height = local density,
 // colour = state. Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
 // The cells are SIMULATED (P2's cell-agent playback, web/public/sim), never tracked cells: the frame shown is the
 // playback frame whose wound area matches the area curve at time t. Live drawing (web/assay/live.js) feeds the same
@@ -11,6 +12,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { viewFrame } from "../public/sim/js/playback.js";
+import { FINAL, HMAX, addLights, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour } from "../vendor-design/look.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
 export const DISPLAY_K = 2;                              // display hexes per lattice site along x
@@ -23,7 +25,7 @@ const SCENE_BG = hexNum(tok("--scene-bg", "#120A09"));
 const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11 };                // tokens.css --ghost-* (linear)
 export const STATE_LABEL = { wound: "wound (no cells)", intact: "intact sheet", edge: "leading edge", fresh: "new tissue" };
 const STATES = ["wound", "intact", "edge", "fresh"];     // state codes 0..3
-const HY = Math.sqrt(3) / 2, S = 0.5, HMAX = 0.7;        // S = world units per lattice site
+const HY = Math.sqrt(3) / 2, S = 0.5;                    // S = world units per lattice site; HMAX (height of density 1) from look.js
 
 export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // ---------- display hex grid over the true W x H site field (pointy-top hexes, odd rows shifted half a hex) ----------
@@ -106,9 +108,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.minDistance = 1.0; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, 1.1));
-  const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-30, 60, 25); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe4e6ea, 0.5); fill.position.set(40, 20, -30); scene.add(fill);
+  addLights(scene, FINAL.mat);   // toon rig: hemisphere 0.4, key 1.25, fill 0.3
 
   // ---------- graph space: floor grid every 100 µm, box, rulers ----------
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -140,11 +140,9 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   label("local density (simulated)", V(xa - 0.2, top + 0.6, za), 0.5, "#e8ecef").center.set(1, 0.5);
 
   // ---------- columns: coloured + matte greyscale (outside a selection) ----------
-  // pointy-top hex prism (CylinderGeometry puts its first vertex on +z), circumradius a little under the packing
-  // radius so the dark floor shows as a thin outline between hexes (the M10 mockup's "outlines on" look)
-  const R = DX * S / Math.sqrt(3) * 0.93;
-  const colGeo = new THREE.CylinderGeometry(R, R, 1, 6); colGeo.translate(0, 0.5, 0);
-  const cols = new THREE.InstancedMesh(colGeo, new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), COUNT);
+  // the mockup's hex prism and proportions: radius 0.55 x hex spacing, turned 30 deg (look.js colGeo)
+  const colGeo = hexGeo(0.55 * DX * S);
+  const cols = new THREE.InstancedMesh(colGeo, makeColumnMaterial(FINAL.mat, FINAL.hshift), COUNT);
   const dull = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial(), COUNT);
   cols.frustumCulled = dull.frustumCulled = false;   // one draw each; the instance bounds never need computing
   scene.add(cols, dull);
@@ -153,7 +151,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const cm = cols.instanceMatrix.array, dm = dull.instanceMatrix.array, cc = cols.instanceColor.array, dc = dull.instanceColor.array;
   const rnd = Float32Array.from({ length: COUNT }, (_, k) => ((Math.sin(k * 12.9898) * 43758.5453) % 1 + 1) % 1);  // fixed shade jitter
   const hNow = new Float32Array(COUNT).fill(0.5), inSelA = new Uint8Array(COUNT).fill(1);
-  const LIN = STATES.map(s => new THREE.Color(PAL[s])), GREY = STATES.map(s => DARK[s]);
+  const GREY = STATES.map(s => DARK[s]);
+  const ramp = makeAgeRamp(PAL, 60);   // skin age ramp; original tissue (age Infinity) gets its darkest stop
 
   // simulated outline (area-matched contour from smooth.js), labelled uncalibrated
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
@@ -191,8 +190,9 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   function writeColours() {
     const st = cur.state;
     for (let k = 0; k < COUNT; k++) {
-      const s = st[k], j = s === 1 ? 0.85 + 0.3 * rnd[k] : 1, c = LIN[s], o = 3 * k, g = GREY[s] * j;
-      cc[o] = c.r * j; cc[o + 1] = c.g * j; cc[o + 2] = c.b * j; dc[o] = dc[o + 1] = dc[o + 2] = g;
+      const s = st[k], o = 3 * k, g = GREY[s] * (s === 1 ? 0.85 + 0.3 * rnd[k] : 1);
+      cellColour(col, STATES[s], s === 1 ? Infinity : 0, rnd[k], ramp);
+      cc[o] = col.r; cc[o + 1] = col.g; cc[o + 2] = col.b; dc[o] = dc[o + 1] = dc[o + 2] = g;
     }
     cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
   }
