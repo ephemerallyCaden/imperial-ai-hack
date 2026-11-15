@@ -8,6 +8,7 @@
 .as-qc { min-width: 0; }
 .as-qc .st-chip { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 .as-honesty { margin-left: auto; display: flex; gap: var(--s2); flex-wrap: wrap; }
+.as-honesty .st-chip { padding: 2px 8px; }
 
 /* main: centre + right panel */
 .as-main { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
@@ -37,7 +38,9 @@
 .as-ageends { display: flex; justify-content: space-between; width: 200px; }
 .as-tip { position: absolute; z-index: 3; white-space: nowrap; }
 .as-cover { position: absolute; inset: 0; z-index: 4; background: var(--bg); display: grid; place-content: center; text-align: center; color: var(--dim); }
-.as-notice { position: absolute; z-index: 5; top: 56px; left: 50%; transform: translateX(-50%); width: min(460px, 90%); padding: var(--s4); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+/* notices sit on .assay's main row, not in the stage (the held-out view hides the stage), centred over the stage
+   column as before (the right panel is 400 px) and kept on screen when narrow */
+.as-notice { position: absolute; z-index: 5; grid-row: 2; grid-column: 1; top: 56px; left: max(50% - 200px, min(230px, 45%)); transform: translateX(-50%); width: min(460px, 90%); padding: var(--s4); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
 .as-notice p { color: var(--dim); }
 
 /* scale strip */
