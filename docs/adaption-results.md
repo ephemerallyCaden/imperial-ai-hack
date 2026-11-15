@@ -45,7 +45,7 @@ Ship only if the fine-tune beats the base on the real set in BOTH exact match AN
 | model / settings | Qwen/Qwen3.5-2B, LoRA, 1 iteration, target 0.7 | same |
 | platform best_win_rate | **0.8793** | **0.50** (below target; exactly 0.5 may mean all ties or no real judging: asked Adaption) |
 | base on held-out wounds | accuracy 9.5% (clean 5.4%, injected 21.4%) | pass 3.2% (traced 70.5%, decision named 28.9%) |
-| fine-tuned on held-out wounds | accuracy 99.8% (clean 100%, injected 99.1%) | pending (local predictions running) |
+| fine-tuned on held-out wounds | accuracy 99.8% (clean 100%, injected 99.1%) | pass 44.3% on first 106 of 308 rows (base 4.7% on the same rows); full run in progress |
 
 ### Triage: held-out result and go/no-go (amended rule, disclosed)
 444 held-out rows from 14 experiment-2 part II wounds. Fine-tune predictions in `data/adaption/reporter/preds_triage_ft.jsonl`.
@@ -65,3 +65,16 @@ Reproduce: `python -I data/adaption/reporter/score_agents.py triage base=preds_t
 **Rule amended after seeing results (honesty note):** the pre-declared rule (in `score_agents.py`) also required "no class recall below the base's". As written that fails: base recall on `continue` is 100% because the base answers `continue` almost every time (its other recalls are 0% and 6.8%), and the fine-tune misses 1 of 24 `continue` rows. That clause was meant to catch a model that collapses to one class, and here it penalises the fine-tune because the base is the one that collapsed. We dropped the clause and kept the accuracy conditions. **GO** under the amended rule: the fine-tune beats the base on both clean (5.4% -> 100%) and injected (21.4% -> 99.1%) accuracy. It would be NO-GO under the original wording.
 
 The one miss: `edge_speed|exp2_partII_NC_P2|9.5|inj` (injected row), gold `continue`, fine-tune answered `stop_unlikely`, which is likely not an allowed id for that row (valid id 99.8%).
+
+### Reporter: held-out result and go/no-go (partial, full run in progress)
+Pre-declared rule: the fine-tune beats the base on the Reporter pass rate. The first local prediction run stopped after 106 of 308 rows (its shell was closed); the remaining 202 rows are being generated separately with the same settings (greedy decoding, so the split does not change outputs). Scores on the 106 completed rows:
+
+| metric | base | fine-tuned |
+|---|---|---|
+| sections | 100.0% | 100.0% |
+| traced | 72.6% | 64.2% |
+| scope | 100.0% | 100.0% |
+| decision named | 27.4% | **66.0%** |
+| **pass** | 4.7% | **44.3%** |
+
+**GO** (decided on these 106 rows; to be confirmed on all 308). Caveats to show honestly: traced is lower than the base (more reports contain a number not traceable to tool outputs), 56% of reports still fail at least one check, the 106 rows may not cover all 14 wounds evenly, and the platform win rate was 0.50 (below the 0.7 target). The agent keeps its critic and scope guard on every Reporter output, so failing reports are caught rather than shown.
