@@ -1,10 +1,11 @@
-/* Draw mode layout (#106). Colours, type and the st-* components come from P3's design/style-guide/tokens.css;
-   the :where() fallbacks below copy the values used here so the page also works before tokens.css is on main
+/* Draw mode layout (#106). Colours, type and the st-* components come from design/style-guide/tokens.css (linked by index.html);
+   the :where() fallbacks below copy its values (final skin look, #131) so the module still matches where tokens.css is not loaded
    (zero specificity, so tokens.css wins wherever both are loaded). */
 :where(:root) {
   --bg: #050607; --panel: rgba(5,6,7,.62); --panel-solid: #0B0D10; --raise: #12151A;
   --ink: #E8ECEF; --dim: #8A949C; --faint: #5C656D; --line: rgba(232,236,239,.5); --hair: rgba(232,236,239,.18);
-  --accent: #E0A458; --cell-wound: #0B1116; --cell-intact: #1F4F5C; --cell-edge: #EE7F2D;
+  --accent: #E0A458; --cell-wound: #24120F; --cell-intact: #C68B6E; --cell-edge: #B3122E;
+  --cell-new: #FFD2C6; --cell-dividing: #FFFFFF; --scene-bg: #120A09;
   --chart-observed: var(--ink); --chart-median: var(--accent); --chart-member: rgba(232,236,239,.22);
   --chart-cut: rgba(232,236,239,.5); --chart-grid: rgba(232,236,239,.08); --chart-axis: rgba(232,236,239,.3);
   --font-cond: "Avenir Next Condensed", "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
@@ -35,7 +36,7 @@
 .dr-body { padding: var(--s4) 0; }
 .dr-view { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s4); align-items: start; outline: none; }
 .dr-stage { position: relative; }
-.dr-canvas { display: block; width: 100%; height: auto; aspect-ratio: 44 / 32; border: 1px solid var(--hair); background: var(--cell-wound); touch-action: none; cursor: crosshair; }
+.dr-canvas { display: block; width: 100%; height: auto; aspect-ratio: 44 / 32; border: 1px solid var(--hair); background: var(--scene-bg, #120A09); touch-action: none; cursor: crosshair; }
 .dr-zoom { position: absolute; right: var(--s2); bottom: var(--s2); display: flex; gap: 4px; }
 .dr-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
 .dr-pair figure { margin: 0; } .dr-pair figcaption { margin-top: 6px; } .dr-pair .dr-canvas { cursor: zoom-in; }
@@ -52,3 +53,4 @@
 .dr-scale i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--accent); }
 .dr-scale span { position: absolute; top: 15px; color: var(--accent); white-space: nowrap; }
 .dr-scale em { position: absolute; top: 30px; font-style: normal; }
+.dr-root [hidden] { display: none !important; }   /* .st-btn / .dr-canvas set display, which beats the hidden attribute */

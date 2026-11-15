@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch · berry shading</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E090E; color: #f2e6ec; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; padding: 20px 24px; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 500; letter-spacing: .18em; }
+  p.sub { margin: 0 0 12px; color: #a8939e; max-width: 960px; }
+  .bar { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; color: #a8939e; letter-spacing: .1em; font-size: 10px; text-transform: uppercase; flex-wrap: wrap; }
+  .seg { display: flex; } .seg button { background: none; border: 1px solid rgba(242,230,236,.35); color: #a8939e; font: inherit; padding: 6px 10px; cursor: pointer; letter-spacing: .12em; }
+  .seg button + button { border-left: 0; } .seg button.on { background: #f2e6ec; color: #0E090E; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid rgba(242,230,236,.16); text-decoration: none; color: inherit; display: block; }
+  .card:hover { border-color: #FF7099; }
+  iframe { width: 100%; aspect-ratio: 16 / 10; border: 0; display: block; pointer-events: none; }
+  .meta { padding: 8px 10px; } .name { letter-spacing: .12em; } .note { color: #a8939e; font-size: 10px; margin-top: 2px; } code { color: #FF7099; }
+  .sw { display: flex; gap: 4px; } .sw i { width: 14px; height: 14px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); }
+</style>
+</head>
+<body>
+<h1>// STITCH · BERRY PALETTE · SHADING</h1>
+<p class="sub">Same palette, same frame (t = 30 min), different shading. Palette from the Petal Rouge / Rose Punch / Strawberry Red / Vintage Berry / Vintage Grape swatch. "Height ramp" follows the cellular-automata pin: colour by height, dark base to pale tips. Click a card to open it full size with the UI; the URL shows the params to reuse.</p>
+<div class="bar">
+  <span>Palette</span><div class="seg" id="pal"></div><div class="sw" id="sw"></div><span id="lad"></span>
+  <span>View</span><div class="seg" id="view"></div>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+// [label, intact, edge, new, dividing, wound, bg]
+const PALS = {
+  berry: ['Berry', '883955', 'FF3E41', 'FF7099', 'FFFFFF', '2A1D29', '120B11'],
+  berrylight: ['Berry, pale new', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E'],
+  grape: ['Grape', '4C3549', 'FF3E41', 'FFB0C4', 'FFFFFF', '140D14', '0B070B'],
+  rose: ['Rose punch edge', '4C3549', 'DF367C', 'FFC2D1', 'FFFFFF', '140D14', '0B070B'],
+};
+// [name, note, params]
+const SHADES = [
+  ['Matte', 'baseline: old material', 'mat=matte'],
+  ['Wet', 'clearcoat, moist tissue', 'mat=wet'],
+  ['Toon', '3-band cel shading + rim', 'mat=toon'],
+  ['Height ramp', 'pin look: dark base, pale tips', 'mat=matte&ramp'],
+  ['Height ramp + bloom', 'pin look, glowing tips', 'mat=glow&ramp&fx=bloom'],
+  ['Pearl', 'thin-film iridescence', 'mat=pearl'],
+  ['X-ray', 'additive fresnel shells (glass heart ref)', 'mat=xray&fx=bloom'],
+  ['Velvet + grain', 'skin sheen, bloom, film grain (poster)', 'mat=skin&fx=bloom,grain'],
+  ['Gel + bloom', 'translucent, glowing rims', 'mat=gel&fx=bloom'],
+];
+const VIEWS = [['close', 'Close'], ['cells', 'Cells'], ['overview', 'Overview']];
+const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+  const Y = .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; return Math.round(116 * (Y > .008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16); };
+const st = { pal: 'berry', view: 'close' };
+try { Object.assign(st, JSON.parse(localStorage.getItem('stitch-berry') || '{}')); } catch {}
+function seg(id, opts, key) {
+  const el = document.getElementById(id); el.innerHTML = '';
+  for (const [v, label] of opts) { const b = document.createElement('button'); b.textContent = label.toUpperCase(); b.classList.toggle('on', st[key] === v);
+    b.onclick = () => { st[key] = v; try { localStorage.setItem('stitch-berry', JSON.stringify(st)); } catch {} render(); }; el.appendChild(b); }
+}
+function render() {
+  seg('pal', Object.entries(PALS).map(([k, v]) => [k, v[0]]), 'pal'); seg('view', VIEWS, 'view');
+  const [, ...hex] = PALS[st.pal], bg = hex[5];
+  document.getElementById('sw').innerHTML = hex.slice(0, 5).map(h => `<i style="background:#${h}"></i>`).join('');
+  document.getElementById('lad').textContent = `L ${hex.slice(0, 3).map(L).join(' / ')}`;
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  for (const [name, note, params] of SHADES) {
+    const q = `pal=${hex.slice(0, 5).join(',')}&bg=${bg}&${params}`;
+    const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
+    a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=30&view=${st.view}&${q}"></iframe>
+      <div class="meta"><div class="name">${name}</div><div class="note">${note} · <code>${params}</code></div></div>`;
+    g.appendChild(a);
+  }
+}
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch · ageing palettes</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #08090B; color: #e8ecef; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; padding: 20px 24px; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 500; letter-spacing: .18em; }
+  p.sub { margin: 0 0 12px; color: #8a949c; max-width: 980px; }
+  .bar { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; color: #8a949c; letter-spacing: .1em; font-size: 10px; text-transform: uppercase; flex-wrap: wrap; }
+  .seg { display: flex; } .seg button { background: none; border: 1px solid rgba(232,236,239,.35); color: #8a949c; font: inherit; padding: 6px 10px; cursor: pointer; letter-spacing: .12em; }
+  .seg button + button { border-left: 0; } .seg button.on { background: #e8ecef; color: #08090B; }
+  h2 { font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #8a949c; margin: 18px 0 8px; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid rgba(232,236,239,.16); text-decoration: none; color: inherit; display: block; }
+  .card:hover { border-color: #e0a458; }
+  iframe { width: 100%; aspect-ratio: 16 / 10; border: 0; display: block; pointer-events: none; }
+  .meta { padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; } .name { letter-spacing: .12em; } .note { color: #8a949c; font-size: 10px; margin-top: 2px; }
+  .sw { display: flex; gap: 4px; align-items: center; } .sw i { width: 14px; height: 14px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); }
+  .ramp { width: 70px; height: 8px; }
+</style>
+</head>
+<body>
+<h1>// STITCH · AGEING PALETTES (TOON)</h1>
+<p class="sub">Toon shading, healed cells coloured by age; the Age ramp buttons change how (Pale→dark was the first version). Swatches: intact · leading edge · new tissue · wound, then the age ramp. L = lightness of intact / edge / new (all ≥ 14 apart; none colour-blind simulated yet). Click a card for the full UI; the AGE HEATMAP button works there too.</p>
+<div class="bar"><span>Mode</span><div class="seg" id="mode"></div><span>Age ramp</span><div class="seg" id="ramp"></div><span>Time</span><div class="seg" id="time"></div><span>View</span><div class="seg" id="view"></div></div>
+<div id="out"></div>
+<script>
+// [name, why, intact, edge, new, dividing, wound, bg]
+const GROUPS = [
+  ['Skin', [
+    ['Skin, bright', 'bright warm skin, red edge, warm white new tissue', 'E8A882', 'FF3E41', 'FFE4D6', 'FFFFFF', '24120F', '120A09', 'warm'],
+    ['Skin, light', 'pale skin; raw crimson edge, pink new epidermis', 'C68B6E', 'B3122E', 'FFD2C6', 'FFFFFF', '24120F', '120A09'],
+    ['Skin, medium', 'tan skin; coral edge, peach new tissue', '9A6248', 'FF5A3C', 'FFD9C7', 'FFFFFF', '1C0F0A', '0E0806'],
+    ['Skin, deep', 'deep brown skin; orange-red edge, rose new tissue', '6B3F2A', 'FF6A45', 'F2BFA3', 'FFFFFF', '140A07', '0A0504'],
+  ]],
+  ['Warm + vibrant (warm light)', [
+    ['Magma', 'deep magenta-red skin, orange edge, cream new tissue', 'B0174F', 'FF8A00', 'FFE3C4', 'FFFFFF', '1A0508', '0D0204', 'warm'],
+    ['Sunset', 'pink-red skin, golden edge, warm white new tissue', 'D6336C', 'FFC21A', 'FFF1E0', 'FFFFFF', '1A060C', '0D0306', 'warm'],
+    ['Blood orange', 'scarlet skin, tangerine edge, peach-white new tissue', 'C22A1E', 'FFA62B', 'FFE6D6', 'FFFFFF', '1A0604', '0D0302', 'warm'],
+    ['Flamingo', 'hot pink skin, apricot edge, blush-white new tissue', 'E8457A', 'FFB347', 'FFF0F4', 'FFFFFF', '1C070F', '0E0408', 'warm'],
+    ['Ember', 'oxblood skin, vermilion edge, apricot-white new tissue', '8F1D14', 'FF5A1F', 'FFD9B8', 'FFFFFF', '170604', '0C0302', 'warm'],
+    ['Berry, warm light', 'Berry with the warm light rig', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E', 'warm'],
+  ]],
+  ['Medical', [
+    ['Surgical green', 'theatre-drape green; red edge reads hot against it, no red afterimage', '1F6B5C', 'FF5A4E', 'C4F2E4', 'FFFFFF', '07120F', '040A08'],
+    ['Clinical blue', 'hospital-software blue; coral edge, ice-white new tissue', '1E4E8C', 'FF5D5D', 'C7E6FF', 'FFFFFF', '060B14', '04070D'],
+    ['Radiology', 'imaging console: neutral greys, one red signal', '4A5561', 'FF4D3D', 'E6EEF5', 'FFFFFF', '07090C', '040506'],
+    ['H&E, soft', 'histology slide: haematoxylin violet, eosin pink', '6A3E8C', 'FF5C93', 'FBD3E9', 'FFFFFF', '0E0814', '08050C'],
+    ['Berry', 'last round, for comparison', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E'],
+  ]],
+];
+const EDGE = 'FF3E41';   // Strawberry Red from the Berry palette
+const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+  const Y = .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; return Math.round(116 * (Y > .008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16); };
+const mix = (a, b, t) => '#' + [0, 2, 4].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
+const dark = (h, w) => [0, 2, 4].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * .45 * .85 + parseInt(w.slice(i, i + 2), 16) * .15).toString(16).padStart(2, '0')).join('');
+const st = { mode: 'skin', ramp: 'pale', t: '70', view: 'close' };
+try { Object.assign(st, JSON.parse(localStorage.getItem('stitch-age') || '{}')); } catch {}
+function seg(id, opts, key) {
+  const el = document.getElementById(id); el.innerHTML = '';
+  for (const [v, label] of opts) { const b = document.createElement('button'); b.textContent = label.toUpperCase(); b.classList.toggle('on', st[key] === v);
+    b.onclick = () => { st[key] = v; try { localStorage.setItem('stitch-age', JSON.stringify(st)); } catch {} render(); }; el.appendChild(b); }
+}
+function render() {
+  seg('mode', [['skin', 'Skin ages'], ['heat', 'Heatmap overlay']], 'mode');
+  seg('ramp', [['pale', 'Pale→dark'], ['scar', 'Scar'], ['ember', 'Ember'], ['deep', 'Dark→normal'], ['sat', 'Saturation'], ['hue', 'Hue drift']], 'ramp');
+  seg('time', [['40', '40 min'], ['70', '70 min'], ['110', '110 min']], 't');
+  seg('view', [['close', 'Close'], ['overview', 'Overview']], 'view');
+  const out = document.getElementById('out'); out.innerHTML = '';
+  for (const [title, pals] of GROUPS) {
+    out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`); const g = document.createElement('div'); g.className = 'grid'; out.appendChild(g);
+    for (const [name, why, ...hex] of pals) {
+      hex[1] = EDGE;   // one leading-edge red for every palette
+      const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}${hex[6] ? '&light=' + hex[6] : ''}&mat=toon&age=skin&ageramp=${st.ramp}${st.mode === 'heat' ? '&heat' : ''}`;
+      const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
+      a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=${st.t}&view=${st.view}&${q}"></iframe>
+        <div class="meta"><div><div class="name">${name}</div><div class="note">${why}</div><div class="note">L ${hex.slice(0, 3).map(L).join(' / ')}</div></div>
+        <div class="sw">${[hex[0], hex[1], hex[2], hex[4]].map(h => `<i style="background:#${h}"></i>`).join('')}</div></div>`;
+      g.appendChild(a);
+    }
+  }
+}
+render();
+</script>
+</body>
+</html>

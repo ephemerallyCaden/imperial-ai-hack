@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch · selection look variations</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050607; color: #e8ecef; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; padding: 20px 24px; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 500; letter-spacing: .18em; }
+  p.sub { margin: 0 0 16px; color: #8a949c; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid rgba(232,236,239,.18); cursor: pointer; text-decoration: none; color: inherit; display: block; }
+  .card:hover { border-color: #e0a458; }
+  iframe { width: 100%; aspect-ratio: 16 / 10; border: 0; display: block; pointer-events: none; }
+  .meta { padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .name { letter-spacing: .12em; } .note { color: #8a949c; font-size: 10px; margin-top: 2px; }
+  .sw { display: flex; gap: 4px; } .sw i { width: 14px; height: 14px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); }
+</style>
+</head>
+<body>
+<h1>// STITCH · SELECTION LOOK VARIATIONS</h1>
+<p class="sub">Same frame and same selected area (t = 40 min, overview). Each card shows a different look for the cells outside the selection. Click to open it full size.</p>
+<div class="grid" id="grid"></div>
+<script>
+const SEL = '-9,-12,5,2', PAL = '1F4F5C,EE7F2D,F9D6FB,FFFFFF,0B1116';
+const G = [
+  ['rims',  'Rim outlines',     'current: dark bodies + hex outlines'],
+  ['grey',  'Greyscale',        'solid columns, colour drained; shape kept'],
+  ['dim',   'Dimmed colour',    'same colours at ~20%; states still faintly readable'],
+  ['flat',  'Flattened',        'rest drops to flat grey tiles; selection stands up like a core sample'],
+  ['dots',  'Dot field',        'rest becomes one dot per cell at its height; states keep colour'],
+  ['lift',  'Lifted out',       'selection rises out of the dish; rest greyscale'],
+];
+const g = document.getElementById('grid');
+for (const [mode, name, note] of G) {
+  const q = `pal=${PAL}&sel=${SEL}&ghost=${mode}`;
+  const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
+  a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=40&view=overview&${q}"></iframe>
+    <div class="meta"><div><div class="name">${name}</div><div class="note">${note}</div></div><div class="note">?ghost=${mode}</div></div>`;
+  g.appendChild(a);
+}
+</script>
+</body>
+</html>
