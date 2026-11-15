@@ -175,7 +175,7 @@ def _walk_objects(schema):
 
 def test_tools_schema_valid():
     names = [t["name"] for t in tools.TOOLS]
-    assert names == ["qc_forecast", "flags_schedule", "simulate", "investigate"] and set(names) == set(tools._FUNCS)
+    assert names == ["qc_forecast", "flags_schedule", "simulate", "investigate", "intake"] and set(names) == set(tools._FUNCS)
     unsupported = {"minimum", "maximum", "multipleOf", "minLength", "maxLength", "minItems", "maxItems"}
     for t in tools.TOOLS:
         assert set(t) == {"name", "description", "input_schema", "strict"} and t["strict"] is True
