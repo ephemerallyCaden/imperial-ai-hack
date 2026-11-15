@@ -71,3 +71,4 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 
 ## 2026-11-15 [ephemerallyCaden] Video demo (docs/video-demo.md)
 - DECIDED: open in a hospital with the original hook line; audience = doctors and assay scientists. Script assumes the finished product: NCA is the forecaster after the data fine-tune; triage = stalling, discolouration, abnormally fast growth. Light touch on limits; use cases kept, movement-vs-multiplication mentioned once (cancer).
+- DECIDED (video v3): Figma and Adaption get short named prize segments (Figma after the NCA visuals: sketch to wireframe to build; Adaption after the agents: fine-tunes across the pipeline, ending on the clinician/researcher report). Voice-over by a teammate; hospital footage self-shot (team walking through the hospital).
