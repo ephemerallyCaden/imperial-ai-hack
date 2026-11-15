@@ -1,6 +1,6 @@
 // Assay mode: pick a recorded agent run or a sample, replay it on a timeline, see the decision card, the forecast,
-// the images and the agent's reasons, over a 3D field of SIMULATED cells (never tracked cells).
-// Data: agent/runs (ctx.data.runIndex), web/data/samples, web/public/sim (P2 playback). Nothing is invented here.
+// the images and the agent's reasons, over a 3D density field from the v2 NCA emulator (never tracked cells).
+// Data: agent/runs (ctx.data.runIndex), web/data/samples, web/public/sim (P2 NCA playbacks). Nothing is invented here.
 // tissue.js needs three.js (import map -> unpkg); it is loaded dynamically in mount() so Assay still works offline
 import { parseRun, mergeBranch, docAsChecks, isCalibrated, HORIZON_H } from "./runlog.js";
 import { areaAt, curveX } from "./curve.js";
@@ -13,8 +13,13 @@ import { photoDialog, photoKind, COLOUR_MIN, SKIN_MIN } from "./photo.js";
 import { routeUpload, KIND_LABEL } from "../upload/route.js";
 import { mountHeldout } from "./heldout.js";
 
-const PLAYBACK = "web/public/sim/whad_partII_C61_P2_follow.json";   // P2 cell-agent playback (follow rule), docs/p2-handoff.md
-const PLAYBACK_WOUND = "exp1_partII_C61_P2";
+// 3D field = a v2 NCA density playback per WHAD run wound, started from that wound's own frame 0 with its follow-rule fit
+// (sim/js/assay_nca_case.py + make_nca_playback.mjs, docs/p2-handoff.md). Items without their own file show
+// FIELD_FALLBACK's field and say so: the samples and the pos2033 upload run are its frames t00-t02 (data/upload.py).
+const NCA_FILE = w => `web/public/sim/nca_follow_${w}.json`;
+const NCA_WOUNDS = ["exp1_partII_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2", "exp1_partI_C61_P1"];
+const FIELD_FALLBACK = "exp1_partII_CC_P2", DEFAULT_WOUND = "exp1_partII_C61_P2";
+const AREA_TOL = 0.04;   // shown NCA frame vs target area (fraction of start): beyond this the mismatch is stated
 const SAMPLES = [
   { id: "sample_3frame", label: "Sample · 3 frames (upload)", n: 3 },
   { id: "sample_2frame", label: "Sample · 2 frames (upload)", n: 2 },
@@ -58,7 +63,7 @@ export async function mount(el, ctx) {
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
-            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span class="as-st"><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-divnote" hidden></span>
+            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span class="as-st"><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-divnote" hidden></span><span class="as-dim as-fieldnote" style="display:none"></span>
               <div class="as-ageleg" hidden><div class="st-kicker">Cell age</div><i class="as-agebar" style="background:${T?.HEAT_GRADIENT || "none"}"></i><div class="as-ageends"><span>new</span><span>old</span></div></div></div>
             <div class="as-legendheat" hidden><span><i class="sw sw-stalled"></i>Stalled edge</span><span><i class="sw sw-moving"></i>Moving edge</span></div>
           </div>
@@ -108,12 +113,31 @@ export async function mount(el, ctx) {
 
   // ---------- tissue ----------
   let tissue = null;
+  const pbs = new Map();   // path -> Promise of the parsed playback
+  const loadPb = path => { if (!pbs.has(path)) pbs.set(path, ctx.data.json(path)); return pbs.get(path); };
   try {
     if (!T) throw new Error("three.js could not be loaded (offline?)");
-    const pb = await ctx.data.json(PLAYBACK);
-    tissue = T.createTissue(stage, pb, { onSelection: showSel, onHover: showTip });
+    tissue = T.createTissue(stage, await loadPb(NCA_FILE(DEFAULT_WOUND)), { onSelection: showSel, onHover: showTip });
   } catch (e) {
     console.error(e); stage.insertAdjacentHTML("afterbegin", `<div class="error">3D view offline</div>`);
+  }
+  // which NCA field an item shows: { path, own (started from this item's own data), note (what the field is) }
+  function fieldFor(it) {
+    const w = it.run?.wound_id;
+    if (it.kind === "run" && it.run.kind !== "frames" && NCA_WOUNDS.includes(w)) return { path: NCA_FILE(w), own: true, note: `started from ${w}'s own frame 0` };
+    const why = it.kind === "upload" ? "no NCA field is made for uploads"
+      : (it.kind === "sample" || it.run?.kind === "frames") ? `these frames are ${FIELD_FALLBACK}'s t00-t02, but the field is not from this item's own masks`
+      : "no NCA field was made for this wound";
+    return { path: NCA_FILE(FIELD_FALLBACK), own: false, note: `field shape not from this item: ${FIELD_FALLBACK}'s NCA field (started from its frame 0; ${why}); only the area follows this item` };
+  }
+  async function useField(it) {
+    if (!tissue) return;
+    const f = fieldFor(it);
+    try {
+      const pb = await loadPb(f.path);
+      if (S.item !== it) return;   // another item was picked while this one loaded
+      tissue.setPlayback(pb); S.field = f;
+    } catch (e) { console.error(e); S.field = { ...f, note: `${f.note}; this field failed to load (${e.message}), the previous field is shown` }; }
   }
 
   // ---------- timeline ----------
@@ -127,7 +151,7 @@ export async function mount(el, ctx) {
   let live = null, special = null, heldout = null, thumbAt = 0;
   const leaveRun = it => {
     S.item = it; sel.value = it.id; S.main = S.branch = S.merged = null; S.playing = false; S.msg = ""; S.panelKey = ""; S.thumbF = -1;
-    $(".as-timeline").hidden = true; $(".as-qc").innerHTML = ""; $(".as-cover").hidden = true;
+    $(".as-timeline").hidden = true; $(".as-qc").innerHTML = ""; $(".as-cover").hidden = true; $(".as-fieldnote").style.display = "none";
   };
   const chips = list => list.map(x => `<span class="st-chip st-chip--honesty">${x}</span>`).join("");
   const VIEWS = {
@@ -138,10 +162,9 @@ export async function mount(el, ctx) {
         tissue.clearSelection();
         live = live || createLive(tissue, { onState: liveState });
         live.start(); markDraw(); renderLivePanel();
-        $(".as-divnote").textContent = "new mass appears only next to cells (NCA v2 source term)";
         $(".as-simnote").textContent = `Simulated cells, not tracked cells: ${LIVE_LABEL}, live in this browser. Drag to cut the tissue.`;
       },
-      leave() { live?.stop(); markDraw(); $(".as-divnote").textContent = "dividing: off in this simulation"; },
+      leave() { live?.stop(); markDraw(); },
       key(a) {
         if (a === "play") { live?.toggle(); return true; }
         return a === "step-back" || a === "step-forward";
@@ -212,6 +235,8 @@ export async function mount(el, ctx) {
     } catch (e) {
       panel.innerHTML = `<div class="error">Could not load ${esc(it.label)}: ${esc(e.message)}</div>`; console.error(e); return;
     }
+    if (!S.main.refused) await useField(it);
+    if (S.item !== it) return;
     tissue?.clearSelection();
     seek(S.t);
   }
@@ -410,12 +435,18 @@ export async function mount(el, ctx) {
     // while a stop / stall decision waits for approval, the edge-stall overlay shows where the front is not moving
     const autoStall = !!(cNow?.needsApproval && !S.approvals[cNow.cut_h] && ["stop", "stall"].includes(decisionKind(cNow.decision)));
     S.stallShown = S.stall || autoStall;
+    let note = "";
     if (tissue && c && !refusedDoc) {
       const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area), dt = Math.min(1, S.t);
       const prev = S.stallShown && dt > 0.05 ? areaAt(fc, c.doc.cutoff_hours, S.t - dt) : null;
       const key = prev == null ? "" : `${fd.f}|${prev.toFixed(3)}`;
       if (key !== S.stallKey) { S.stallKey = key; tissue.setStall(prev == null ? null : { prevArea: prev, dtHours: dt, cutH: S.t, horizonH: HORIZON_H }); }
+      // visible only when needed: the field is another wound's, or the NCA cannot show this area (full note on hover)
+      const miss = Math.abs(fd.area - area) > AREA_TOL;
+      note = [S.field && !S.field.own ? `NCA field of ${FIELD_FALLBACK}, not this item's` : "",
+        miss ? `NCA cannot show ${Math.round(area * 100)}% (closest frame ${Math.round(fd.area * 100)}%${area > fd.area ? ", the NCA wound only shrinks" : ""})` : ""].filter(Boolean).join(" · ");
     }
+    const fn = $(".as-fieldnote"); fn.textContent = note; fn.title = note ? S.field?.note || "" : ""; fn.style.display = note ? "" : "none";
     $(".as-stallbtn").setAttribute("aria-pressed", !!S.stallShown);
     $(".as-legendheat").hidden = !S.stallShown;
     $(".as-legend3d").classList.toggle("is-stall", !!S.stallShown);
@@ -460,7 +491,7 @@ export async function mount(el, ctx) {
     S.sel = st; const box = $(".as-selstats");
     $('[data-act="clear"]').hidden = !st; box.hidden = !st;
     if (!st) return;
-    box.innerHTML = `<div class="st-kicker">Selection · simulated cells</div>
+    box.innerHTML = `<div class="st-kicker">Selection · NCA field</div>
       <div class="st-row"><span>Size</span><span>${st.w_um} × ${st.d_um} µm</span></div>
       <div class="st-row"><span>Display hexes</span><span>${st.sites}</span></div>
       <div class="st-row"><span>Wound (open)</span><span>${Math.round(st.open * 100)}%</span></div>
@@ -572,7 +603,7 @@ export async function mount(el, ctx) {
   ctx.bus.addEventListener("key", onKey);
 
   markView(); setHeat(new URLSearchParams(location.search).has("heat"));
-  const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
+  const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === DEFAULT_WOUND) || S.items[0];
   delete ctx.openItem;
   if (first) await select(first.id);
 
