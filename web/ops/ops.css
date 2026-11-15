@@ -1,0 +1,31 @@
+/* Ops mode layout. Components come from tokens.css (st-*); this file only places them. */
+.ops { height: 100%; overflow: auto; padding: var(--s4); display: grid; gap: var(--s3); align-content: start; }
+.ops-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.ops-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 540px); gap: var(--s4); align-items: start; }
+.ops-col { display: grid; gap: var(--s3); min-width: 0; }
+.ops-box { background: var(--panel-solid); border: 1px solid var(--hair); padding: var(--s3); min-width: 0; overflow-x: auto; }
+.ops-box > .st-kicker { margin-bottom: var(--s2); }
+.ops-box p { margin: var(--s2) 0; }
+.ops-box ul { margin: var(--s2) 0; padding-left: var(--s4); }
+.ops-box li { margin: 2px 0; }
+.ops-na { color: var(--dim); font-style: italic; }
+.ops .st-table td, .ops .st-table th { vertical-align: top; }
+.ops .st-table td.n, .ops .st-table th.n { text-align: right; }
+.ops tr.click { cursor: pointer; }
+.ops tr.click:hover td { background: var(--raise); }
+.ops tr.sel td { background: var(--raise); }
+.ops tr.sel td:first-child { color: var(--accent); }
+.ops tr.open td { background: var(--raise); }
+.ops tr.json td { background: var(--bg); }
+.ops pre { margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: var(--fs-small)/1.4 var(--font-mono); color: var(--dim); }
+.ops-totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); column-gap: var(--s4); }
+.ops-headline { font: 500 13px/1.4 var(--font-mono); margin: var(--s2) 0; }
+.ops-summary { color: var(--dim); font-size: var(--fs-small); }
+.ops .dim { color: var(--dim); }
+.ops .warn { color: var(--accent); }
+.ops details > summary { cursor: pointer; color: var(--dim); font-size: var(--fs-small); margin-top: var(--s2); }
+.ops-md table { margin: var(--s2) 0; }
+.ops-md h3 { font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--dim); margin: var(--s3) 0 var(--s1); }
+.ops-md code { color: var(--ink); }
+.ops-placeholder { border: 1px dashed var(--line); padding: var(--s6); text-align: center; color: var(--dim); }
+@media (max-width: 1100px) { .ops-cols { grid-template-columns: minmax(0, 1fr); } }
