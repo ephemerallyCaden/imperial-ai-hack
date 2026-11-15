@@ -3,6 +3,7 @@
   ADAPTION_API_KEY=... python -I data/adaption/launch.py --model ID        # launch on the uploaded dataset, writes run_ids.json
   python -I data/adaption/launch.py --models                        # list trainable base models
   python -I data/adaption/launch.py --cancel                        # cancel that run, keep its IDs as run_ids.cancelled-*.json
+  python -I data/adaption/launch.py --download                      # best LoRA -> data/adaption/best.tgz (gitignored)
   python -I data/adaption/launch.py --status                        # poll the run in run_ids.json
 
 The key is read from the environment only and never written anywhere. run_ids.json holds IDs only (safe to commit).
@@ -35,7 +36,7 @@ for m in models:
     print("model", m.id, m.api_model_size, size_b(m), m.methods, "reasoning" if m.train_with_reasoning else "", flush=True)
 if "--models" in sys.argv:
     sys.exit(0)
-if "--model" not in sys.argv and "--status" not in sys.argv and "--cancel" not in sys.argv:
+if not any(a in sys.argv for a in ("--model", "--status", "--cancel", "--download")):
     sys.exit("pass --model ID (auto-pick chose Mixtral-8x7B twice; pick explicitly from the list above)")
 MODEL = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else None
 print("chosen model", MODEL, flush=True)
@@ -45,6 +46,12 @@ if "--cancel" in sys.argv:  # --cancel [RUN_ID]; default: the run in run_ids.jso
     print("cancel", rid, c.autoscientist.cancel(rid))
     if os.path.exists(IDS) and json.load(open(IDS))["run_id"] == rid:
         os.replace(IDS, IDS.replace(".json", f".cancelled-{rid[:8]}.json"))
+    sys.exit(0)
+if "--download" in sys.argv:  # best LoRA of the run in run_ids.json -> data/adaption/best.tgz (gitignored)
+    rid = json.load(open(IDS))["run_id"]
+    with c.autoscientist.with_streaming_response.download(rid) as r:
+        r.stream_to_file(os.path.join(HERE, "best.tgz"))
+    print("saved", os.path.join(HERE, "best.tgz"), os.path.getsize(os.path.join(HERE, "best.tgz")), "bytes")
     sys.exit(0)
 if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.json
     i = sys.argv.index("--status")
