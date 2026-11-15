@@ -441,6 +441,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     // swap to another playback of the same field size; shows its frame 0 (cell ages restart)
     setPlayback(p) {
       if (p === pb) return;
+      heatR = heat ? HEAT_R1 : 0; heatAnim = false;   // a running heat front lands at its end: the new field is all on or all off
       load(p); bornUpTo(0); show(f0, bornPb, 0, SPAN_PB); drawOutline(f0.outline);
     },
     playback: () => pb,
