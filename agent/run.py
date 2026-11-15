@@ -19,10 +19,13 @@ decisions, a forced decision (refused / stall) skips the model, otherwise the mo
 policy.check() validates it (fallback: first allowed reversible decision), the Critic traces every number in the
 explanation, and an irreversible decision (a stop) needs approve(decision). Everything goes to agent/runs/<run_id>.jsonl.
 
-The Critic traces against tool outputs with metadata subtrees (META_KEYS) removed: numbers in wound names, notes or
-protocol text are never evidence. Metadata sent to the model is truncated (META_STR_MAX per string, META_TOTAL_MAX in
-total); the prompt size is estimated before each call and the call is skipped (fallback) if it would exceed the token
-budget left. If the budget runs out on a call, that check still gets its Critic and decision records, then the run
+The Critic traces against tool outputs with metadata subtrees (META_KEYS) removed (numbers in wound names, notes or
+protocol text are never evidence) and numeric lists longer than config.CRITIC_LIST_MAX dropped (curves, quantile series,
+ensemble members): only scalar summary fields and short lists are evidence. Before the Critic, scope_guard (a keyword
+filter, config.SCOPE_TERMS) replaces any explanation with clinical / treatment or molecule-design text by a neutral
+template from the decision's label and evidence, and logs a "scope" record. Metadata sent to the model is truncated
+(META_STR_MAX per string, META_TOTAL_MAX in total); the prompt size is estimated before each call and the call is
+skipped (fallback) if it would exceed the token budget left. If the budget runs out on a call, that check still gets its Critic and decision records, then the run
 stops. With record_both_branches, <run_id>.reject.jsonl is created before the first approval is asked, so an existing
 file fails before any stop (the parent log still gets run_end); run_end lists branch_run_ids.
 
@@ -40,6 +43,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import time
 
 from agent import config, critic, llm, policy, prompts, tools
@@ -181,9 +185,10 @@ class _Run:
         return self.tok_in + self.tok_out
 
     def _outputs(self):
-        """Critic sources: tool outputs with metadata subtrees (META_KEYS) removed. Numbers in names, notes or
-        protocol text come from files, not tools, so they are never evidence."""
-        return [_strip_meta(o) for o in self.inherited_outputs + self.log.tool_outputs()]
+        """Critic sources (critic_sources): tool outputs with metadata subtrees (META_KEYS) removed and long numeric
+        series dropped. Numbers in names, notes or protocol text come from files, not tools, so they are never
+        evidence; a long curve would let almost any made-up value trace by rounding."""
+        return [critic_sources(o) for o in self.inherited_outputs + self.log.tool_outputs()]
 
     # -- fixed steps
     def _tool(self, name, inp, fn):
@@ -253,7 +258,7 @@ class _Run:
         nxt = checks[k + 1] if k + 1 < len(checks) else None
         self.last_cut = cut
         name, inp, fn = self.src.step(cut)
-        doc = self._tool(name, inp, fn)
+        doc = self._tool(name, inp, lambda i: _with_summary(fn(i)))
         if doc.get("error"):
             raise _Stop("no_forecast")
         refused = bool(doc.get("refused"))
@@ -290,6 +295,12 @@ class _Run:
                 did, source = first["id"], "fallback"
                 expl = f"{first['label']}: {first['evidence']}."
         item = next(d for d in allowed if d["id"] == did)
+        guarded, hits = scope_guard(expl, item)
+        if hits:   # every explanation, before it is shown: no clinical / molecule-design text reaches the scientist
+            self.log.log("scope", cut_h=cut, decision=did, source=source, matched=hits, text_in=expl, text_out=guarded,
+                         reason="out of scope (keyword filter): clinical, treatment or molecule-design text replaced "
+                                "by a neutral template")
+            expl = guarded
         calibrated = bool(doc.get("model") == "edge_speed" and doc.get("level") == config.BAND_LEVEL) and not refused
         cr = critic.trace(expl, self._outputs(), calibrated_band=calibrated)
         self.traced += cr["traced"]; self.untraced += cr["untraced"]
@@ -376,6 +387,18 @@ class _Run:
         return out
 
 
+def _with_summary(doc):
+    """Forecast doc plus a "summary" of scalars taken from its curves: the area quantiles at the last forecast time
+    (the horizon). The Critic drops long series (critic_sources), so these are the curve values it can still trace;
+    they are the same values the model sees in the data block (_forecast_facts)."""
+    if not isinstance(doc, dict) or doc.get("error") or doc.get("refused") or not doc.get("forecasts"):
+        return doc
+    f = doc["forecasts"][0]
+    last = lambda k: (f.get(k) or [None])[-1]  # noqa: E731
+    return {**doc, "summary": {"area_q05_last": last("area_q05"), "area_q50_last": last("area_q50"),
+                               "area_q95_last": last("area_q95")}}
+
+
 def _forecast_facts(doc):
     """Short view of the forecast for the model (all numbers are tool output)."""
     if doc.get("refused"):
@@ -419,13 +442,39 @@ def _metadata(doc):
     return meta, cut[0]
 
 
-def _strip_meta(obj):
-    """Copy of a tool output with every META_KEYS subtree removed (at any depth)."""
+_SCOPE_RX = {kind: re.compile(r"\b(?:" + "|".join(terms) + r")\b", re.I) for kind, terms in config.SCOPE_TERMS.items()}
+
+
+def scope_guard(text, item):
+    """Keyword filter (config.SCOPE_TERMS), not a classifier. -> (text, matched). If `text` contains a clinical /
+    treatment or molecule-design term, it is replaced by the neutral template "<label>: <evidence>." for the decision
+    and `matched` lists {"kind", "term"} per distinct term found; otherwise (text, [])."""
+    hits, seen = [], set()
+    for kind, rx in _SCOPE_RX.items():
+        for m in rx.finditer(text or ""):
+            term = m.group(0).lower()
+            if (kind, term) not in seen:
+                seen.add((kind, term))
+                hits.append({"kind": kind, "term": term})
+    if not hits:
+        return text, []
+    return f"{item['label']}: {item['evidence']}.", hits
+
+
+def critic_sources(obj):
+    """Copy of a tool output for the Critic: META_KEYS subtrees removed (at any depth) and numeric lists longer than
+    config.CRITIC_LIST_MAX dropped (curves, quantile series, ensemble members), so a made-up number cannot trace by
+    rounding to one point of a long series. Scalar summary fields and short lists stay."""
     if isinstance(obj, dict):
-        return {k: _strip_meta(v) for k, v in obj.items() if k not in META_KEYS}
+        return {k: critic_sources(v) for k, v in obj.items() if k not in META_KEYS and not _long_series(v)}
     if isinstance(obj, (list, tuple)):
-        return [_strip_meta(v) for v in obj]
+        return [critic_sources(v) for v in obj if not _long_series(v)]
     return obj
+
+
+def _long_series(v):
+    return isinstance(v, (list, tuple)) and len(v) > config.CRITIC_LIST_MAX and \
+        all(x is None or (isinstance(x, (int, float)) and not isinstance(x, bool)) for x in v)
 
 
 def _allowed_item(d):

@@ -358,3 +358,93 @@ def test_empty_flags_results(tmp_path, monkeypatch):
     assert len(_kind(recs, "warning")) == len(config.CHECKS_H)
     for d in _kind(recs, "decision"):
         assert d["state"]["stall"] is False and d["state"]["p_close"] is None
+
+
+# ---------------------------------------------------------------- scope guard (clinical / molecule text)
+
+def _fixed_stub(decision_id, explanation):
+    def h(messages, system, tools):
+        return {"tool_calls": [{"id": "f", "name": prompts.TOOL_NAME,
+                                "input": {"decision_id": decision_id, "explanation": explanation}}],
+                "stop_reason": "tool_use", "usage": {"input_tokens": 100, "output_tokens": 20}}
+    return h
+
+
+def test_scope_guard_replaces_clinical_text_and_logs(tmp_path):
+    advice = "For the patient: start oral antibiotics and expect the ulcer to heal in 21 days."
+    llm.set_stub(_fixed_stub(policy.CONTINUE, advice))
+    out, recs = _go(tmp_path, NORMAL, checks=[1.9])
+    d = _kind(recs, "decision")[0]
+    assert d["decision"] == policy.CONTINUE                       # the allowed decision stands
+    item = next(a for a in d["allowed"] if a["id"] == policy.CONTINUE)
+    assert d["explanation"] == f"{item['label']}: {item['evidence']}."
+    for w in ("patient", "antibiotic", "ulcer", "21"):
+        assert w not in d["explanation"].lower() and w not in (out["explanation"] or "").lower()
+    sc = _kind(recs, "scope")
+    assert len(sc) == 1 and sc[0]["text_in"] == advice and sc[0]["text_out"] == d["explanation"]
+    assert {m["term"] for m in sc[0]["matched"]} == {"patient", "antibiotics"}
+    assert all(m["kind"] == "clinical" for m in sc[0]["matched"])
+    crit = _kind(recs, "critic")[0]
+    assert crit["text_in"] == d["explanation"] and crit["untraced"] == 0   # the Critic sees the template, not the advice
+    kinds = [r["kind"] for r in recs]
+    assert kinds.index("scope") < kinds.index("critic") < kinds.index("decision")
+
+
+@pytest.mark.parametrize("text,kind,term", [
+    ("Diagnosis: chronic wound.", "clinical", "diagnosis"),
+    ("Treat with a higher dose of the drug.", "clinical", "treat"),
+    ("Prescribe this to prevent infection.", "clinical", "prescribe"),
+    ("A candidate compound, SMILES CC(=O)O.", "molecule", "compound"),
+    ("Design a molecule that speeds closure.", "molecule", "molecule"),
+])
+def test_scope_guard_terms(text, kind, term):
+    item = {"label": "Continue", "evidence": "no refusal or stall at 1.9 h"}
+    shown, hits = run.scope_guard(text, item)
+    assert shown == "Continue: no refusal or stall at 1.9 h." and {"kind": kind, "term": term} in hits
+
+
+def test_scope_guard_leaves_normal_text():
+    text = ("At the 1.9 h check the chance of closing by 19.0 h is 0.094; the stall flag did not fire. "
+            "Imaging again at 3.8 h should narrow the band.")
+    assert run.scope_guard(text, {"label": "x", "evidence": "y"}) == (text, [])
+
+
+def test_system_prompt_says_no_clinical_advice():
+    assert "never give clinical or treatment advice" in prompts.SYSTEM
+
+
+# ---------------------------------------------------------------- Critic sources: scalars and short lists only
+
+def test_critic_sources_drop_long_series():
+    doc = {"p_close_by_T": 0.094, "short": [0.1, 0.2, 0.3, 0.4], "curve": [0.5, 0.3654, 0.2, 0.1, 0.05],
+           "forecasts": [{"area_q50": [0.9] * 18, "members": [[0.3654] * 18, [0.2] * 18], "t50": {"median": 5.1},
+                          "wound": "exp1_pos37", "flags": ["stall"]}]}
+    src = run.critic_sources(doc)
+    assert src == {"p_close_by_T": 0.094, "short": [0.1, 0.2, 0.3, 0.4],
+                   "forecasts": [{"members": [], "t50": {"median": 5.1}, "flags": ["stall"]}]}
+
+
+def test_made_up_percent_no_longer_traces_to_a_curve_point(tmp_path):
+    """Regression (adversarial untraced_number): 37% traced because it rounded to 0.3654 inside a long area series."""
+    expl = ("P(90% closed by 19 h) is 0.094. The wound will be fully closed by 14.2 h and 37% of the cells "
+            "are migrating.")
+    llm.set_stub(_fixed_stub(policy.STOP_UNLIKELY, expl))
+    _, recs = _go(tmp_path, NORMAL, checks=[1.9], approve=lambda d: False)
+    raw = _kind(recs, "tool_call")[0]["output"]
+    assert critic.trace("37%", [raw])["untraced"] == 0            # the old sources: a curve point matched
+    c = _kind(recs, "critic")[0]
+    assert c["removed"] == ["14.2 h", "37%"] and "0.094" in c["text_out"] and "19 h" in c["text_out"]
+
+
+def test_horizon_summary_scalars_still_trace(tmp_path):
+    """The area band at the horizon is quoted by real runs: it is kept as summary scalars on the forecast output."""
+    llm.set_stub(_schedule_stub())
+    _, recs = _go(tmp_path, NORMAL, checks=[1.9], approve=lambda d: False)
+    out = _kind(recs, "tool_call")[0]["output"]
+    f = out["forecasts"][0]
+    assert out["summary"] == {"area_q05_last": f["area_q05"][-1], "area_q50_last": f["area_q50"][-1],
+                              "area_q95_last": f["area_q95"][-1]}
+    q95 = f["area_q95"][-1]
+    text = f"The 90% band for area at 19.0 h runs from 0.0 to {q95}."
+    assert critic.trace(text, [run.critic_sources(o) for o in [r["output"] for r in _kind(recs, "tool_call")]]
+                        )["untraced"] == 0

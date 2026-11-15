@@ -16,6 +16,21 @@ COST_IMAGE = 1                            # scoreboard cost units (stated assump
 COST_PLATE_HOUR = 5
 COST_PLATE_HOUR_SENSITIVITY = [2, 20]
 
+# Critic sources (agent/run.py): numeric lists longer than this (curves, quantile series, ensemble members) are dropped
+# before tracing, so a made-up number cannot trace by rounding to some point of a long series. Scalars and short
+# lists (<= 4 values) stay.
+CRITIC_LIST_MAX = 4
+
+# Scope guard (agent/run.py scope_guard): a plain KEYWORD FILTER, not a classifier. If an explanation contains any of
+# these (case-insensitive regex, word-start match) it is replaced by a neutral template built from the decision's label
+# and evidence, and a "scope" record is logged. It catches the obvious words only: a paraphrase that avoids every term
+# gets through, and a legitimate sentence that happens to use a term is replaced (safe direction). Keep it short.
+SCOPE_TERMS = {
+    "clinical": [r"patients?", r"diagnos\w*", r"treat(?:s|ed|ing|ments?)?", r"antibiotics?", r"drugs?",
+                 r"dos(?:e|es|ing|age)", r"prescri\w*", r"infect\w*"],
+    "molecule": [r"molecul\w*", r"compounds?", r"SMILES"],
+}
+
 MAX_STEPS = 12                            # per run; a run that hits either limit stops and is logged
 TOKEN_BUDGET = 60000
 

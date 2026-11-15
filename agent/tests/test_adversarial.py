@@ -42,10 +42,19 @@ def test_real_case_met(tmp_path):
     assert "policy rejected" in rows[0]["observed"]
 
 
-def test_real_case_missed_when_outcome_differs(tmp_path):
-    """Same run as the clinical case, scored by the harness: the advice reaches the text, so it is missed."""
+def test_real_case_missed_when_outcome_differs(tmp_path, monkeypatch):
+    """The clinical case with the scope guard switched off: the advice reaches the text, so it is missed."""
+    monkeypatch.setattr(A.run, "scope_guard", lambda text, item: (text, []))
     rows = A.score([_by_name("out_of_scope_clinical")], str(tmp_path))
     assert rows[0]["met"] == "missed" and "antibiotic" in rows[0]["observed"]
+
+
+def test_gap_cases_now_met(tmp_path):
+    """Regression for the two gaps: clinical advice is replaced and logged as out of scope; a made-up 37% no longer
+    traces to a point of a long area series."""
+    rows = A.score([_by_name("out_of_scope_clinical"), _by_name("untraced_number")], str(tmp_path))
+    assert [r["met"] for r in rows] == ["met", "met"], rows
+    assert "logged as out of scope: True" in rows[0]["observed"]
 
 
 def test_obeying_stub_obeys(tmp_path):

@@ -9,7 +9,7 @@ At each imaging check (1.9, 3.8, 5.7 and 9.5 h) the agent:
 1. runs the fixed steps in code: QC and the calibrated forecast (`data/upload.py`), then the stall flag and schedule advice;
 2. works out in code which decisions are allowed (`policy.py`);
 3. asks the model to pick one allowed decision and explain it in plain English;
-4. checks the pick against policy, then passes the explanation through the Critic;
+4. checks the pick against policy, then passes the explanation through the scope guard and the Critic;
 5. asks a human to approve anything that cannot be undone (stopping a plate);
 6. writes every step to a run log.
 
@@ -25,7 +25,12 @@ policy (code; replay model, no LLM)", and why the real-model row reports how oft
 
 - The LLM never makes a number. Every number comes from a tool. The Critic (`critic.py`, plain code) removes any
   number in the explanation that does not match a tool output or an allowlisted constant with its unit, and counts it.
-  Numbers in wound names, notes or protocol text never count as evidence.
+  Numbers in wound names, notes or protocol text never count as evidence. Only scalar fields and short lists (<= 4
+  values) count: curves, quantile series and ensemble members are dropped, so a made-up number cannot match some
+  point of a long series. The area band at the horizon is kept as `summary` scalars on the forecast output.
+- No clinical, treatment or molecule-design text is shown. A keyword filter (`config.SCOPE_TERMS`; a keyword list, not
+  a classifier, so a paraphrase can get through) replaces any such explanation with "<label>: <evidence>." and logs a
+  `scope` record.
 - The LLM never raises or clears a flag. A refusal forces "data refused, ask a human". A fired stall flag forces
   "stall flagged, ask a human". The model is not called for those.
 - The LLM can only pick from the allowed list. Anything else is rejected and the loop falls back to the first
@@ -103,6 +108,7 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 | `model_call` | each model call | `model`, `usage`, `tokens_total`, `text`, `tool_calls`, `data`, `input_fp`; or `error` |
 | `model_skipped` | call would go over the token budget | `reason`, `estimated_tokens`, `tokens_left` |
 | `warning` | a tool returned nothing usable | `tool`, `message` |
+| `scope` | explanation had clinical / molecule terms | `decision`, `matched` (`kind`, `term`), `text_in`, `text_out`, `reason` |
 | `critic` | each check | `text_in`, `text_out`, `removed`, `traced`, `untraced`, `calibrated_band` |
 | `decision` | each check | `decision`, `label`, `allowed`, `state`, `source` (`forced`, `llm` or `fallback`), `fallback_reason`, `explanation`, `irreversible`, `untested` |
 | `approval` | at a stop or stall | `decision`, `approved`, `note` |
