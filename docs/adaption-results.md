@@ -1,6 +1,6 @@
 # Adaption Intake fine-tune: results (#90)
 
-Status: **run succeeded** (Qwen/Qwen3.5-2B, 1 of 1 iterations; checked 03:0x Sun). Real-set eval pending. Qwen/Qwen3.5-0.8B was deprecated on the platform; two
+Status: **GO** (04:10 Sun). The fine-tune beats the base on the real test set in both exact match and mean field accuracy. Qwen/Qwen3.5-0.8B was deprecated on the platform; two
 runs launched by mistake on Mixtral-8x7B were cancelled (`data/adaption/run_ids.cancelled-*.json`).
 
 ## Run
@@ -13,9 +13,26 @@ runs launched by mistake on Mixtral-8x7B were cancelled (`data/adaption/run_ids.
 | adapter | `best.tgz` (44 MB, zstd despite the name; not in git): LoRA r16/alpha32 on all 7 linear projections, base `togethercomputer/Qwen3.5-2B` (loaded locally on `Qwen/Qwen3.5-2B`; rendered chat prompt identical), final eval loss 0.032 |
 | best_win_rate (platform, held-out templated rows) | **0.9471** vs base (target 0.7). Judged by Adaption on a held-out split of OUR synthetic rows, not on the real test set |
 
-## Real test set (30 open-access paragraphs, never trained on)
-Pending: human spot-check of `docs/adaption-test-review.md`, then
-`python -I data/adaption/score.py data/adaption/test_real.jsonl --compare base=preds_base.jsonl finetuned=preds_ft.jsonl claude=preds_claude.jsonl`.
+## Real test set (30 open-access paragraphs, never trained on; labels frozen 04:05 Sun after the human check)
+`test_real.jsonl` sha256 `2631405a1293`. Same prompt (`prompt.py`), chat template, greedy decoding, thinking off, for both.
+
+| field | base Qwen3.5-2B | fine-tuned (Adaption LoRA) |
+|---|---|---|
+| frame_interval_h | 47% (14/30) | 87% (26/30) |
+| pixel_um | 97% (29/30) | 97% (29/30) |
+| duration_h | 43% (13/30) | 70% (21/30) |
+| cell_type | 57% (17/30) | 97% (29/30) |
+| assay_type | 53% (16/30) | 70% (21/30) |
+| imaging | 27% (8/30) | 57% (17/30) |
+| proliferation_blocked | 17% (5/30) | 93% (28/30) |
+| condition | 20% (6/30) | 80% (24/30) |
+| in_scope | 67% (20/30) | 73% (22/30) |
+| **exact match (all 9)** | 0% (0/30) | **20% (6/30)** |
+| **mean field accuracy** | 47.4% | **80.4%** |
+
+Reproduce: `python -I data/adaption/score.py data/adaption/test_real.jsonl --compare base=data/adaption/preds_base.jsonl finetuned=data/adaption/preds_ft.jsonl`.
+
+**Loading bug found and fixed before this result (honesty note):** the first fine-tuned run was byte-identical to the base on all 30 rows. Adaption names the LoRA keys for Qwen3.5's multimodal wrapper (`model.language_model.layers.N`), the text-only model calls them `model.layers.N`, and PEFT silently attached nothing. `predict.py` now renames the keys and refuses to run if 0 modules get a LoRA (96 do). Prompt, decoding and test set were not changed. Anyone loading the adapter must do the same rename.
 
 ## Go/no-go (pre-declared)
-Ship only if the fine-tune beats the base on the real set in BOTH exact match AND mean per-field accuracy. Pending.
+Ship only if the fine-tune beats the base on the real set in BOTH exact match AND mean per-field accuracy. **GO**: exact match 0% -> 20%, mean field accuracy 47.4% -> 80.4%. Intake uses the fine-tune locally, with Claude as the fallback. Weak spots to show honestly: imaging (57%) and in_scope (73%); 80% of paragraphs still have at least one field wrong, so the extraction is shown next to the source text for review (R10).

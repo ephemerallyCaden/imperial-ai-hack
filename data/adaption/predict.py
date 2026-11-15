@@ -28,6 +28,24 @@ a = ap.parse_args()
 rows = [json.loads(l) for l in open(a.test) if l.strip()][: a.limit]
 
 
+def text_only_adapter(src):
+    """Adaption trains Qwen3.5 through its multimodal wrapper, so LoRA keys read model.language_model.layers.N...; the
+    text-only AutoModelForCausalLM names the same layers model.layers.N... . PEFT silently attaches NOTHING on a name
+    mismatch (fine-tune output == base output), so rename the keys into a temp copy and check every key maps."""
+    import shutil
+    from safetensors.torch import load_file, save_file
+    w = load_file(os.path.join(src, "adapter_model.safetensors"))
+    if not any(".language_model." in k for k in w):
+        return src
+    dst = tempfile.mkdtemp()
+    for f in os.listdir(src):
+        if f != "adapter_model.safetensors":
+            shutil.copy(os.path.join(src, f), dst)
+    save_file({k.replace("model.language_model.", "model."): v for k, v in w.items()}, os.path.join(dst, "adapter_model.safetensors"))
+    print(f"adapter: renamed {len(w)} LoRA tensors to the text-only layer names", file=sys.stderr)
+    return dst
+
+
 def hf_generate():
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -38,12 +56,19 @@ def hf_generate():
         subprocess.run(["tar", "-xf", adapter, "-C", d], check=True)
         hits = [r for r, _, fs in os.walk(d) if "adapter_config.json" in fs]
         adapter = hits[0]
+    if adapter:
+        adapter = text_only_adapter(adapter)
     dev = "mps" if torch.backends.mps.is_available() else "cpu"
     tok = AutoTokenizer.from_pretrained(adapter or a.model)
     model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.bfloat16 if dev == "mps" else torch.float32)
     if adapter:
         from peft import PeftModel
+        n_before = sum(1 for n, _ in model.named_modules())
         model = PeftModel.from_pretrained(model, adapter)
+        n_lora = sum(1 for n, _ in model.named_modules() if n.endswith("lora_A"))
+        if n_lora == 0:
+            sys.exit("adapter attached to 0 modules: key names do not match the base model")
+        print(f"adapter: LoRA attached to {n_lora} modules", file=sys.stderr)
     model.to(dev).eval()
     for r in rows:
         msgs = [{"role": "user", "content": r["prompt"] if a.raw_prompt else build_prompt(r["paragraph"])}]
