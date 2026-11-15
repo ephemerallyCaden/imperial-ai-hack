@@ -41,7 +41,7 @@
   .timeline { left: 50%; bottom: 24px; transform: translateX(-50%); width: min(720px, 56vw); display: flex; gap: 12px; align-items: center; padding: 8px 12px; }
   .timeline button { background: none; border: 1px solid var(--line); color: var(--ink); font: inherit; padding: 6px 12px; cursor: pointer; letter-spacing: .1em; }
   .timeline input { flex: 1; accent-color: #e8ecef; } .timeline .t { width: 120px; white-space: nowrap; text-align: right; color: var(--dim); }
-  .bare .hud { display: none; }
+  .bare .hud { display: none !important; }   /* !important: also beats .photo-mode .photo-on */
   .photo { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 360px; padding: 12px; border: 1px solid var(--line); z-index: 5; }
   .photo canvas { display: block; margin: 8px 0; max-width: 100%; } .photo p { margin: 6px 0; } .photo button:disabled { opacity: .35; cursor: not-allowed; }
   .photo-on { display: none !important; } .photo-mode .photo-on { display: inherit !important; } .photo-mode .photo-off { display: none !important; }
