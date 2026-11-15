@@ -91,6 +91,13 @@ Verdict:
 
 Caveats: the WHiM-BC pixel scale is unknown, so starts are synthetic bands on the WHAD 32 x 44 lattice and absolute Tm is not comparable with WHAD; the free-rule rows transfer less cleanly.
 
+**Demo upload sample: known failure mode (for honest narration).** The "try a sample" upload is 3 real frames (0-2 h) of exp1_partII_CC_P2, with
+that wound held out of the calibration pool. With P1's conformal, the observed curve is inside the 90% band at 13 of 17 forecast hours for both the
+sim (follower) and the NCA v2. At 19 h the observed 0.06 is inside both bands (sim 0.00-0.45, NCA 0.00-0.47). But from about 6 to 10 h the observation
+sits just above the band's top (by up to 0.02), because both models close this wound too fast mid-course: sim median 0.13 at 10 h vs observed 0.38. Not
+tuned. Suggested narration: "the band catches the endpoint, but this wound closed more slowly mid-way than the model expected." The 1-frame sample
+uses a wide population-prior band (not conformal) and contains the observation at all 19 hours.
+
 **Which NCA is the demo forecaster (user decision, Sun 00:20):** NCA v2 (trained on follower-rule simulations, Agent 2, `nca/v2/`), for
 consistency with the follower-rule cells shown in the draw tool and playback. This is a stated choice, not the best score: **nca_realft** (P1, #71: the
 v1 NCA fine-tuned on real WHAD frames, 4 wound-level folds) scores best on the gate (passes 9 of 12 groups). The scorecard keeps both rows.
