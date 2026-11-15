@@ -35,9 +35,11 @@ The demo uses the **follower rule everywhere**. This is an *open departure* from
 | NCA weights for the band | **v2 follower emulator** (user decision): `web/public/sim/nca_v2_weights.json` + `nca_v2_weights.config.json` (Agent 2 b2b47e8, sha256 `a426643dab3b`). `{type:'nca-load'}` with no weights loads it. Passed the torch check (JS vs torch at most 8.9e-7 over 4 cases, including clipped Tm and bias) and mass_check (flux residual ~1e-5, reservoir share ≤ 0.01, no source at isolated sites, density ≤ 1). Checked in headless Chrome. | `web/public/sim/nca_weights.json` (v1, free-rule emulator): `{type:'nca-load', model:'v1'}` |
 | Video run | `whad_partII_C61_P2_follow.json` | `whad_partII_C61_P2.json` |
 | Fair panel (one wound, same 3.8 h start and fit) | `whad_partII_C61_P2_sim38_follow.json` + `whad_partII_C61_P2_nca_follow.json` + `meta.observed`. MAE vs observed after the cut-off (16 frames): sim 0.0088, NCA v2 deterministic 0.0040. One wound only, so don't generalise. | `whad_partII_C61_P2_sim38.json` + `whad_partII_C61_P2_nca.json` |
-| Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 39 frames at 0.5 h; display only, not scored | none |
+| Zoom view | `zoom_follow.json`: synthetic 120×168 field, CC follow preset, 56 frames at 0.5 h, runs until fully closed (27.5 h); display only, not scored | none |
 
 Rules that hold for both rules:
+- **Simulations run until fully healed; data panels stop at the data horizon.** Live agent runs (`run` with `untilClosed`), live NCA runs (`isHealed` / `isStalled` from `nca.js`) and the synthetic zoom playback run until healed. Panels compared with data (real-wound runs, `sim38`, `nca`, forecasts, gate files) stay on the 0-19 h observed window.
+- **NCA "until healed":** density never reaches exactly 1, so `isHealed(rho, {minRho: 0.95})` (every coarse cell >= 0.95, i.e. no 2×2 cell is missing a whole site) is the stop; add `isStalled(means, {window: 12, eps: 1e-4})` on the hourly `meanRho(rho)` and a cap. v2 heals the r9 disc at 25 h. See docs/sim.md.
 - **No band on drawn wounds.** The band is only for uploaded or real wounds with fitted parameters.
 - **The band is uncalibrated.** Caption it "NCA emulator ensemble spread (uncalibrated)", and never call it a 90% interval.
 - **Never mix weights and fits across rules.** v2 weights need follow fits (`sim/fits/whad_fits_follow.json`), and v1 weights need free fits. `make_nca_playback.mjs` refuses a mismatch.
@@ -98,16 +100,19 @@ Show `PRESET_LABEL` = `"simulation, preset parameters (WHAD part II fits)"` (= `
 | `{type:'init', w, h, wound, preset, seed}` | `wound`: `Uint8Array(w*h)`, 1 = drawn (empty), 0 = cells. `preset`: `'CC'` or `'C61'`. Posts frame 0. Any message sent before `init` is ignored. |
 | `init` option `rule` | `'free'` (default; `'frozen'` is accepted as an alias) is the gate rules. `'follow'` is the sheet-like follower rule (`cellsim.Params.rule`, Agent 4 3dd4fcf): a moving cell connected to the reservoir pulls the chain behind it, so no vacancy is left behind. It is fixed per `init`, and frames report `rule`. Parity against 3dd4fcf over 20 seeds at Tm 3, 4/12/24 h: JS 0.1685 / 0.1236 / 0.0532, Python 0.1686 / 0.1236 / 0.0545 (24 h difference about 1.3 standard errors). Invariants over 10 seeds × 24 h: area never grows and a connected site never empties. The presets are fitted to the free rule; follower presets come with Agent 1's follower fits. |
 | `{type:'run', hoursPerFrame}` | Starts the loop at up to about 30 fps; default 0.5 h of sim time per frame |
+| `run` option `untilClosed: true` (`stallHours` 12, `maxHours` 500) | The worker stops by itself; the last frame has `stopped`: `'closed'` (every site occupied), `'stalled'` (occupied count unchanged for `stallHours` of sim time) or `'cap'` (`t_hours >= maxHours`). Each new `run` starts a fresh stall window. Without the option, `run` loops until `pause` as before. |
 | `{type:'pause'}` | Stops the loop |
 | `{type:'step', hours}` | Advances once and posts one frame |
 | `{type:'reset'}` | Stops and restarts from the last `init` |
 | `{type:'preset', preset}` | Switches CC/C61 live |
 
-**Frames from the worker:** `{type:'frame', w, h, t_hours, wound_frac, occ, fine, outline}`
+**Frames from the worker:** `{type:'frame', w, h, t_hours, wound_frac, closed, touches_edge, occ, fine, outline}` (+ `stopped` on the last frame of an `untilClosed` run)
 
 | Field | Contents |
 |---|---|
 | `wound_frac` | `1 - mean(occ)`, the same definition as `whad_curves.csv` |
+| `closed` | every site occupied (integer count; use this, not `wound_frac === 0`) |
+| `touches_edge` | the t0 wound reaches the border band, which is then not reservoir there. Under follow such a wound still closes; under free it can stall at the border |
 | `occ` | `Uint8Array(w*h)`, raw agents, 1 = cell |
 | `fine` | `{scale: 2, sigma: 2.5, h: 2h, w: 2w, data: Uint8Array}`. Smoothed occupancy, `round(v*255)`, row-major. Each site is `scale × scale` fine px. |
 | `outline` | `{units:'sites', rule:'area-matched', level, lines}`. `lines` is a list of flat `[x0,y0,x1,y1,...]` polylines in site coords (`x` = col, `y` = row, the lattice spans `[0,w]×[0,h]`). The outlined area equals `wound_frac`. When there is no wound, `level` is null and `lines` is empty. |
