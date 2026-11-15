@@ -88,14 +88,15 @@ function toolSummary(r) {
   if (!o || typeof o !== "object") return show(o);
   const f = Array.isArray(o.forecasts) ? o.forecasts[0] : null;
   if (f) {
-    const bits = [`P(90% closed by ${o.p_close_by_T_hours} h) ${f.p_close_by_T}`, `p_stall ${f.p_stall}`];
-    if (f.flags && f.flags.length) bits.push(`flags: ${f.flags.join(", ")}`);
+    const bits = [o.model, `P(90% closed by ${o.p_close_by_T_hours} h) ${f.p_close_by_T}`, f.p_stall == null ? "p_stall n/a (one image)" : `p_stall ${f.p_stall}`];
+    if (f.flags && f.flags.length) bits.push(`flags: ${f.flags.map(x => x?.type ?? x).join(", ")}`);
     if (f.segmentation_quality) bits.push(`seg ${f.segmentation_quality.status}`);
+    if (o.schedule) bits.push(`schedule ${o.schedule.action}${o.schedule.call ? ": " + o.schedule.call : ""}${o.schedule.next_image_hours != null ? " " + o.schedule.next_image_hours + " h" : ""}`);
     return esc(bits.join(" · "));
   }
   if (o.refused || o.refusal) return `<span class="warn">refused</span> ${esc(JSON.stringify(o.reasons || o.refusal || "").slice(0, 160))}`;
   const res = Array.isArray(o.results) ? o.results[0] : null;
-  if (res && res.stall) return esc(`stall ${res.stall.fired ? "fired" : "off"} (p ${res.stall.p_stall} vs ${res.stall.threshold}) · schedule ${res.schedule?.action ?? "–"}${res.schedule?.call ? ": " + res.schedule.call : ""}`);
+  if (res && res.stall) return esc(`stall ${res.stall.p_stall == null ? "n/a (one image)" : `${res.stall.fired ? "fired" : "off"} (p ${res.stall.p_stall} vs ${res.stall.threshold})`} · schedule ${res.schedule?.action ?? "–"}${res.schedule?.call ? ": " + res.schedule.call : ""}`);
   if (Array.isArray(o.hypotheses) && o.hypotheses.length) return esc(`top hypothesis ${o.hypotheses[0].name} (fit error ${o.hypotheses[0].fit_error}) · ${o.note || ""}`);
   if ("ok" in o) return esc(`ok ${o.ok} · backend ${o.backend ?? "–"}${o.fallback_reason ? " · fallback " + o.fallback_reason : ""}`);
   return esc(Object.keys(o).slice(0, 6).join(", "));

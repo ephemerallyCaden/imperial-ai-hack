@@ -23,6 +23,24 @@ export function fmtEvent(ev) {
 }
 
 const SCHEDULE_LABEL = { image_again: "Image again at the next check", call: "Code call", continue: "Continue" };
+// schedule advice as one line: "Image again at the next check (1.9 h)" or "Code call: likely to reach ..."
+export function fmtSchedule(sch) {
+  if (!sch) return "";
+  const head = SCHEDULE_LABEL[sch.action] || sch.action || "Schedule advice";
+  return `${head}${sch.call ? `: ${sch.call}` : ""}${sch.next_image_hours != null ? ` (${sch.next_image_hours} h)` : ""}`;
+}
+// readable model names; the raw id stays visible next to them
+const MODEL_LABEL = {
+  nca_realft3: "NCA fine-tuned on real WHAD frames",
+  whad_population_prior: "WHAD population prior, one image",
+  edge_speed: "Edge-speed baseline",
+  logistic: "Logistic baseline",
+  nca_ensemble: "NCA ensemble (simulator)",
+  nca_deterministic: "NCA (deterministic)",
+  sim_ensemble: "Cell-agent simulator ensemble",
+};
+export const modelName = m => MODEL_LABEL[m] ? `${MODEL_LABEL[m]} (${m})` : String(m ?? "unknown model");
+const stallP = p => p == null ? "not evaluable (needs 2+ images)" : null;
 
 // ---------- decision card ----------
 export function decisionCard(s) {
@@ -31,7 +49,7 @@ export function decisionCard(s) {
     const sch = check?.doc?.schedule;
     return `<section class="st-card as-card">
       <div class="st-kicker">Decision card · code schedule advice</div>
-      <h3>${esc(sch ? `${SCHEDULE_LABEL[sch.action] || sch.action}${sch.next_image_hours != null ? ` (${sch.next_image_hours} h)` : ""}` : "No schedule advice in this file")}</h3>
+      <h3>${esc(sch ? fmtSchedule(sch) : "No schedule advice in this file")}</h3>
       ${sch ? `<p>${esc(sch.evidence)}</p>` : ""}
       <p class="as-note">No agent run is recorded for this sample, so there is no proposal to approve. The schedule advice comes from data/upload.py.</p>
       <div class="as-btns"><button class="st-btn" disabled>${ICON.check}Approve</button><button class="st-btn" disabled>${ICON.x}Reject</button><button class="st-btn" data-act="why">${ICON.help}Why?</button></div>
@@ -111,14 +129,14 @@ export function forecastTab(check, t) {
   if (!check?.fc) return `<p class="as-note">No forecast yet.</p>`;
   const { doc, fc } = check, cal = isCalibrated(doc, fc), unc = (fc.flags || []).filter(f => f.type === "uncalibrated_condition");
   const stall = check.flags?.stall;
-  const stallTxt = stall ? `${stall.fired ? "ON" : "off"} (P = ${stall.p_stall}, threshold ${stall.threshold})`
-    : fc.p_stall == null ? "not evaluable (needs 2+ frames)" : `${(fc.flags || []).some(f => f.type === "stall") ? "ON" : "off"} (P = ${fc.p_stall})`;
+  const stallTxt = stall ? (stallP(stall.p_stall) || `${stall.fired ? "ON" : "off"} (P = ${stall.p_stall}, threshold ${stall.threshold})`)
+    : stallP(fc.p_stall) || `${(fc.flags || []).some(f => f.type === "stall") ? "ON" : "off"} (P = ${fc.p_stall})`;
   const sch = check.flags?.schedule || doc.schedule;
   const otherFlags = (fc.flags || []).filter(f => f.type !== "uncalibrated_condition");
-  return `${unc.map(f => `<div class="as-flag"><b>UNCALIBRATED CONDITION</b> ${esc(f.reason)}</div>`).join("")}
+  return `${unc.map(f => `<div class="as-flag"><b>Condition outside the calibration set · band widened, not a calibrated 90% band</b>${esc(f.reason)}</div>`).join("")}
     <section class="st-panel--solid as-box">
       <div class="st-kicker">Figure A · closure curve</div>
-      <p class="as-caption">${esc(doc.model)} · ${esc(doc.fold)} · ${cal ? `calibrated ${Math.round(doc.level * 100)}% band` : "band uncalibrated"}</p>
+      <p class="as-caption">${esc(modelName(doc.model))} · ${esc(doc.fold)} · ${cal ? `calibrated ${Math.round(doc.level * 100)}% band` : unc.length ? "band widened for a new condition, uncalibrated" : "band uncalibrated"}</p>
       ${curveSVG(fc, { cutoff: doc.cutoff_hours, t, calibrated: cal })}
     </section>
     <section class="st-panel--solid as-box">
@@ -128,7 +146,7 @@ export function forecastTab(check, t) {
       <div class="st-row"><span>Time to 90% closed</span><span>${esc(fmtEvent(fc.t90))}</span></div>
       <div class="st-row"><span>Stall flag</span><span>${esc(stallTxt)}</span></div>
       ${doc.summary ? `<div class="st-row"><span>Area at ${HORIZON_H} h (q05 · q50 · q95)</span><span>${doc.summary.area_q05_last} · ${doc.summary.area_q50_last} · ${doc.summary.area_q95_last}</span></div>` : ""}
-      ${sch ? `<div class="st-row"><span>Schedule advice</span><span>${esc(sch.call || sch.action)}${sch.next_image_hours != null ? ` · ${sch.next_image_hours} h` : ""}</span></div><p class="as-caption">${esc(sch.evidence)}${sch.untested ? " · untested" : ""}</p>` : ""}
+      ${sch ? `<div class="st-row"><span>Schedule advice</span><span>${esc(fmtSchedule(sch))}</span></div><p class="as-caption">${esc(sch.evidence)}${sch.untested ? " · untested" : ""}</p>` : ""}
       ${otherFlags.map(f => `<p class="as-flagline">⚠ ${esc(f.type)}: ${esc(f.reason)}</p>`).join("")}
     </section>
     <p class="as-caption">${esc(doc.notes || "")}</p>`;
@@ -170,8 +188,8 @@ export function imagesTab(images, check, run) {
 const toolLine = c => {
   const o = c.output || {};
   if (o.error) return `${c.tool} · error: ${o.error}`;
-  if (c.tool === "forecast_lookup" || c.tool === "qc_forecast") return o.refused ? `${c.tool} · refused` : `${c.tool} · ${o.model}, t0 = ${o.cutoff_hours} h`;
-  if (c.tool === "flags_schedule") { const r = o.results?.[0]; return r ? `flags_schedule · stall ${r.stall?.fired ? "fired" : "off"} (p_stall ${r.stall?.p_stall}), schedule ${r.schedule?.call || r.schedule?.action}` : c.tool; }
+  if (c.tool === "forecast_lookup" || c.tool === "qc_forecast") return o.refused ? `${c.tool} · refused` : `${c.tool} · ${modelName(o.model)}, t0 = ${o.cutoff_hours} h`;
+  if (c.tool === "flags_schedule") { const r = o.results?.[0]; return r ? `flags_schedule · stall ${r.stall?.p_stall == null ? "not evaluable (one image)" : `${r.stall?.fired ? "fired" : "off"} (p_stall ${r.stall.p_stall})`}, schedule ${fmtSchedule(r.schedule) || "none"}` : c.tool; }
   if (c.tool === "investigate") { const h = o.hypotheses?.[0]; return h ? `investigate · best fit ${h.name} (fit error ${h.fit_error}); hypotheses, not causes` : c.tool; }
   if (c.tool === "intake") return `intake · protocol fields extracted (${o.backend})`;
   return c.tool;
