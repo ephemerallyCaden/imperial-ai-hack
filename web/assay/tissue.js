@@ -202,11 +202,11 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   }
   load(pb);
 
-  // model outline (area-matched contour, smooth.js rule), labelled uncalibrated; off by default (the mockup has none),
-  // shown with setOutline (the HUD's Outline toggle)
+  // model outline (area-matched contour, smooth.js rule), labelled "simulated outline"; off by default (the mockup has
+  // none), shown with setOutline (the HUD's Outline toggle)
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
   const outlineGroup = new THREE.Group(); scene.add(outlineGroup);
-  const outlineLabel = label("simulated outline (uncalibrated)", V(0, HMAX * 1.1, 0), 0.4, "#e8ecef", scene); outlineLabel.visible = false;
+  const outlineLabel = label("simulated outline", V(0, HMAX * 1.1, 0), 0.4, "#e8ecef", scene); outlineLabel.visible = false;
   const siteToWorld = (x, y) => V(X0 + x * S, HMAX * 0.9, Z0 + y * S);
   let outlineOn = false;
   function drawOutline(disp) {
