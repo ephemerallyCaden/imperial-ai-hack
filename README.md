@@ -11,8 +11,8 @@ Scratch (wound-healing) assays are used across cancer migration, fibrosis, wound
 ## What we built
 
 - **Forecaster**: from the first few hours of a time-lapse (1 to 5 frames are enough to start), the real-data NCA forecasts the rest of the closure curve with a **90% band**, time to 50% and 90% closed with ranges, and P(closed by the end of the run).
-- **Honest calibration**: every band is calibrated leave-one-wound-out, so a wound's own outcome never shapes its own forecast. On 27 unseen WHAD wounds the 90% band contains 92% of what actually happens.
-- **Stall flag**: warns when a wound is unlikely to close much further (AUC 0.78-0.90, thresholds tuned on other wounds only).
+- **Honest calibration**: every band is calibrated leave-one-wound-out, so a wound's own outcome never shapes its own forecast. On 28 unseen WHAD wounds the 90% band contains 92% of what actually happens.
+- **Stall flag**: warns when a wound is unlikely to close much further (AUC 0.77-0.90, thresholds tuned on other wounds only).
 - **Stop-early advice**: on held-out wounds, 82% get a call at the first check (1.9 h); 91% of those calls are right, against 75% for always saying "won't close". Every early call is "won't reach 90% closure by 19 h"; we never confidently call early closure.
 - **Upload pipeline**: frames + frame interval + pixel size -> wound masks (texture segmenter) -> forecast. Refuses blank, out-of-focus or badly segmented frames, with the reason.
 - **Cell-level model**: a cell-agent simulator and a neural cellular automaton (NCA) that emulates it, for the draw-a-wound view and a continuous zoom from cells to the whole wound (simulated cells, labelled as such). Fine-tuned on real WHAD frames, the NCA now matches the statistical forecaster (see Results).
@@ -94,7 +94,7 @@ numpy, scipy, pandas, matplotlib, tifffile, Pillow, jsonschema, PyTorch (NCA), a
 - Cell-agent simulator and NCA: our code (`sim/`, `nca/`), PyTorch on CPU.
 - Claude (Anthropic) was used as a coding assistant.
 - In the product, Claude (Opus 5.5) is the agent's model: it chooses among the decisions the policy code allows, explains them, writes the end-of-run summary and, without the fine-tune, reads protocol text. It never produces a number that the Critic cannot trace to a tool output, and it never raises or clears a flag. Demo runs are recorded once and played back, so viewing needs no key.
-- Adaption: a small model (Qwen 3.5 0.8B) fine-tuned on our Intake task (protocol text to settings); see `data/adaption/` and the results doc for its win rate.
+- Adaption: a small model (Qwen 3.5 0.8B) fine-tuned on our Intake task (protocol text to settings); see `data/adaption/` (win rate not yet reported).
 
 ## Honesty notes
 

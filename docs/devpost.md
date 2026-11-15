@@ -70,7 +70,7 @@ On 28 unseen WHAD wounds (55 series), forecasting from the first 3.8 h of a 19 h
 
 ## Accomplishments that we're proud of
 
-- An uncertainty band that holds on wounds the model never saw, checked on four public datasets.
+- An uncertainty band that holds on wounds the model never saw, checked leave-one-wound-out. It does not transfer to a new cell type (58% on WHiM-BC) and we show that.
 - A neural cellular automaton that passes a gate we set before seeing the results. It is the best model at the earliest and latest cut-offs.
 - Failures shown on screen: the cell-type failure, the stall flag's error rate and a worst-case wound.
 - An agent where every number on screen is traced to a tool. A person approves anything that cannot be undone.
