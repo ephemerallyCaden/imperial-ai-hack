@@ -155,6 +155,7 @@ Status: v1, 14 Nov 2026. Owner: team lead. Rule: this file holds ONLY what is de
 5. Evaluate on the real test set: accuracy per field (interval, scale, condition, scope) against the base model and against Claude, plus the win rate. Ship it only if it beats the base model on the real set.
 6. Prize evidence: leaderboard screenshot, dataset and run IDs, and the eval table in the README.
 7. Wire-up: Intake calls the fine-tuned model if Adaption can serve it (check), otherwise run it locally; Claude is the fallback.
+8. **Result (04:10 Sun): GO.** Run `695c8c20`, `Qwen/Qwen3.5-2B` + Adaption LoRA (1,500 templated rows), platform win rate 0.9471. Real test set (30 paragraphs): exact match 0% -> 20%, mean field accuracy 47.4% -> 80.4% vs the base. Runs locally, Claude fallback. Details and the LoRA key-rename note: `docs/adaption-results.md`. Triage and Reporter fine-tunes added in #115 (decisions.md 03:30).
 
 ## 10. Schedule [D / F]
 - Now: Sat afternoon. **Gate: 00:00 Sun** (section 5.3; moved in R15). Building closes 21:00 Sat. **Team will keep working elsewhere overnight [D]** (rules not yet confirmed; see 15). Submissions close 12:00 Sun; plan to submit by 11:30.
