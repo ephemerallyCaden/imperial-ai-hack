@@ -414,7 +414,28 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   { const v = views.field(); camera.position.copy(v.p); controls.target.copy(v.t); }
   const easeIO = x => x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ---------- idle orbit: after IDLE_S s with no input on the 3D view the camera turns slowly about the orbit target
+  // (azimuth only, so the user's distance and tilt stay), eased in over ORBIT_EASE s. Pointer or wheel input on the canvas,
+  // a zoom or a camera fly stops it at once and restarts the wait; never while a pointer is down, a fly runs, the tab is
+  // hidden or under prefers-reduced-motion. On by default; assay.js keeps the per-session choice (setIdleOrbit). ----------
+  const IDLE_S = 6, ORBIT_W = 2 * Math.PI / 150, ORBIT_EASE = 1.5;   // rad/s: one turn per 2.5 min
+  let idleOn = true, held = false, lastInput = performance.now(), spin = 0;   // spin 0..1 = eased share of ORBIT_W
+  const wake = () => { lastInput = performance.now(); spin = 0; };
+  const onPress = () => { held = true; wake(); }, onRelease = () => { if (held) { held = false; wake(); } };
+  const onHoverMove = e => { if (!e.buttons) held = false; wake(); };   // a lost pointerup (e.g. alt-tab mid-drag) heals on hover
+  canvas.addEventListener("pointerdown", onPress); canvas.addEventListener("pointermove", onHoverMove); canvas.addEventListener("wheel", wake, { passive: true });
+  window.addEventListener("pointerup", onRelease); window.addEventListener("pointercancel", onRelease); document.addEventListener("visibilitychange", wake);
+  function idleTurn(dt) {
+    if (fly || held || document.hidden) return wake();
+    if (performance.now() - lastInput < IDLE_S * 1000) return;
+    if (spin === 0) onLeave();   // the view starts turning under a resting pointer: drop the hover tip and brush ring
+    spin = Math.min(1, spin + dt / ORBIT_EASE);
+    const a = ORBIT_W * spin * spin * (3 - 2 * spin) * dt, c = Math.cos(a), s = Math.sin(a);
+    const p = camera.position, t = controls.target, dx = p.x - t.x, dz = p.z - t.z;
+    p.x = t.x + dx * c - dz * s; p.z = t.z + dz * c + dx * s;
+  }
   function zoom(dir) {
+    wake();
     const off = camera.position.clone().sub(controls.target).multiplyScalar(dir > 0 ? 0.8 : 1.25);
     const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, off.length()));
     camera.position.copy(controls.target).add(off.setLength(len));
@@ -428,12 +449,13 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // zoom level 0 (whole field) .. 1 (closest), log-scaled camera distance
   const FIELD_D = views.field().p.distanceTo(views.field().t), NEAR_D = controls.minDistance * 1.2;
   const zoomLevel = () => { const d = camera.position.distanceTo(controls.target); return Math.max(0, Math.min(1, Math.log(FIELD_D / d) / Math.log(FIELD_D / NEAR_D))); };
-  function setZoom(z) { const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
+  function setZoom(z) { wake(); const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
 
-  // screen length of 100 µm at the orbit target (for the HUD scale bar)
+  // screen length of 100 µm at the orbit target (for the HUD scale bar), along the camera's right axis (horizontal on
+  // screen) rather than world x, so the bar holds as the view turns (idle orbit)
   const sa = new THREE.Vector3(), sb = new THREE.Vector3();
   function pxPer100um() {
-    sa.copy(controls.target); sb.copy(sa); sb.x += (100 / SITE_UM) * S;
+    sa.copy(controls.target); sb.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar((100 / SITE_UM) * S).add(sa);
     sa.project(camera); sb.project(camera);
     return Math.abs(sb.x - sa.x) / 2 * canvas.clientWidth;
   }
@@ -452,6 +474,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (heatAnim) stepHeat();
     if (moving) { ease(reduced ? 1 : dt); if (sel && !moving) emitSel(); }
     if (fly) { fly.t = reduced ? 1 : Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
+    if (idleOn && !reduced) idleTurn(dt);
     controls.update(); renderer.render(scene, camera);
     onFrameCb && onFrameCb();
   });
@@ -492,6 +515,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     clearSelection() { setSel(null); emitSel(); },
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
+    // idle orbit on/off (the wait restarts); canIdleOrbit is false under prefers-reduced-motion, where it never runs
+    setIdleOrbit(on) { idleOn = !!on; wake(); }, isIdleOrbit: () => idleOn, canIdleOrbit: !reduced,
     onFrame(cb) { onFrameCb = cb; },
     // age heatmap overlay: recolours only (no change to heights, playback or the live run); animated by the heat front
     setHeat(on) {
@@ -506,6 +531,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
       renderer.setAnimationLoop(null); ro.disconnect(); controls.dispose();
       canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointerleave", onLeave); canvas.removeEventListener("contextmenu", onContext);
+      canvas.removeEventListener("pointerdown", onPress); canvas.removeEventListener("pointermove", onHoverMove); canvas.removeEventListener("wheel", wake);
+      window.removeEventListener("pointerup", onRelease); window.removeEventListener("pointercancel", onRelease); document.removeEventListener("visibilitychange", wake);
       scene.traverse(o => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
       renderer.dispose(); canvas.remove();
     },
