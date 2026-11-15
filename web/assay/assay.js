@@ -53,6 +53,7 @@ export async function mount(el, ctx) {
           <div class="as-hud as-hud-tr">
             <button class="as-ibtn" data-act="draw" aria-label="Draw (B)" title="Draw · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
             <button class="as-ibtn" data-act="heat" aria-pressed="false" aria-label="Age heatmap (A)" title="Age heatmap · A"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+            <button class="as-ibtn" data-act="outline" aria-pressed="false" aria-label="Simulated outline, uncalibrated (O)" title="Outline · O (simulated, uncalibrated)"><svg viewBox="0 0 24 24"><path d="M6 9c2-4 9-5 12-1s1 9-4 10-10-3-8-9z" stroke-dasharray="3 2.5"/></svg></button>
             <div class="as-zoom" role="group" aria-label="Zoom">
               <button class="as-ibtn" data-act="zoom-in" aria-label="Zoom in (+)" title="Zoom in · +">+</button>
               <input class="as-zoomr" type="range" min="0" max="1" step="0.01" value="0" aria-label="Zoom">
@@ -188,6 +189,7 @@ export async function mount(el, ctx) {
   function markDraw() {
     $('[data-act="draw"]').setAttribute("aria-pressed", !!(special === VIEWS.draw && live?.state.brushOn));
     $('[data-act="select"]').setAttribute("aria-pressed", !!tissue?.isSelecting());
+    $('[data-act="outline"]').disabled = !!live?.state.active;   // a drawn wound has no outline
   }
   // one active tool on the 3D view: the brush (draw item only) or select-area
   function useTool(t) {
@@ -306,6 +308,7 @@ export async function mount(el, ctx) {
     else if (a === "select") return useTool("select");
     else if (a === "clear") return tissue?.clearSelection();
     else if (a === "heat") return setHeat(!tissue?.isHeat());
+    else if (a === "outline") return setOutline(!tissue?.isOutline());
     refresh();
   }
   el.addEventListener("click", e => {
@@ -507,6 +510,11 @@ export async function mount(el, ctx) {
     tissue.setHeat(on); $('[data-act="heat"]').setAttribute("aria-pressed", on);
     $(".as-legend3d").classList.toggle("is-heat", on); $(".as-ageleg").hidden = !on;
   }
+  // simulated outline overlay (button, O): off by default, as the mockup has none; shown with its "(uncalibrated)" label
+  function setOutline(on) {
+    const b = $('[data-act="outline"]'); if (!tissue || b.disabled) return;
+    tissue.setOutline(on); b.setAttribute("aria-pressed", on);
+  }
   function markView() {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
@@ -574,6 +582,7 @@ export async function mount(el, ctx) {
     else if (a === "select-area") act("select");
     else if (a === "clear-selection") tissue?.clearSelection();
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
+    else if (a === "outline") act("outline");
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
     else if (a.startsWith("camera:")) { tissue?.goTo(a.slice(7)); markView(); }
     else if (a === "export-forecast") exportForecast();
@@ -590,6 +599,7 @@ export async function mount(el, ctx) {
     else if (a === "zoom-out") tissue?.zoom(-1);
     else if (a === "select-area") act("select");
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
+    else if (a === "outline") act("outline");
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
     else if (a === "reset-camera") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.reset(); markView(); }
   };

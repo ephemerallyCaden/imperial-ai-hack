@@ -147,6 +147,7 @@
 .as-ibtn svg { width: 20px; height: 20px; }
 .as-ibtn--primary { background: var(--accent); border-color: var(--accent); color: #140d05; }
 .as-ibtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.as-ibtn:disabled { color: var(--faint); border-color: var(--hair); cursor: not-allowed; }
 .as-hud-tr { flex-direction: column; align-items: center; gap: var(--s2); }
 .as-zoom { display: flex; flex-direction: column; align-items: center; gap: 6px; background: rgba(5,6,7,.6); border: 1px solid var(--hair); padding: 6px 0; }
 .as-zoom .as-ibtn { border: 0; background: none; width: 44px; height: 36px; }
