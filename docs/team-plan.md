@@ -1,5 +1,7 @@
 # Stitch: who does what (Sat 19:45 to Sun 13:00)
 
+> **Superseded (Sun 03:00).** This was the Saturday-evening plan. Current state: GitHub issues (integration umbrella #112) and the decisions log in `docs/design.md` (R26-R30). Kept for history; the forecaster choice and branch names below are out of date.
+
 Follows `docs/design.md` (R14); section numbers in brackets point there. Task IDs become GitHub Project items. **Must** = needed for the video and scorecard. **Should** = makes it better. **Stretch** = only if ahead.
 
 | Role | Person | Owns | Branch |

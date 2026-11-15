@@ -34,7 +34,7 @@ def label_end(ax, x, y, text, color, dy=0):
 
 def calibration(S):
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.8), sharey=True)
-    panels = [("whad", [("loo_all", "held-out wounds (27)"), ("CC_to_C61", "held-out condition: CC to C61")], 19.0, "WHAD MCF10A"),
+    panels = [("whad", [("loo_all", "held-out wounds (28)"), ("CC_to_C61", "held-out condition: CC to C61")], 19.0, "WHAD MCF10A"),
               ("whimbc", [("loo", "held-out wells (24)"), ("Monolayer_to_Sphere", "held-out condition: ordinary to stem-cell")], 27.0, "WHiM-BC MCF-7")]
     for ax, (ds, splits, span, title) in zip(axes, panels):
         ax.axhline(0.90, color=MUTED, lw=1, ls=(0, (4, 3)), zorder=1)
@@ -85,7 +85,7 @@ def error_vs_history(S):
     ax.set_ylabel("quantile score (CRPS approx.), lower is better")
     ax.set_title("Fine-tuned on real frames, the NCA catches the simple edge-speed model", loc="left", fontsize=11.5, fontweight="bold")
     ax.legend(frameon=False, fontsize=9, loc="lower left")
-    fig.text(0.125, -0.03, "WHAD MCF10A, leave-one-wound-out, 55 series from 27 wounds. NCA real-data: fine-tuned on real frames, "
+    fig.text(0.125, -0.03, "WHAD MCF10A, leave-one-wound-out, 55 series from 28 wounds. NCA real-data: fine-tuned on real frames, "
              "4 wound-level folds.", fontsize=8.5, color=MUTED)
     fig.savefig(f"{OUT}/error_vs_history.png"); plt.close(fig)
 

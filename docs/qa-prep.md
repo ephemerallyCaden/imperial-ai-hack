@@ -48,7 +48,7 @@ Frames -> texture segmenter (wound = low-texture region) -> wound area curve -> 
 **What does the NCA add?** (gate results, design.md R18 and R26)
 "Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes. Our cleanest version beats every model at the earliest cut-off (1.9 h: 0.0530 vs 0.0562 for edge speed) and at 9.5 h, and is within a few percent in between. What made it work: training on real frames, giving it the same early parameter estimates it gets at forecast time, and averaging three training runs. Adding a second dataset (Zaritsky) made it worse, so we didn't."
 _Earlier answer (simulator-only NCA):_
-"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0495 vs 0.0385), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
+"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0499 vs 0.0386), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
 **Which model does the product use?** "The real-data NCA. When a scientist uploads frames, we fit the wound's speed parameters from those frames, roll out the NCA 50 times and calibrate the band with its own errors on held-out wounds. If anything fails, it falls back to the simple edge-speed model and says so in the output."
 
 **Why not just trust the NCA's own spread?** "Uncalibrated, its 90% band covers 14% of what happens (the simulator's 21%): member spread is too small. The same conformal step brings both to 93%."
@@ -85,7 +85,7 @@ An assay scientist running scratch assays. Today tools (TScratch, ImageJ plugins
 Calibration data from their own microscope and cell line: our results show bands do not transfer across cell types. A few dozen wells per condition is enough to calibrate (we used 28 wounds).
 
 **Could a lab actually stop plates early?** (simulation on recorded WHAD data, not a lab trial)
-"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 91% of those calls are right (95% with the real-data NCA), against 75% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 4 of 45 calls were wrong: wounds that did close."
+"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 91% of those calls are right (the same with the shipped real-data NCA v3), against 75% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 4 of 45 calls were wrong: wounds that did close."
 
 **Clinical use?**
 Not claimed. Clinics use a similar early rule for chronic wounds (about 50% area reduction at 4 weeks); large EHR studies predict non-healing with AUC ~0.85-0.90. We have no clinical data, so that is a future direction only.
@@ -115,4 +115,4 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
 | NCA real-data v3 | best of all models at 1.9 h (0.0530 vs 0.0562) and 9.5 h; within 3-8% at 3.8/5.7 h; sim-only failed |
-| Stop early | 82% called at 1.9 h, 91% right (95% real-data NCA) vs 75% always-no; only "won't close" calls |
+| Stop early | 82% called at 1.9 h, 91% right (same with shipped NCA v3) vs 75% always-no; only "won't close" calls |
