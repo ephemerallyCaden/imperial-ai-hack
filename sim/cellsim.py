@@ -106,17 +106,25 @@ def join_islands(conn, occ):
     return conn
 
 
-def step(occ, p: Params, rng, conn=None):
-    """Advance one step in place. occ: (H,W) uint8, 1 = cell. conn: reservoir-connected mask, needed for "follow"."""
+def _move_rate(p, tm_map, ys, xs):
+    """Per-step move probability before the density factor: min(1, dt / Tm), or per cell min(1, dt / (Tm * tm_map[site]))."""
+    if tm_map is None:
+        return np.minimum(1.0, p.dt / p.Tm)
+    return np.minimum(1.0, p.dt / (p.Tm * tm_map[ys, xs]))
+
+
+def step(occ, p: Params, rng, conn=None, tm_map=None):
+    """Advance one step in place. occ: (H,W) uint8, 1 = cell. conn: reservoir-connected mask, needed for "follow".
+    tm_map: optional (H,W) Tm multiplier by site (np.inf = cells there never start a move); None = uniform Tm."""
     if p.rule == "follow":
-        return step_follow(occ, p, rng, conn)
+        return step_follow(occ, p, rng, conn, tm_map)
     H, W = occ.shape
     ys, xs = np.nonzero(occ)
     if len(ys) == 0:
         return occ
     empty = (occ == 0)
     rho = box_mean(occ, 1)[ys, xs]
-    pm = np.minimum(1.0, p.dt / p.Tm) * rho ** p.dens_exp
+    pm = _move_rate(p, tm_map, ys, xs) * rho ** p.dens_exp
     pd = 0.0 if p.Td is None else min(1.0, p.dt / p.Td)
     u = rng.random(len(ys))
     move = u < pm
@@ -173,7 +181,7 @@ def _grad_at(g, ys, xs):
     return (g[yp, xs] - g[ym, xs]) / (yp - ym), (g[ys, xp] - g[ys, xm]) / (xp - xm)
 
 
-def step_follow(occ, p: Params, rng, conn):
+def step_follow(occ, p: Params, rng, conn, tm_map=None):
     """One "follow" step in place; updates conn (bool, reservoir-connected cells) in place.
     Only cells with an empty Moore neighbour can act (others have no target), so only they draw random numbers."""
     empty = occ == 0
@@ -182,7 +190,7 @@ def step_follow(occ, p: Params, rng, conn):
         return occ
     H, W = occ.shape  # rho = box_mean(occ, 1) at the front cells only (edge-replicated 3x3 mean, by gather)
     rho = occ[np.clip(ys[:, None] + NB9[:, 0], 0, H - 1), np.clip(xs[:, None] + NB9[:, 1], 0, W - 1)].mean(1)
-    pm = np.minimum(1.0, p.dt / p.Tm) * rho ** p.dens_exp
+    pm = _move_rate(p, tm_map, ys, xs) * rho ** p.dens_exp
     pd = 0.0 if p.Td is None else min(1.0, p.dt / p.Td)
     u = rng.random(len(ys))
     move = u < pm
@@ -208,10 +216,12 @@ def coarse_grain(occ, g):
     return occ[:H, :W].reshape(H // g, g, W // g, g).mean((1, 3)).astype(np.float32)
 
 
-def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=GRAIN):
-    """Run and record. Returns dict matching docs/sim.md (npz-ready)."""
+def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=GRAIN, tm_map=None):
+    """Run and record. Returns dict matching docs/sim.md (npz-ready).
+    tm_map: optional (H,W) per-site Tm multiplier (sim/alt_start.py region_tm_map); None (default) = uniform Tm, unchanged."""
     rng = np.random.default_rng(seed)
     occ = occ0.astype(np.uint8).copy()
+    assert tm_map is None or (tm_map.shape == occ.shape and (tm_map > 0).all()), "tm_map: (H,W) multipliers > 0"
     res = reservoir_mask(occ, p.edge)
     refill(occ, res)
     assert p.rule in RULES, f"unknown rule {p.rule!r}; one of {RULES}"
@@ -225,7 +235,7 @@ def simulate(occ0, p: Params, hours, frame_dt=1.0, seed=0, grain=GRAIN):
             occs.append(occ.copy()); dens.append(dens[-1])
             continue
         for _ in range(spf):
-            step(occ, p, rng, conn)
+            step(occ, p, rng, conn, tm_map)
             refill(occ, res)
             if follow:
                 join_islands(conn, occ)
