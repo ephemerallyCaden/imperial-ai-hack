@@ -456,18 +456,19 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   function setZoom(z) { wake(); const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
 
   // screen length of 100 µm at the orbit target (for the HUD scale bar), along the camera's right axis (horizontal on
-  // screen) rather than world x, so the bar holds as the view turns (idle orbit)
-  const sa = new THREE.Vector3(), sb = new THREE.Vector3();
+  // screen) rather than world x, so the bar holds as the view turns (idle orbit); cssW = canvas CSS width kept by
+  // resize(), so the per-frame HUD reads no layout
+  const sa = new THREE.Vector3(), sb = new THREE.Vector3(); let cssW = 0;
   function pxPer100um() {
     sa.copy(controls.target); sb.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar((100 / SITE_UM) * S).add(sa);
     sa.project(camera); sb.project(camera);
-    return Math.abs(sb.x - sa.x) / 2 * canvas.clientWidth;
+    return Math.abs(sb.x - sa.x) / 2 * cssW;
   }
 
   // ---------- loop ----------
   function resize() {
     const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    cssW = w; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(resize); ro.observe(host); resize();
   const clock = new THREE.Clock();

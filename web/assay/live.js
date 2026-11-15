@@ -99,12 +99,12 @@ export function livePanel(S) {
   </div>`;
 }
 export function liveReadouts(root, S) {
-  const q = s => root.querySelector(s);
+  const q = s => root.querySelector(s), set = (s, v) => { const e = q(s); if (e && e.textContent !== v) e.textContent = v; };   // per NCA state: write on change only
   if (!q(".as-live-t")) return;
   const since = S.tCut == null ? null : S.t - S.tCut;
   // photo shapes count NCA substeps (0.5 h each), never hours: the healing is a cell-culture model, not the photo's wound
-  q(".as-live-t").textContent = S.fromPhoto ? String(Math.round((since ?? 0) * 2)) : `${S.t.toFixed(1)} h${since == null ? "" : ` · ${since.toFixed(1)} h since this cut`}`;
-  q(".as-live-status").textContent = S.status === "error" ? `NCA failed to load: ${S.error}` : STATUS[S.status] || S.status;
-  q(".as-live-open").textContent = `${(S.open * 100).toFixed(1)}% of the field`;
-  const play = q('[data-live="play"]'); if (play) play.textContent = S.status === "paused" ? "Play" : "Pause";
+  set(".as-live-t", S.fromPhoto ? String(Math.round((since ?? 0) * 2)) : `${S.t.toFixed(1)} h${since == null ? "" : ` · ${since.toFixed(1)} h since this cut`}`);
+  set(".as-live-status", S.status === "error" ? `NCA failed to load: ${S.error}` : STATUS[S.status] || S.status);
+  set(".as-live-open", `${(S.open * 100).toFixed(1)}% of the field`);
+  set('[data-live="play"]', S.status === "paused" ? "Play" : "Pause");
 }

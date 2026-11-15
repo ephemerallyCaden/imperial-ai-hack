@@ -183,7 +183,7 @@ export async function mount(el, ctx) {
   function liveState(st) {
     if (special !== VIEWS.draw) return;
     if (pendingPhoto && st.ready) { live.carveMask(pendingPhoto); pendingPhoto = null; renderLivePanel(); }
-    $(".as-readout").textContent = `${st.fromPhoto ? "shape from photo" : `simulated t = ${st.t.toFixed(1)} h`} · live NCA · ${st.status === "running" ? "healing" : st.status}`;
+    setText($(".as-readout"), `${st.fromPhoto ? "shape from photo" : `simulated t = ${st.t.toFixed(1)} h`} · live NCA · ${st.status === "running" ? "healing" : st.status}`);
     if (panel.querySelector(".as-live")) liveReadouts(panel, st); else renderLivePanel();
     const now = performance.now(); if (now - thumbAt > 1000) { thumbAt = now; drawThumbs(); }
   }
@@ -433,8 +433,8 @@ export async function mount(el, ctx) {
 
     // ----- stage -----
     const cover = $(".as-cover");
-    cover.hidden = !refusedDoc;
-    if (refusedDoc) cover.innerHTML = `<span class="as-cover-icon">${ICON.refused}</span><div class="st-kicker">Refused</div>`;
+    if (cover.hidden !== !refusedDoc) cover.hidden = !refusedDoc;
+    if (refusedDoc && !cover.querySelector(".as-cover-icon")) cover.innerHTML = `<span class="as-cover-icon">${ICON.refused}</span><div class="st-kicker">Refused</div>`;
     let note = "";
     if (tissue && c && !refusedDoc) {
       const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area);
@@ -443,7 +443,8 @@ export async function mount(el, ctx) {
       note = [S.field && !S.field.own ? `NCA field of ${FIELD_FALLBACK}, not this item's` : "",
         miss ? `NCA cannot show ${Math.round(area * 100)}% (closest frame ${Math.round(fd.area * 100)}%${area > fd.area ? ", the NCA wound only shrinks" : ""})` : ""].filter(Boolean).join(" · ");
     }
-    const fn = $(".as-fieldnote"); fn.textContent = note; fn.title = note ? S.field?.note || "" : ""; fn.style.display = note ? "" : "none";
+    const fn = $(".as-fieldnote"), fnTitle = note ? S.field?.note || "" : "", fnDisp = note ? "" : "none";
+    setText(fn, note); if (fn.title !== fnTitle) fn.title = fnTitle; if (fn.style.display !== fnDisp) fn.style.display = fnDisp;
 
     // ----- timeline -----
     tl.update({ t: S.t, playing: S.playing, speed: S.speed, t0: refusedDoc ? null : c?.doc?.cutoff_hours ?? null,
@@ -465,8 +466,12 @@ export async function mount(el, ctx) {
         + (sq?.status === "flagged" ? `<span class="st-chip st-chip--flag" title="${esc((sq.reasons || []).join("; "))}">QC flagged</span>` : "");
     }
     const now = panel.querySelector(".c-now");
-    if (now) { const x = curveX(S.t).toFixed(1); now.setAttribute("x1", x); now.setAttribute("x2", x); }
+    if (now) { const x = curveX(S.t).toFixed(1); setAttr(now, "x1", x); setAttr(now, "x2", x); }
   }
+  // DOM writes only on change: refresh() runs every frame while playing, and re-setting an unchanged text or attribute
+  // still costs a style / layout / paint pass
+  function setText(e, s) { if (e.textContent !== s) e.textContent = s; }
+  function setAttr(e, k, v) { v = String(v); if (e.getAttribute(k) !== v) e.setAttribute(k, v); }
 
   // amber outline (and faint fill) of a binary mask PNG, drawn on a canvas over its frame
   function drawMask(cv) {
@@ -555,10 +560,11 @@ export async function mount(el, ctx) {
     });
   }
   const zr = $(".as-zoomr");
-  tissue?.onFrame(() => {
+  tissue?.onFrame(() => {   // every frame: write only what changed (no layout reads; tissue.js keeps the canvas width)
     const px = tissue.pxPer100um(), [um, w] = px > 260 ? [20, px / 5] : px < 30 ? [500, px * 5] : [100, px];
-    $(".as-scalebar i").style.width = `${Math.round(w)}px`; $(".as-scalebar span").textContent = `${um} µm`;
-    if (document.activeElement !== zr) zr.value = tissue.zoomLevel().toFixed(2);
+    const bar = $(".as-scalebar i"), bw = `${Math.round(w)}px`, zl = tissue.zoomLevel().toFixed(2);
+    if (bar.style.width !== bw) bar.style.width = bw; setText($(".as-scalebar span"), `${um} µm`);
+    if (document.activeElement !== zr && +zr.value !== +zl) zr.value = zl;
   });
 
   // ---------- exports ----------
