@@ -1,28 +1,57 @@
 # Video demo plan (2 minutes, Devpost)
 
-Status: draft v3, Sun 15 Nov. Owner: P3 (video). The script describes the finished product: the NCA is the forecaster after the data fine-tune (P2), triage covers stalling, discolouration and abnormally fast growth, and the agent pipeline runs on Adaption fine-tunes ending in a report for doctors and researchers. Audience: doctors and assay scientists.
+Status: v5 script, Sun 15 Nov. Owner: P3 (video). Opening and evidence lines written by the team; the rest keeps the earlier structure (NCA, agents, Adaption, Figma, lab use). The script describes the finished product: the real-data NCA is the forecaster (R29), triage covers stalling, discolouration and abnormally fast growth, and the agent pipeline runs on Adaption fine-tunes. Audience: doctors and assay scientists.
 
 The video is the only demo the judges see (no slides, no live demo), so it carries every mark: rigour 30, execution 25, path to the lab 20, novelty 15, video 10. It is also how we qualify for the two open prizes (rules: "show in your presentation how you qualify"): **Best Designed AI Product (Figma)** and **Best use of Adaption**. Each gets its own short, named segment, placed next to the part of the product it built.
 
-## Structure
+## Script (v5)
 
-The hospital runs through the whole video, not just the open and close. Every segment starts on a short hospital beat (1-3 s, under the voice-over) and then cuts to the product. Two teammates play the same characters throughout: **the patient** (dressed forearm wound) and **the clinician** (gloves, tablet). The third films.
+The hospital runs through the whole video. Two teammates play the same characters throughout: **the patient** (dressed forearm wound) and **the clinician** (gloves, tablet). The third films. The complex parts of the NCA go on screen as short captions, so the voice-over can stay simple.
 
-~300 words of voice-over at about 150 words per minute. Times are targets; time the real read and trim academia or use cases first if it runs long.
+About 340 words including the role-play. It fits 2:00 at a fast, energetic read (about 175 words per minute) with the numbers and triage carried on screen. The 2:00 cap is a hard Devpost rule, so time the real read and use the cut list below if it runs over 1:58.
 
-| Time | Segment | Hospital beat, then product visual | Voice-over (draft) |
+| Time | Segment | On screen | Voice-over |
 |---|---|---|---|
-| 0:00-0:12 | **Hook** | Team walks down a hospital corridor (tracking from behind). Cut to gloved hands peeling back the patient's dressing. Ambient sound, then silence. | "When you're in a high-pressure, life-or-death situation like here, you don't have the luxury of faith. You need to know what happens next, and how sure you can be." |
-| 0:12-0:22 | **The problem** | The clinician photographs the wound with the tablet. Tablet screen: a row of dated wound photos. Title: **Stitch**. | "Every dressing change, the wound is photographed, and clinics wait weeks to know if it's healing. Stitch forecasts it from the first few images." |
-| 0:22-0:37 | **Tech: the NCA (hero shot)** | Match cut: push into the wound photo on the tablet, and it becomes the 3D NCA tissue. A wound is drawn, the tissue heals, one continuous zoom from single cells out to the whole wound with its forecast range. | "Inside that wound, cells are moving and dividing. Our neural cellular automaton learns the rule each cell follows, fine-tuned on real wound time-lapses, and grows the whole wound's future from it, live, in 3D." |
-| 0:37-0:45 | **Figma (prize segment)** | Match cuts on the same screen: paper sketch, Figma wireframe, Figma high-fidelity frame, then the finished app on the tablet in the clinician's hand in the corridor. Corner badge: "Designed in Figma". | "We designed it in Figma, from sketch to wireframe to the finished product, to be read in seconds between patients." |
-| 0:45-0:59 | **Tech: agent orchestration + triage** | The clinician walks the corridor reading the tablet. On screen: images go in, QC ticks, NCA forecast with its range, triage cards light up: **Stalling**, **Discolouration**, **Abnormally fast growth**. The clinician taps Approve. | "Then it triages, like a nurse on a busy ward. A team of agents checks every image, forecasts healing with a calibrated range, and flags stalling, discolouration and abnormally fast growth. The doctor decides." |
-| 0:59-1:11 | **Adaption (prize segment)** | Adaption dashboard: Expand counter past 1,000 rows, AutoScientist run, leaderboard win rate vs base. Pipeline diagram with an Adaption badge on each agent (Intake, Triage, Reporter). Then the report: **For clinicians** view on the tablet at the bedside, **For researchers** view on a laptop in the lab. | "Every agent runs on a model we fine-tuned with Adaption, beating its base model, and it writes one report two ways: clinical language for the ward, full detail for the lab." |
-| 1:11-1:32 | **Academia: evidence** | The clinician pins the patient's photo next to the forecast. Cut to a held-out wound: the range drawn ahead, the real outcome revealed inside it. Calibration figure, then the scorecard with the NCA row highlighted. The four datasets named. | "Medicine runs on evidence, so we hold Stitch to it. Every forecast is tested on wounds the model has never seen, across four public datasets. Ninety-two percent of real outcomes land inside our ninety-percent range, and the NCA matches or beats every simple baseline. Most tools measure healing after it happens; Stitch calls it ahead." |
-| 1:32-1:51 | **Use cases: across the hospital** | The team walks past department signs, one per case (lower-third labels if the real signs can't be filmed): **Diabetes clinic**, **Surgical ward**, **Oncology**, **Burns and plastics**, **Research labs**. Each gets a 1 s inset of its closure curve (slow / stalled / slowed on purpose / overshoot / a plate of many wells). | "Walk any hospital and the need is everywhere: diabetic wounds that close too slowly, surgical wounds where infection stalls healing, cancer, where Stitch tells moving from multiplying, scarring, where healing goes too far, and the labs screening the drugs that treat them all." |
-| 1:51-2:00 | **Close** | The clinician redresses the patient's arm; the patient nods. The team walks towards camera down the corridor. End card: Stitch logo, repo URL, team names, "Designed in Figma · Fine-tuned with Adaption", data credits (WHAD, WHiM-BC, Zenodo 7660424, GigaDB 100118; CC BY needs the credit). | "Because in here, faith isn't enough. Stitch. Know sooner. Know how sure." |
+| 0:00-0:17 | **1. Hook: the hospital** | Team walks down a hospital corridor (tracking from behind). Gloved hands peel back the patient's dressing. Quick inserts as each case is named: a foot dressing (diabetic), a red, swollen edge (infection), a raised scar (scarring); props or make-up only, no real patients. | "In a hospital, a wound that won't heal can be life or death. Nobody here has the luxury of guessing. What if we could audit a wound early, and catch the diabetic ulcer that's closing too slowly, the infected wound that has stalled, or the scar that won't stop growing?" |
+| 0:17-0:36 | **2. Upload, cells, NCA** | The clinician photographs the wound on the tablet. Cut to the app: the image is uploaded, the wound edge is traced, and the image breaks apart into cells in 3D. The NCA runs: cells move into the gap, the camera zooms from single cells out to the whole wound. Captions, about 1 s each: "wound edge found" / "1 point = 1 cell" / "the same learned rule in every cell" / "move or divide" / "trained on a published cell model (Migliaccio 2023)" / "fine-tuned on real wound videos (WHAD)". | "Upload a photo of a wound, and Stitch turns it into cells, one point per cell. Then our neural cellular automaton takes over. Each cell looks at its neighbours and follows one small learned rule: move into the gap, or divide. We trained it on a published cell model, then fine-tuned it on real wound videos." |
+| 0:36-0:49 | **3. Range, flags, assistant** | Fifty faint healing curves fan out, then merge into one shaded range. Triage cards light up, no voice-over needed: **Stalling**, **Discolouration**, **Abnormally fast growth**. Assistant card with two options, "Take another photo" and "Stop early". The clinician taps one. Caption: "50 runs". | "It runs fifty times to give a range, and tells you how sure it is. An AI assistant suggests what to do next, whether to take another photo or stop early. A person always has the final say." |
+| 0:49-1:01 | **3b. Role-play: "Hey Stitch"** | At the bedside, the clinician looks at the patient's wound, then at the tablet showing its progress, and asks it out loud. On the tablet: Stitch's voice waveform, the **Stalling** triage card and the curve flattening out. Subtitles for both speakers. The clinician says thanks and walks off down the corridor to look into it. Stitch's voice is ElevenLabs. | **Doctor:** "Hey Stitch, what's it looking like?"<br>**Stitch** (ElevenLabs voice): "I've triaged the anomalies. It seems like the wound is stagnating at [X]% a day, worth looking into this."<br>**Doctor:** "Thanks." |
+| 1:01-1:12 | **4. Does it work?** | One held-out wound: the range is drawn ahead, then its 16 real measurements land one by one, a counter ticking to **15/16**. Then: "28 unseen wounds · 4 public datasets · 92% inside the 90% range" and "matches or beats every simple baseline" over the scorecard, NCA row highlighted (on screen only, no voice-over). | "Does Stitch really work? We tested it on 28 wounds it had never seen. Here's one that we tested, and our prediction was right 15 times out of 16." |
+| 1:12-1:45 | **5. Agents + Adaption (prize segment)** | Pipeline diagram: Intake, QC, NCA forecast, Triage, Assistant, Reporter. Intake, Triage and Reporter light up with an Adaption badge. Adaption platform, in the order the voice-over names it: **Datasets** page with our three uploads (1,500 / 1,188 / 1,973 rows); **AutoScientist** recommended hyperparameters (LoRA r16 / alpha 32, lr 5e-5), the training run on Qwen/Qwen3.5-2B, and best win rate vs base (Intake **0.95**, Triage **0.88**); the adapter download. Chip: "44 MB LoRA adapter, runs locally". **Intake**: a protocol paragraph on the left, the settings it pulls out ticking in on the right (cell type, frame interval, mitomycin...); caption "30 real protocols: 47% to 80%". **Triage**: bar 10% to 99.8% on unseen wounds; second bar "with prompt-injection attacks: 21% to 99%". **Reporter**: the report in two versions, clinician view on the tablet at the bedside, researcher view on a laptop in the lab; caption "names the decision: 29% to 71% · every number checked by a code critic". | "Behind it runs a team of agents, and we fine-tuned three of them with Adaption. We uploaded thousands of our own training examples to Adaption Datasets. AutoScientist recommended the settings and trained a LoRA adapter on Qwen 3.5, a two-billion-parameter model small enough to run inside the hospital. Adaption's judge preferred our Intake model over its base 95% of the time, and Triage 88%. On unseen wounds, Triage went from 10% to almost 100% right. Then the Reporter writes the summary, one for the doctor and one for the researcher." |
+| 1:45-1:51 | **6. Figma** | Figma wireframes, then the style guide (colours, type, components), then the same screen finished on the tablet in the clinician's hand. Badge: "Designed in Figma". Caption: "readable in seconds between patients". | "We designed it in Figma, from wireframes to a full style guide." |
+| 1:51-1:56 | **7. The lab** | A lab bench or laptop. Two curves side by side, "Drug A: stops movement" and "Drug B: stops division". Then a grid of wells, each with its own forecast, captioned "drug screens: a forecast from the first few hours". | "In the lab, it shows whether a cancer drug stops cells moving or multiplying." |
+| 1:56-2:00 | **8. Close** | The clinician redresses the patient's arm. The team walks towards camera down the corridor. End card (under the last line): Stitch logo, "Know sooner. Know how sure.", repo URL, team names, "Designed in Figma · Fine-tuned with Adaption", data credits (WHAD, WHiM-BC, Zenodo 7660424, GigaDB 100118; CC BY needs the credit). | "Nobody here has the luxury of guessing. With Stitch, they don't have to." |
 
-Balance: technology 49 s (NCA, agents, plus the two prize segments), academia 21 s, use cases 19 s, and the hospital story carries all of it.
+### Read-through (for the voice-over)
+
+> In a hospital, a wound that won't heal can be life or death. Nobody here has the luxury of guessing. What if we could audit a wound early, and catch the diabetic ulcer that's closing too slowly, the infected wound that has stalled, or the scar that won't stop growing?
+>
+> Upload a photo of a wound, and Stitch turns it into cells, one point per cell. Then our neural cellular automaton takes over. Each cell looks at its neighbours and follows one small learned rule: move into the gap, or divide. We trained it on a published cell model, then fine-tuned it on real wound videos.
+>
+> It runs fifty times to give a range, and tells you how sure it is. An AI assistant suggests what to do next, whether to take another photo or stop early. A person always has the final say.
+>
+> **[Role-play, acted on camera]**
+>
+> **Doctor:** Hey Stitch, what's it looking like?
+>
+> **Stitch** (ElevenLabs): I've triaged the anomalies. It seems like the wound is stagnating at [X]% a day, worth looking into this.
+>
+> **Doctor:** Thanks.
+>
+> Does Stitch really work? We tested it on 28 wounds it had never seen. Here's one that we tested, and our prediction was right 15 times out of 16.
+>
+> Behind it runs a team of agents, and we fine-tuned three of them with Adaption. We uploaded thousands of our own training examples to Adaption Datasets. AutoScientist recommended the settings and trained a LoRA adapter on Qwen 3.5, a two-billion-parameter model small enough to run inside the hospital. Adaption's judge preferred our Intake model over its base 95% of the time, and Triage 88%. On unseen wounds, Triage went from 10% to almost 100% right. Then the Reporter writes the summary, one for the doctor and one for the researcher.
+>
+> We designed it in Figma, from wireframes to a full style guide.
+>
+> In the lab, it shows whether a cancer drug stops cells moving or multiplying.
+>
+> Nobody here has the luxury of guessing. With Stitch, they don't have to.
+
+### If the read runs over 1:58, cut in this order
+1. "a two-billion-parameter model small enough to run inside the hospital" becomes "a small model that runs inside the hospital" (segment 5).
+2. "then fine-tuned it on real wound videos" (segment 2); the caption already says it.
+3. "Then the Reporter writes the summary," becomes "The Reporter writes"; keep both report versions on screen.
 
 | Tempting line | Problem | Say instead |
 |---|---|---|
@@ -39,41 +68,45 @@ Balance: technology 49 s (NCA, agents, plus the two prize segments), academia 21
 ## Fill from the final results before recording
 
 The judges have the repo and the Adaption leaderboard, so these must match:
-- "the NCA beats every simple baseline": NCA vs best-baseline ratio at the headline cut-off (3.8 h), from `docs/results.md` after the fine-tune.
-- "Ninety-two percent": NCA calibrated coverage on unseen WHAD wounds (0.92 today, per #135).
-- "beating its base model head to head": Adaption leaderboard win rate per agent model; show the real figure on screen.
+- "matches or beats every simple baseline" (on screen): the real-data NCA vs best baseline per cut-off in `docs/results.md` (R29: 0.0397 vs edge speed 0.0386 at 3.8 h, better at 1.9 h and 9.5 h).
+- Role-play "[X]% a day": pick a believable number for a stalling wound. If you want it to be a real tool output, use the closure rate of the stall demo wound (WHAD is filmed hourly, so say "an hour" instead of "a day").
+- "28 wounds it had never seen": WHAD wounds passing QC in `docs/results.md`.
+- "right 15 times out of 16": pick the held-out WHAD wound used in segment 4 from the forecast files; 15 of its 16 real measurements after the cut-off must fall inside the 90% range. Use that same wound on screen.
+- "92% inside the 90% range" (on screen): NCA calibrated coverage on unseen WHAD wounds (0.92 today, per #135).
+- Adaption numbers come from `docs/adaption-results.md` (all three GO): Intake mean field accuracy 47.4% to 80.4% on 30 real protocols, platform win rate 0.947; Triage 9.5% to 99.8% on held-out wounds (injected rows 21.4% to 99.1%), win rate 0.879; Reporter pass 3.2% to 47.1%, decision named 28.9% to 70.5%. **Don't show a Reporter win rate**: the platform gave 0.50, below target; show its held-out numbers instead.
+- Adaption tools actually used (`data/adaption/launch.py`): Datasets raw upload of rows we generated ourselves (`make_train.py`, `reporter/make_reporter.py`, `reporter/make_triage.py`); AutoScientist `list_models`, `recommend_hyperparams`, `create` (instruction tuning, target win rate 0.7, 1 iteration), win-rate judging, `download` of the LoRA. **Expand and Invent were not used**, so don't show or say them. The win rate is judged on a held-out split of our generated rows, not the real test set.
+- "small enough to run inside the hospital": the adapters run locally on Qwen3.5-2B; Intake falls back to Claude, so show the local run on screen.
 - Triage cards: one real demo wound per flag type.
 
 ## High-priority items
 
 | # | Item | Owner | When |
 |---|---|---|---|
-| P0-1 | **Draw mode, NCA hero render**: `web/index.html` with draw-a-wound, continuous zoom, three.js relief. The engine is ready in `web/public/sim/js/` (engine, nca, worker, smooth). | P3 (+P2 for weights) | overnight |
+| P0-1 | **Upload to cells to NCA, hero render**: in `web/index.html`, an uploaded wound image is traced, turned into cells (one point per cell) and run forward by the NCA in 3D (three.js), with the continuous zoom from cells to the whole wound and the 50-run range. Draw mode is a bonus. The engine is ready in `web/public/sim/js/` (engine, nca, worker, smooth). The image uploaded on screen must be one the app really processes. | P3 (+P2 for weights) | overnight |
 | P0-2 | **Agent layer**: merge PR #69; `agent/` loop with `call_model()` and the code Critic; recorded runs on held-out WHAD wounds; Assay playback (forecast + band + triage cards + decision card + Approve). | P3 | overnight |
 | P0-3 | **NCA fine-tune and re-score** so the NCA is the shipped forecaster; regenerate `docs/results.md`; send final numbers to P3. | P2 | by Sun 09:00 |
 | P0-4 | **Triage in the demo run**: stall, discolouration and fast-growth flags on the Assay path, with one demo wound per flag plus one normal wound. | P1 / P3 | by Sun 09:00 |
-| P0-5 | **Adaption across the pipeline**: widen design 9c from Intake only to every agent model (Intake, Triage, Reporter); Expand datasets, AutoScientist runs, leaderboard win rate vs base for each; wire them in through `call_model()`. Reporter produces the two-audience report (clinician and researcher summaries). Keep the leaderboard screenshots and run IDs for the README and Devpost. | P2 (Adaption) + P3 (wiring, report UI) | by Sun 09:00 |
-| P0-6 | **Figma evidence**: one Figma Design file (not Figma Make) with pages for sketches (photos of paper sketches), wireframes and high-fidelity frames of the same screens; put the link in `HACKATHON.md` and on Devpost. The old HTML mockups don't count as Figma (archived at tag `archive/mockups-2026-11-15`). | P3 | by Sun 09:00 |
+| P0-5 | **Adaption on screen**: the three fine-tunes are done and GO (`docs/adaption-results.md`). Still needed for the video: screen captures of the Adaption platform (Datasets uploads, AutoScientist recommended settings, runs, win rates for Intake and Triage, adapter download); the Intake protocol-to-settings view; the Reporter's two-audience report (clinician and researcher) in the app; the three result bars as styled graphics. | P2 (captures) + P3 (UI, graphics) | by Sun 10:00 |
+| P0-6 | **Figma evidence**: one Figma Design file (not Figma Make) with the wireframes and the style guide (colours, type, components), plus the finished frames; put the link in `HACKATHON.md` and on Devpost. | P3 | by Sun 09:00 |
 | P0-7 | **Validation + scorecard shots**: held-out reveal animation; calibration, reliability and scorecard figures restyled to the Figma design. | P1 data, P3 styling | Sun 09:00-10:00 |
 | P0-8 | **Lock the script**; time the read at 1:55 max. | P3 + all | tonight |
 | P1-9 | **Hospital shoot, self-shot**: cast = patient (teammate, dressed forearm), clinician (teammate, gloves, tablet), one person filming (tripod or a friend for the full-team walking shots). Get filming permission from the hospital first (usually its communications/press office), including which corridors and department signs we may film. No real patients, staff who haven't agreed, or patient screens or notes in frame. Plain clothes or gloves only, no hospital uniforms or ID badges. Props: tablet, gloves, bandage, tape. Film 2-3 takes of each shot; phone at 1080p/4K, 24-30 fps. | P3 + team | Sun, before 10:30 |
 | P1-9b | **App on the tablet**: screen-record each app shot on a laptop first, then play those recordings full-screen on the tablet during the hospital shoot. No server reachable from the tablet needed. | P3 | before the shoot |
+| P1-10b | **Stitch's voice**: generate the role-play line in ElevenLabs, a few takes, pick one; keep the voice for any other Stitch lines. | P3 | Sun 10:00 |
 | P1-10 | **Voice-over**: one teammate reads it; record in a quiet room, 2-3 full takes, phone close to the mouth; captions burned in (judges may watch muted). | teammate | Sun 10:00 |
 | P2-11 | **Backup video tonight**: screen capture of whatever runs plus a scratch voice-over. | P3 | before sleeping |
 | P2-12 | Export 1080p, max 2:00, H.264; upload to Devpost with the Figma link and Adaption leaderboard link; check it plays logged out. | P3 | Sun 11:15-11:30 |
 
 ## Shot list (capture Sun 09:00-10:30)
 
-1. Hospital beats (one session, in script order): team walking a corridor from behind, 4 s; dressing peeled back, 3 s; clinician photographs the wound with the tablet, 3 s; push-in on the tablet photo (for the match cut to the NCA), 2 s; finished app on the tablet in hand, 2 s; clinician reading the tablet while walking, then tapping Approve, 4 s; report on the tablet at the bedside, 2 s; photo pinned next to the forecast, 2 s; five department signs or corridor walk-bys, 2 s each; redressing the arm and the patient's nod, 3 s; team walking towards camera, 3 s.
-2. WHAD time-lapse of one wound, 4 s.
-3. Draw mode: draw stroke, 3 s; heal, 5 s; continuous zoom cells to wound, 5 s; slow orbit of the 3D relief, 3 s.
-4. Figma: sketch, wireframe, hi-fi, live build of the same screen (1.5 s each, matched framing); Figma canvas zoom-out over all frames, 3 s.
-5. Assay mode: drop frames, QC, NCA forecast + band, three triage cards, decision card, Approve (one take, sped up to ~13 s).
-6. Adaption: Expand row counter, 2 s; AutoScientist run, 2 s; leaderboard win rate, 3 s; pipeline diagram with Adaption badges, 2 s; two-audience report, 3 s.
-7. Held-out reveal: band first, then the true curve, 6 s.
-8. Calibration figure, 5 s; scorecard with the NCA row highlighted, 6 s; four datasets, 3 s.
-9. Five closure-curve insets for the use cases, 1 s each.
-10. End card, 4 s.
+1. Hospital, in script order: team walking a corridor from behind, 4 s; dressing peeled back, 3 s; inserts for diabetic foot dressing, infected edge and raised scar (props or make-up), 1.5 s each; clinician photographs the wound with the tablet, 3 s; clinician taps an assistant option, 2 s; report on the tablet at the bedside, 2 s; finished app on the tablet in hand, 2 s; redressing the arm, 3 s; team walking towards camera, 3 s.
+1b. Role-play at the bedside: clinician looks at the wound and the tablet, asks "Hey Stitch, what's it looking like?", 3 s; tablet showing the waveform, Stalling card and flattening curve, 6 s; "Thanks." and walking off down the corridor, 3 s. Record the clinician's lines on set with a phone mic close by; generate Stitch's line in ElevenLabs (a calm voice that sounds different from the narrator), export WAV and lay it in during the edit.
+2. App screen recordings (play them on the tablet for the in-hand shots): upload, edge traced, image breaking into cells, NCA healing with the zoom, 20 s; fifty curves merging into the range, 4 s; triage cards, 3 s; assistant card, 3 s.
+3. Evidence: held-out wound with 16 measurements landing and the 15/16 counter, 8 s; "28 unseen wounds · 4 datasets · 92%" card, 3 s; scorecard with the NCA row highlighted, 4 s.
+4. Agents + Adaption (33 s): pipeline diagram with badges, 3 s; Datasets page with the three uploads, 2 s; AutoScientist recommended settings, run and win rates, 2 s each; adapter download and "runs locally" chip, 2 s; Intake protocol to settings, 5 s; Triage bars, 5 s; two report versions at the bedside and in the lab, 6 s; critic caption, 2 s.
+5. Figma: wireframes, style guide, finished screen, about 2.5 s each.
+6. Lab: bench or laptop, 2 s; drug A vs drug B curves, 4 s; grid of wells, 3 s.
+7. End card, 4 s.
 
 ## Timeline
 
@@ -83,7 +116,7 @@ The judges have the repo and the Adaption leaderboard, so these must match:
 - Sun 11:15-11:30: export, upload, submit. 12:00 hard deadline (video and last commit).
 
 ## Decided
-- Hook: the original line (above). Audience: doctors and assay scientists; the hospital opening sets up both.
+- Script v5: the team's opening ("In a hospital, a wound that won't heal can be life or death...") and evidence lines ("Does Stitch really work?..."), then the earlier structure. Audience: doctors and assay scientists.
 - The script assumes the finished product (NCA forecaster after the fine-tune; full anomaly triage; Adaption across the agent pipeline).
 - Figma and Adaption each get a short named segment placed next to what they built: Figma after the visuals, Adaption after the agents, ending on the report.
 - Voice-over: a teammate. Hospital footage: self-shot, the team walking through the hospital.

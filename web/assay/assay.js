@@ -52,20 +52,20 @@ export async function mount(el, ctx) {
           <div class="as-hud as-hud-tl" hidden><div class="as-readout num"></div><div class="as-caption as-simnote"></div></div>
           <div class="as-hud as-hud-tr">
             <button class="as-ibtn" data-act="draw" aria-label="Draw (B)" title="Draw · B"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg></button>
-            <button class="as-ibtn as-stallbtn" data-act="stall" aria-pressed="false" aria-label="Edge stall heatmap (H)" title="Edge stall · H"><svg viewBox="0 0 24 24"><path d="M12 3c3 4 6 6.5 6 10.5a6 6 0 0 1-12 0C6 10 9 8 12 3z"/></svg></button>
-            <button class="as-ibtn" data-act="heat" aria-pressed="false" aria-label="Age heatmap (A)" title="Cell age · A"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+            <button class="as-ibtn" data-act="heat" aria-pressed="false" aria-label="Age heatmap (A)" title="Age heatmap · A"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></button>
+            <button class="as-ibtn" data-act="outline" aria-pressed="false" aria-label="Simulated outline (O)" title="Simulated outline · O"><svg viewBox="0 0 24 24"><path d="M6 9c2-4 9-5 12-1s1 9-4 10-10-3-8-9z" stroke-dasharray="3 2.5"/></svg></button>
             <div class="as-zoom" role="group" aria-label="Zoom">
               <button class="as-ibtn" data-act="zoom-in" aria-label="Zoom in (+)" title="Zoom in · +">+</button>
               <input class="as-zoomr" type="range" min="0" max="1" step="0.01" value="0" aria-label="Zoom">
               <button class="as-ibtn" data-act="zoom-out" aria-label="Zoom out (−)" title="Zoom out · −">−</button>
             </div>
+            <button class="as-ibtn" data-act="orbit" aria-pressed="true" aria-label="Idle orbit (I)" title="Idle orbit · I"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/><circle cx="12" cy="12" r="1.6"/></svg></button>
             <button data-act="select" hidden></button><button data-act="clear" hidden></button>
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
             <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span class="as-st"><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-divnote" hidden></span><span class="as-dim as-fieldnote" style="display:none"></span>
-              <div class="as-ageleg" hidden><div class="st-kicker">Cell age</div><i class="as-agebar" style="background:${T?.HEAT_GRADIENT || "none"}"></i><div class="as-ageends"><span>new</span><span>old</span></div></div></div>
-            <div class="as-legendheat" hidden><span><i class="sw sw-stalled"></i>Stalled edge</span><span><i class="sw sw-moving"></i>Moving edge</span></div>
+              <div class="as-ageleg" hidden><div class="st-kicker">Cell age</div><i class="as-agebar" style="background:${T?.HEAT_GRADIENT || "none"}"></i><div class="as-ageends"><span>new</span><span>old</span></div><span class="as-dim as-agenote">colour = simulated cell age, not a measurement</span></div></div>
           </div>
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
@@ -82,7 +82,7 @@ export async function mount(el, ctx) {
 
   // ---------- state ----------
   const S = { items: [], item: null, main: null, branch: null, merged: null, active: "main", t: 0, playing: false, speed: 1,
-    stall: false, stallShown: false, stallKey: "", approvals: {}, tab: "forecast", rejectNote: "", panelKey: "", msg: "", sel: null, raw: {} };
+    approvals: {}, tab: "forecast", rejectNote: "", panelKey: "", msg: "", sel: null, raw: {} };
   const run = () => S.active === "branch" ? S.merged : S.main;
   const checkAt = t => { const cs = run()?.checks || []; let c = null; for (const x of cs) if (x.cut_h <= t + 1e-9) c = x; return c; };
   const branchCut = () => S.branch?.start?.branch_cut_h;
@@ -176,7 +176,7 @@ export async function mount(el, ctx) {
         $(".as-main").hidden = true; const host = $(".as-heldout"); host.hidden = false; heldout = mountHeldout(host);
       },
       leave() { heldout?.dispose(); heldout = null; $(".as-heldout").hidden = true; $(".as-main").hidden = false; },
-      key: a => a === "play" || a === "step-back" || a === "step-forward" || a === "brush",   // the view handles its own keys
+      key: a => a === "play" || a === "step-back" || a === "step-forward" || a === "brush" || a === "age-heatmap",   // the view handles its own keys (H = its edge speed)
     },
   };
   function renderLivePanel() { panel.innerHTML = livePanel(live.state); liveReadouts(panel, live.state); }
@@ -190,6 +190,7 @@ export async function mount(el, ctx) {
   function markDraw() {
     $('[data-act="draw"]').setAttribute("aria-pressed", !!(special === VIEWS.draw && live?.state.brushOn));
     $('[data-act="select"]').setAttribute("aria-pressed", !!tissue?.isSelecting());
+    $('[data-act="outline"]').disabled = !!live?.state.active;   // a drawn wound has no outline
   }
   // one active tool on the 3D view: the brush (draw item only) or select-area
   function useTool(t) {
@@ -214,7 +215,7 @@ export async function mount(el, ctx) {
     special = v;
     if (v) return v.enter(it);
     if (tissue) loadPb(fieldFor(it).path).catch(() => {});   // fetch the field alongside the run log (useField reports errors)
-    S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1; S.stall = false; S.stallKey = "";
+    S.item = it; sel.value = id; S.approvals = {}; S.active = "main"; S.branch = S.merged = null; S.playing = false; S.msg = ""; S.rejectNote = ""; S.panelKey = ""; S.thumbF = -1;
     try {
       if (it.kind === "run") {
         const recs = await ctx.data.jsonl(index.base + it.run.file);
@@ -300,15 +301,16 @@ export async function mount(el, ctx) {
       // undo the latest answer at or before t
       const cut = Math.max(...Object.keys(S.approvals).map(Number).filter(k => k <= S.t + 1e-9));
       if (isFinite(cut)) { delete S.approvals[cut]; if (cut === branchCut()) S.active = "main"; Object.keys(S.approvals).forEach(k => +k > cut && delete S.approvals[k]); seek(cut); return; }
-    } else if (a === "stall") { S.stall = !S.stallShown; }
-    else if (a === "zoom-in") return tissue?.zoom(1);
+    } else if (a === "zoom-in") return tissue?.zoom(1);
     else if (a === "zoom-out") return tissue?.zoom(-1);
+    else if (a === "orbit") return setOrbit(!tissue?.isIdleOrbit());
     else if (a === "upload") return $("#as-file").click();
     else if (a === "sample") return select("sample_3frame");
     else if (a === "draw") return useTool("brush");
     else if (a === "select") return useTool("select");
     else if (a === "clear") return tissue?.clearSelection();
     else if (a === "heat") return setHeat(!tissue?.isHeat());
+    else if (a === "outline") return setOutline(!tissue?.isOutline());
     refresh();
   }
   el.addEventListener("click", e => {
@@ -433,24 +435,15 @@ export async function mount(el, ctx) {
     const cover = $(".as-cover");
     cover.hidden = !refusedDoc;
     if (refusedDoc) cover.innerHTML = `<span class="as-cover-icon">${ICON.refused}</span><div class="st-kicker">Refused</div>`;
-    // while a stop / stall decision waits for approval, the edge-stall overlay shows where the front is not moving
-    const autoStall = !!(cNow?.needsApproval && !S.approvals[cNow.cut_h] && ["stop", "stall"].includes(decisionKind(cNow.decision)));
-    S.stallShown = S.stall || autoStall;
     let note = "";
     if (tissue && c && !refusedDoc) {
-      const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area), dt = Math.min(1, S.t);
-      const prev = S.stallShown && dt > 0.05 ? areaAt(fc, c.doc.cutoff_hours, S.t - dt) : null;
-      const key = prev == null ? "" : `${fd.f}|${prev.toFixed(3)}`;
-      if (key !== S.stallKey) { S.stallKey = key; tissue.setStall(prev == null ? null : { prevArea: prev, dtHours: dt, cutH: S.t, horizonH: HORIZON_H }); }
+      const area = areaAt(fc, c.doc.cutoff_hours, S.t), fd = tissue.showArea(area);
       // visible only when needed: the field is another wound's, or the NCA cannot show this area (full note on hover)
       const miss = Math.abs(fd.area - area) > AREA_TOL;
       note = [S.field && !S.field.own ? `NCA field of ${FIELD_FALLBACK}, not this item's` : "",
         miss ? `NCA cannot show ${Math.round(area * 100)}% (closest frame ${Math.round(fd.area * 100)}%${area > fd.area ? ", the NCA wound only shrinks" : ""})` : ""].filter(Boolean).join(" · ");
     }
     const fn = $(".as-fieldnote"); fn.textContent = note; fn.title = note ? S.field?.note || "" : ""; fn.style.display = note ? "" : "none";
-    $(".as-stallbtn").setAttribute("aria-pressed", !!S.stallShown);
-    $(".as-legendheat").hidden = !S.stallShown;
-    $(".as-legend3d").classList.toggle("is-stall", !!S.stallShown);
 
     // ----- timeline -----
     tl.update({ t: S.t, playing: S.playing, speed: S.speed, t0: refusedDoc ? null : c?.doc?.cutoff_hours ?? null,
@@ -511,16 +504,30 @@ export async function mount(el, ctx) {
     tip.hidden = false; tip.style.left = `${h.px + 14}px`; tip.style.top = `${h.py + 14}px`;
     tip.textContent = `${h.x_um}, ${h.y_um} µm · ${STATE_LABEL[h.state]} · ${h.density.toFixed(2)}`;
   }
-  // age heatmap overlay (button, A, ?heat): recolours the 3D field only, so playback and the live run carry on untouched;
-  // legend as in the glass-dish mockup (title, gradient of the stops, state entries dimmed)
+  // age heatmap overlay (button, A or H, View menu, ?heat): recolours the 3D field only, so playback and the live run carry
+  // on untouched; grows from / shrinks to the field centre (tissue.js). Legend as in the glass-dish mockup (title, gradient
+  // of the stops, state entries dimmed), fading in and out with the front (assay.css)
   function setHeat(on) {
     if (!tissue) return;
     tissue.setHeat(on); $('[data-act="heat"]').setAttribute("aria-pressed", on);
     $(".as-legend3d").classList.toggle("is-heat", on); $(".as-ageleg").hidden = !on;
   }
+  // simulated outline overlay (button, O, View menu): off by default, as the mockup has none; labelled "simulated outline"
+  function setOutline(on) {
+    const b = $('[data-act="outline"]'); if (!tissue || b.disabled) return;
+    tissue.setOutline(on); b.setAttribute("aria-pressed", on);
+  }
   function markView() {
     const v = tissue?.view();
     el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v));
+  }
+  // idle orbit (button, I, View menu): tissue.js turns the camera slowly about its target after a few seconds without input on the
+  // 3D view; on by default, the choice kept for the session; no button under prefers-reduced-motion (it never runs then)
+  const ORBIT_KEY = "assay.idleOrbit";
+  function setOrbit(on) {
+    if (!tissue) return;
+    tissue.setIdleOrbit(on); $('[data-act="orbit"]').setAttribute("aria-pressed", on);
+    try { sessionStorage.setItem(ORBIT_KEY, on ? "1" : "0"); } catch { /* storage blocked: the default applies next time */ }
   }
   const rootCss = getComputedStyle(document.documentElement), cv = (n, h) => rootCss.getPropertyValue(n).trim() || h;
   const COLORS = { wound: cv("--cell-wound", "#24120F"), intact: cv("--cell-intact", "#C68B6E"), edge: cv("--cell-edge", "#B3122E"), fresh: cv("--cell-new", "#FFD2C6") };
@@ -585,9 +592,10 @@ export async function mount(el, ctx) {
     else if (a === "select-area") act("select");
     else if (a === "clear-selection") tissue?.clearSelection();
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
-    else if (a === "toggle-heatmap") act("stall");
+    else if (a === "outline") act("outline");
     else if (a === "reset-camera") { tissue?.reset(); markView(); }
     else if (a.startsWith("camera:")) { tissue?.goTo(a.slice(7)); markView(); }
+    else if (a === "idle-orbit") setOrbit(!tissue?.isIdleOrbit());
     else if (a === "export-forecast") exportForecast();
     else if (a === "export-runlog") exportRunlog();
   };
@@ -600,14 +608,17 @@ export async function mount(el, ctx) {
     else if (a === "step-forward") step(1);
     else if (a === "zoom-in") tissue?.zoom(1);
     else if (a === "zoom-out") tissue?.zoom(-1);
+    else if (a === "idle-orbit") setOrbit(!tissue?.isIdleOrbit());
     else if (a === "select-area") act("select");
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
+    else if (a === "outline") act("outline");
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
     else if (a === "reset-camera") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.reset(); markView(); }
-    else if (a === "toggle-heatmap") act("stall");
   };
   ctx.bus.addEventListener("action", onAction);
   ctx.bus.addEventListener("key", onKey);
+  $('[data-act="orbit"]').style.display = tissue?.canIdleOrbit ? "" : "none";
+  { let on = true; try { on = sessionStorage.getItem(ORBIT_KEY) !== "0"; } catch { /* storage blocked */ } setOrbit(on); }
 
   markView(); setHeat(new URLSearchParams(location.search).has("heat"));
   const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === DEFAULT_WOUND) || S.items[0];

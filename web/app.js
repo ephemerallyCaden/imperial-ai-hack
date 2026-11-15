@@ -41,7 +41,7 @@ document.querySelectorAll("[data-action]").forEach(el => el.addEventListener("cl
 }));
 
 const HELP = {
-  shortcuts: "<h3>Keyboard shortcuts</h3><p>Space play/pause · ←/→ step · +/− zoom · right-drag zoom to area · Esc zoom out · H edge stall · A cell age · B draw · Ctrl O open images</p>",
+  shortcuts: "<h3>Keyboard shortcuts</h3><p>Space play/pause · ←/→ step · +/− zoom · right-drag zoom to area · Esc zoom out · A or H age heatmap · O outline · B draw · I idle orbit · Ctrl O open images</p>",
   "how-it-works": "<h3>How the forecast works</h3><p>Code runs the science at each check (QC, forecast, flags, schedule). An agent picks one of the decisions the policy code allows and explains it; every number it writes is checked against the tool outputs. Stops need your approval.</p>",
   limitations: "<h3>Limitations</h3><p>Cells shown are simulated, not tracked. Research use only, not for diagnosis or treatment. Bands from the simulator are uncalibrated; only the forecast band is a calibrated 90% band.</p>",
   about: "<h3>About</h3><p>Data: WHAD (Iheme et al., CC BY 4.0), WHiM-BC, Jin et al. 2016. See the README for citations.</p>",
@@ -52,9 +52,10 @@ document.addEventListener("keydown", e => {
   if (e.target.closest("input,textarea")) return;
   if (e.key === "?") return help("shortcuts");
   const k = { " ": "play", ArrowLeft: "step-back", ArrowRight: "step-forward", "+": "zoom-in", "=": "zoom-in", "-": "zoom-out",
-              Escape: "reset-camera", r: "reset-camera", h: "toggle-heatmap", b: "brush", a: "age-heatmap" }[e.key];
+              Escape: "reset-camera", r: "reset-camera", h: "age-heatmap", b: "brush", a: "age-heatmap", o: "outline" }[e.key];
   if (e.ctrlKey && e.key.toLowerCase() === "n") { e.preventDefault(); return ctx.emit("action", { action: "new-analysis" }); }
   if (e.ctrlKey && e.key.toLowerCase() === "o") { e.preventDefault(); return ctx.emit("action", { action: "open-images" }); }
+  if (e.key === "i") return ctx.emit("key", { action: "idle-orbit" });
   if (k) { if (k === "play") e.preventDefault(); ctx.emit("key", { action: k }); }
 });
 
