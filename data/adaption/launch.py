@@ -31,6 +31,20 @@ def size_b(m):
 
 
 c = Adaption()
+if "--download" in sys.argv:  # best LoRA of the run in run_ids.json -> data/adaption/best.tgz (gitignored)
+    rid, out = json.load(open(IDS))["run_id"], os.path.join(HERE, "best.tgz")
+    print("downloading", rid, flush=True)
+    n = 0
+    with c.with_options(timeout=1800).autoscientist.with_streaming_response.download(rid) as r:
+        print("HTTP", r.status_code, r.headers.get("content-type"), r.headers.get("content-length"), "bytes", flush=True)
+        with open(out + ".part", "wb") as f:
+            for chunk in r.iter_bytes():
+                f.write(chunk); n += len(chunk)
+                if n // (50 << 20) != (n - len(chunk)) // (50 << 20):
+                    print(f"  {n >> 20} MB", flush=True)
+    os.replace(out + ".part", out)
+    print("saved", out, n, "bytes", flush=True)
+    sys.exit(0)
 models = c.autoscientist.list_models().models
 for m in models:
     print("model", m.id, m.api_model_size, size_b(m), m.methods, "reasoning" if m.train_with_reasoning else "", flush=True)
@@ -46,12 +60,6 @@ if "--cancel" in sys.argv:  # --cancel [RUN_ID]; default: the run in run_ids.jso
     print("cancel", rid, c.autoscientist.cancel(rid))
     if os.path.exists(IDS) and json.load(open(IDS))["run_id"] == rid:
         os.replace(IDS, IDS.replace(".json", f".cancelled-{rid[:8]}.json"))
-    sys.exit(0)
-if "--download" in sys.argv:  # best LoRA of the run in run_ids.json -> data/adaption/best.tgz (gitignored)
-    rid = json.load(open(IDS))["run_id"]
-    with c.autoscientist.with_streaming_response.download(rid) as r:
-        r.stream_to_file(os.path.join(HERE, "best.tgz"))
-    print("saved", os.path.join(HERE, "best.tgz"), os.path.getsize(os.path.join(HERE, "best.tgz")), "bytes")
     sys.exit(0)
 if "--status" in sys.argv:  # --status [RUN_ID]; default: the run in run_ids.json
     i = sys.argv.index("--status")

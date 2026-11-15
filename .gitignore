@@ -38,3 +38,4 @@ upload_out/
 
 # Adaption LoRA downloads (#90)
 *.tgz
+*.tgz.part
