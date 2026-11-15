@@ -33,7 +33,7 @@
 
 <section>
   <div class="st-kicker">2 · Cell states (3D columns + legend)</div>
-  <p class="lead">Checked under protan / deutan / tritan simulation (closest pair ΔE ≈ 26) and in greyscale (lightness 5 / 31 / 65 / 89 / 100). Height = local density; colour = state; dividing = dark centre dot.</p>
+  <p class="lead">Skin look. Checked under protan / deutan / tritan simulation (closest pair ΔE ≥ 17) and in greyscale (wound 8 · edge 38 · intact 63 · new 88 · dividing 100). Rendered with toon shading, age colouring and an 8° cool hue shift. Height = local density; colour = state; dividing = dark centre dot.</p>
   <div class="grid g5" id="cells"></div>
   <p class="st-caption">Outside a box selection: matte greyscale, one step per state so the rest of the wound still reads.</p>
   <div class="row" id="ghost"></div>
@@ -130,7 +130,7 @@
     <li><b>Research use only, not for diagnosis or treatment</b> · footer + Help</li>
     <li><b>Colours illustrative, not clinically calibrated</b> · tissue tone help</li>
   </ul></div>
-  <div class="box grid"><div class="do">Do: state the decision first, then the number that drove it.</div><div class="do">Do: pair every colour with a word, icon, hatch or dot.</div><div class="dont">Don't: call any simulator or NCA spread a “90% interval”.</div><div class="dont">Don't: use the intact teal for text or thin lines (2.3:1 on the background).</div><div class="dont">Don't: add a second accent colour; status uses amber + words.</div></div></div>
+  <div class="box grid"><div class="do">Do: state the decision first, then the number that drove it.</div><div class="do">Do: pair every colour with a word, icon, hatch or dot.</div><div class="dont">Don't: call any simulator or NCA spread a “90% interval”.</div><div class="dont">Don't: use the leading-edge red for text (it's a cell state, not a status colour).</div><div class="dont">Don't: add a second accent colour; status uses amber + words.</div></div></div>
 </section>
 
 <section>
@@ -157,7 +157,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const sw = (host, items) => items.forEach(([v, name, note, outline]) => host.insertAdjacentHTML('beforeend', `<div class="sw"><div style="background:var(${v});${outline ? 'outline:1px solid var(--hair);outline-offset:-1px' : ''}"></div><p><b>${name}</b><code>${v}</code> ${css(v)}<br>${note}</p></div>`));
 sw(document.getElementById('core'), [['--bg', 'Background', 'page + scene'], ['--panel-solid', 'Panel', 'menus, tables, side panels'], ['--ink', 'Ink', 'text, observed data · 17:1'], ['--dim', 'Dim', 'secondary text · 6.6:1'], ['--accent', 'Accent (amber)', 'median, band, selection, focus · 9.3:1']]);
 const C = document.getElementById('cells');
-[['--cell-wound', 'Wound', 'floor · near-black · L5', ''], ['--cell-intact', 'Intact', 'flat fill · L31 · never text', ''], ['--cell-edge', 'Leading edge', 'shorter column · L65', ''], ['--cell-new', 'New tissue', 'rising column · L89', ''], ['--cell-dividing', 'Dividing', 'dark centre dot · L100', 'dot']].forEach(([v, n, note, dot]) =>
+[['--cell-wound', 'Wound', 'floor · near-black · L8', ''], ['--cell-intact', 'Intact', 'skin · L63', ''], ['--cell-edge', 'Leading edge', 'shorter column · L38', ''], ['--cell-new', 'New tissue', 'rising column · L88', ''], ['--cell-dividing', 'Dividing', 'dark centre dot · L100', 'dot']].forEach(([v, n, note, dot]) =>
   C.insertAdjacentHTML('beforeend', `<div class="sw" style="padding:10px"><span class="hex ${dot}" style="background:var(${v});${v === '--cell-wound' ? 'outline:1px solid var(--hair)' : ''}"></span><p style="padding:6px 0 0"><b>${n}</b><code>${v}</code> ${css(v)}<br>${note}</p></div>`));
 ['wound', 'intact', 'edge', 'new', 'dividing'].forEach(k => document.getElementById('ghost').insertAdjacentHTML('beforeend', `<span class="hex" style="background:var(--ghost-${k});outline:1px solid var(--hair)"></span><span style="font-size:10px;color:var(--dim);margin-right:10px">${k}</span>`));
 // example curve from web/data/samples/sample_3frame.json
