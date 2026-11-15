@@ -613,6 +613,10 @@ export async function mount(el, ctx) {
     else if (a === "age-heatmap") setHeat(!tissue?.isHeat());
     else if (a === "outline") act("outline");
     else if (a === "clear-selection") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.clearSelection(); }
+    else if (a === "escape") {   // Esc: deselect first; with nothing selected, zoom out as before
+      if (tissue?.hasSelection() || tissue?.isSelecting()) { if (tissue.isSelecting()) tissue.setSelecting(false); tissue.clearSelection(); }
+      else { tissue?.reset(); markView(); }
+    }
     else if (a === "reset-camera") { if (tissue?.isSelecting()) tissue.setSelecting(false); tissue?.reset(); markView(); }
   };
   ctx.bus.addEventListener("action", onAction);
