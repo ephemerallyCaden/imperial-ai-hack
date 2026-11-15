@@ -29,6 +29,12 @@ skipped (fallback) if it would exceed the token budget left. If the budget runs 
 stops. With record_both_branches, <run_id>.reject.jsonl is created before the first approval is asked, so an existing
 file fails before any stop (the parent log still gets run_end); run_end lists branch_run_ids.
 
+Investigator (issue #87): when a wound is off track at a check (the stall flag fired, or the first 2 observed frames
+after the previous check both fell outside the previous check's forecast band, the eval/flags.py out-of-band rule), code
+calls the `investigate` tool once per run with the observed curve up to this check only. It is logged as a tool_call (so
+the Critic can trace its fit errors) and its ranked hypotheses go into the model's data block. It never changes the
+decision: policy.allowed() sees only the state, which the Investigator does not touch.
+
 What a human answer does (issue #83 replay semantics):
   - "stall flagged, ask a human": approve(decision) is asked; approved = stop the plate at that check (stop_kind
     "stall"), rejected = keep imaging.
@@ -45,6 +51,8 @@ import json
 import os
 import re
 import time
+
+import numpy as np
 
 from agent import config, critic, llm, policy, prompts, tools
 from agent.runlog import RunLog, fingerprint
@@ -170,8 +178,10 @@ class _Run:
         self.steps, self.tok_in, self.tok_out, self.traced, self.untraced = 0, 0, 0, 0, 0
         self.inherited_outputs, self.branches, self.last, self.last_cut = [], [], None, None
         self.budget_out, self.child_log, self.child_used = False, None, False
+        self.investigated, self.prev_doc = False, None
         if parent is not None:   # a branch shares the parent's counters and evidence up to the branch point
-            for k in ("steps", "tok_in", "tok_out", "traced", "untraced", "last", "last_cut", "budget_out"):
+            for k in ("steps", "tok_in", "tok_out", "traced", "untraced", "last", "last_cut", "budget_out",
+                      "investigated", "prev_doc"):
                 setattr(self, k, copy.deepcopy(getattr(parent, k)))
             self.inherited_outputs = parent.inherited_outputs + parent.log.tool_outputs()
 
@@ -191,7 +201,7 @@ class _Run:
         return [critic_sources(o) for o in self.inherited_outputs + self.log.tool_outputs()]
 
     # -- fixed steps
-    def _tool(self, name, inp, fn):
+    def _tool(self, name, inp, fn, **extra):
         """Run one fixed step. On a held-out replay, code forces exclude_wound on any tool that accepts it."""
         if self.src.held_out is not None and name in EXCLUDABLE:
             inp = {**inp, "exclude_wound": self.src.held_out}
@@ -202,8 +212,25 @@ class _Run:
         except Exception as e:  # noqa: BLE001 - tool errors are logged as data
             out = {"error": f"{type(e).__name__}: {e}"}
         self.log.log("tool_call", step=self.steps, tool=name, input_fp=fingerprint(inp), input=inp, output=out,
-                     elapsed_s=round(time.time() - t0, 3))
+                     elapsed_s=round(time.time() - t0, 3), **extra)
         return out
+
+    def _investigate(self, doc, cut, state):
+        """Once per run, only when off track: the Investigator on the observed curve up to this check. -> output or None."""
+        if self.investigated or doc.get("refused"):
+            return None
+        trigger = off_track(doc, self.prev_doc, cut, state)
+        if trigger is None:
+            return None
+        f = doc["forecasts"][0]
+        obs = f.get("observed") or {}
+        pts = [(t, a) for t, a in zip(obs.get("t_hours") or [], obs.get("area") or []) if t <= cut + 1e-9]
+        if not any(t > 1e-9 for t, _ in pts):
+            return None
+        self.investigated = True
+        inp = {"observed": {"t_hours": [t for t, _ in pts], "area": [a for _, a in pts]}, "check_h": cut,
+               "condition": f.get("condition") if f.get("condition") in ("CC", "C61") else "CC"}
+        return self._tool("investigate", inp, lambda i: tools.run_tool("investigate", i), trigger=trigger)
 
     # -- the model's open choice
     def _propose(self, cut, state, allowed, data):
@@ -277,6 +304,8 @@ class _Run:
         state = {"refused": refused, "stall": bool(stall.get("fired")), "p_close": sched.get("p_close_by_T"),
                  "cut_h": cut, "next_check_h": nxt}
         allowed = policy.allowed(state)
+        inv = self._investigate(doc, cut, state)
+        self.prev_doc = doc
         forced = refused or state["stall"]
         proposed, fallback = None, None
         if forced:
@@ -288,6 +317,10 @@ class _Run:
                     "forecast": _forecast_facts(doc), "wound_metadata": meta}
             if meta_trunc:
                 data["wound_metadata_truncated"] = True
+            if inv and inv.get("hypotheses"):
+                data["investigation"] = {"note": inv["note"], "check_h": inv["check_h"],
+                                         "hypotheses": [{k: h[k] for k in ("name", "rank", "fit_error")}
+                                                        for h in inv["hypotheses"]]}
             proposed, expl, fallback = self._propose(cut, state, allowed, data)
             did, source = proposed, "llm"
             if fallback:
@@ -385,6 +418,26 @@ class _Run:
         if self.branches:
             out["branches"] = self.branches
         return out
+
+
+def off_track(doc, prev_doc, cut, state):
+    """-> "stall_flag", "out_of_band" or None. Out of band = eval/flags.py rule: the first 2 observed frames after the
+    previous check's cut-off (both at or before this check) are both outside that check's forecast band."""
+    if state.get("stall"):
+        return "stall_flag"
+    try:
+        p, f = prev_doc["forecasts"][0], doc["forecasts"][0]
+        pc = float(prev_doc["cutoff_hours"])
+        obs = f["observed"]
+        nxt = [(t, a) for t, a in zip(obs["t_hours"], obs["area"]) if pc + 1e-9 < t <= cut + 1e-9][:2]
+        if len(nxt) < 2:
+            return None
+        ft = p["t_hours"]
+        interp = lambda t, k: float(np.interp(t, ft, p[k]))  # noqa: E731
+        out = [a < interp(t, "area_q05") or a > interp(t, "area_q95") for t, a in nxt]
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    return "out_of_band" if all(out) else None
 
 
 def _with_summary(doc):

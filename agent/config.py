@@ -31,7 +31,7 @@ SCOPE_TERMS = {
     "molecule": [r"molecul\w*", r"compounds?", r"SMILES"],
 }
 
-MAX_STEPS = 12                            # per run; a run that hits either limit stops and is logged
+MAX_STEPS = 13                            # per run (4 checks x 3 steps + one Investigator call); a run that hits either limit stops and is logged
 TOKEN_BUDGET = 60000
 
 # (value, unit) pairs the Critic accepts. Units: "%", "h", "p" (probability), "cost".

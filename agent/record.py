@@ -26,7 +26,9 @@ def leaks(text):
     """Strings that must never appear in a committed run file."""
     pats = [r"/home/", r"/Users/", r"\b\d{12}\b", "arn:" + "aws", "sk-" + "ant-", r"session_id", "isen" + "gard",
             r"@amazon\.", os.path.expanduser("~"), os.environ.get("USER", "") or "\x00"]
-    return [p for p in pats if p and re.search(re.escape(p) if p.startswith("/home/ANT") else p, text, re.I)]
+    home = os.path.expanduser("~")
+    hits = [p for p in pats[:-2] if re.search(p, text, re.I)]
+    return hits + [s for s in pats[-2:] if s and s != "\x00" and s in text] + (["home folder"] if home in text else [])
 
 
 def check_clean(path):

@@ -4,6 +4,8 @@
                                                             segmentation, calibrated edge-speed forecast (the only "90%" band)
   flags_schedule(forecast_doc)                           -> stall flag (eval/flags.py thresholds) + schedule_advice
   simulate(masks_npz_path, interval_h, condition)        -> sim/upload.py forecast_upload; every band marked uncalibrated
+  investigate(observed, check_h, condition)             -> agent/investigator.py: alternative starts ranked by fit to the
+                                                            observed curve up to the check (hypotheses, not causes)
   TOOLS, run_tool(name, input)                           -> Claude tool definitions (strict) and a dispatcher that never raises
 
 Every function returns plain JSON (dicts, lists, str, float, int, bool, None; NaN -> None). Text inside uploaded files is
@@ -255,6 +257,16 @@ def simulate(masks_npz_path, interval_h, condition="CC", exclude_wound=None):
     return res
 
 
+# ---------------------------------------------------------------- Investigator (agent/investigator.py)
+
+def investigate(observed, check_h, condition="CC"):
+    """Observed block {t_hours, area} -> investigator.investigate. Only frames after 0 h up to check_h are used."""
+    from agent import investigator
+    if condition not in ("CC", "C61"):
+        raise ValueError("condition must be CC or C61")
+    return _plain(investigator.investigate({"observed": observed}, _positive(check_h, "check_h"), condition))
+
+
 # ---------------------------------------------------------------- Claude tool definitions + dispatcher
 
 TOOLS = [
@@ -316,6 +328,33 @@ TOOLS = [
         },
         "strict": True,
     },
+    {
+        "name": "investigate",
+        "description": (
+            "Only for a wound that is off track. Reruns the cell simulator from alternative starting conditions (normal, "
+            "slow migration, low starting density, edge damage, partial stall) and ranks them by fit error to the "
+            "observed closure curve up to the check. The result is hypotheses, not causes, and never changes a decision."),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "observed": {
+                    "type": "object",
+                    "properties": {
+                        "t_hours": {"type": "array", "items": {"type": "number"}, "description": "Frame times in hours."},
+                        "area": {"type": "array", "items": {"type": "number"},
+                                 "description": "Wound area normalised to 1 at 0 h."},
+                    },
+                    "required": ["t_hours", "area"],
+                    "additionalProperties": False,
+                },
+                "check_h": {"type": "number", "description": "Check time in hours; later frames are ignored."},
+                "condition": {"type": "string", "enum": ["CC", "C61"], "description": "Assay condition."},
+            },
+            "required": ["observed", "check_h"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
 ]
 
 _FUNCS = {
@@ -324,6 +363,7 @@ _FUNCS = {
     "flags_schedule": lambda a: flags_schedule(a["forecast_path"]),
     "simulate": lambda a: simulate(a["masks_npz_path"], a["interval_h"], a.get("condition", "CC"),
                                    exclude_wound=a.get("exclude_wound")),
+    "investigate": lambda a: investigate(a["observed"], a["check_h"], a.get("condition", "CC")),
 }
 
 

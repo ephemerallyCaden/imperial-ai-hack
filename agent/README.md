@@ -21,6 +21,16 @@ of closing and the stall flag; the policy code sets the stop thresholds and forc
 English. Every number it writes is checked by the Critic. That is why the scoreboard calls the replay row "Forecast
 policy (code; replay model, no LLM)", and why the real-model row reports how often Claude picked the same option.
 
+## Investigator (hypotheses, not causes)
+
+When a wound is off track (the stall flag fired, or the first 2 frames after the previous check fell outside that
+check's band, the `eval/flags.py` rule), code calls `investigate` once per run. It reruns the cell simulator from five
+starts the `sim/alt_start.py` helper supports (normal, slow migration, low starting density, edge damage, partial stall;
+fixed seeds, about 1 s) and ranks them by fit error to the observed curve up to the check, never later frames. It is
+logged as a `tool_call` (with `trigger`), so the Critic can trace its fit errors. The model sees the ranking and may
+mention it; it never changes the decision. Accuracy on the simulated known-cause wounds is in
+`results/investigator.md` (`python -m agent.investigator`). The start is a synthetic band, not the wound's own mask.
+
 ## What it does not do
 
 - The LLM never makes a number. Every number comes from a tool. The Critic (`critic.py`, plain code) removes any
@@ -46,12 +56,14 @@ policy (code; replay model, no LLM)", and why the real-model row reports how oft
 | `config.py` | Constants with units (horizon, checks, thresholds, cost units, step and token limits) and the Critic allowlist |
 | `llm.py` | `call_model()`, the only place that talks to a model; stub, Anthropic or Bedrock, picked from env |
 | `runlog.py` | Append-only JSONL writer to `agent/runs/<run_id>.jsonl` |
-| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`: thin wrappers over the existing code; errors come back as `{error}` |
+| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`, `investigate`: thin wrappers over the existing code; errors come back as `{error}` |
 | `policy.py` | `allowed(state)` and `check(proposal, state)` |
 | `critic.py` | `trace(text, tool_outputs)`: returns cleaned text plus traced and untraced counts |
 | `prompts.py` | System prompt, the `propose_decision` tool and the delimited data block |
 | `run.py` | The hand-written loop and the CLI; `replay_stub` is the offline model |
 | `evaluate.py` | Replay scoreboard for the three policies |
+
+| `investigator.py` | Investigator lite (#87): reruns the simulator from alternative starts and ranks them by fit to the observed curve; hypotheses, not causes |
 
 Flow: tools -> policy -> model pick -> policy check -> Critic -> approval -> run log.
 
@@ -104,7 +116,7 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 | kind | When | Main fields |
 |---|---|---|
 | `run_start` | first line | `wound`, `checks_h`, `max_steps`, `token_budget`, `model_provider`, `model_id`; branch logs add `parent_run_id`, `branch_seq`, `branch_cut_h` |
-| `tool_call` | each fixed step | `step`, `tool`, `input`, `input_fp` (sha256), `output`, `elapsed_s` |
+| `tool_call` | each fixed step | `step`, `tool`, `input`, `input_fp` (sha256), `output`, `elapsed_s`; `investigate` adds `trigger` (`stall_flag` or `out_of_band`) |
 | `model_call` | each model call | `model`, `usage`, `tokens_total`, `text`, `tool_calls`, `data`, `input_fp`; or `error` |
 | `model_skipped` | call would go over the token budget | `reason`, `estimated_tokens`, `tokens_left` |
 | `warning` | a tool returned nothing usable | `tool`, `message` |
