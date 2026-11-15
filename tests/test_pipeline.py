@@ -92,3 +92,22 @@ def test_fold_rule_matches_forecast_script():
     import forecast_realft
     for w in ("exp1_pos1027", "exp2_pos1021", "zaritsky_SN29_L1"):
         assert forecast_realft.fold_of(w) == zlib.crc32(w.encode()) % 4
+
+
+def test_uncalibrated_condition_is_flagged_and_widened(tmp_path):
+    import upload
+    frames = [_png(tmp_path, f"g{k}", scratch_image(w, 720, 960)) for k, w in enumerate((0.30, 0.27, 0.24))]
+    known = upload.run(frames, 1, 0.908, str(tmp_path), "known", condition="CC")["forecasts"][0]
+    new = upload.run(frames, 1, 0.908, str(tmp_path), "new", condition="HaCaT")["forecasts"][0]
+    width = lambda f: np.mean(np.array(f["area_q95"]) - np.array(f["area_q05"]))
+    assert not any(x["type"] == "uncalibrated_condition" for x in known["flags"])
+    assert any(x["type"] == "uncalibrated_condition" for x in new["flags"]) and width(new) >= width(known)
+
+
+def test_upload_uses_the_nca_on_the_demo_sample(tmp_path):
+    pytest.importorskip("torch")
+    import upload
+    frames = [os.path.join(ROOT, "web", "data", "samples", f"sample_frame{k}.png") for k in (1, 2, 3)]
+    doc = upload.run(frames, 1, 0.908, str(tmp_path), "nca", exclude_wound="exp1_pos2033", forecaster="nca")
+    assert doc["model"] == "nca_realft3" and "never trained on exp1_pos2033" in doc["notes"]
+    assert validate.problems(doc) == []

@@ -43,12 +43,12 @@ def schedule_advice(p, cut):
     nxt = next((c for c in checks if c > cut + 1e-9), None)
     if p <= 0.1:
         return {"action": "call", "call": "unlikely to reach 90% closure by 19 h",
-                "evidence": "on held-out WHAD wounds such early calls were right 89% of the time (always saying no: 73%)"}
+                "evidence": "on held-out WHAD wounds such early calls were right 91% of the time (always saying no: 75%)"}
     if p >= 0.9:
         return {"action": "call", "call": "likely to reach 90% closure by 19 h",
                 "evidence": "untested: no held-out WHAD wound got this call early"}
     return {"action": "image_again", "next_image_hours": nxt,
-            "evidence": "the 90% band narrows on average from 0.59 (1.9 h) to 0.32 (3.8 h) of the starting area"}
+            "evidence": "the 90% band narrows on average from 0.49 (1.9 h) to 0.34 (3.8 h) of the starting area (held-out WHAD, real-data NCA)"}
 
 
 def check_frame(img, scale):
@@ -73,7 +73,28 @@ def check_frame(img, scale):
     return m, reasons
 
 
-def run(frames, interval, scale, out, name, exclude_wound=None):
+CALIBRATED = {"CC", "C61", "N61", "NC"}  # WHAD MCF10A conditions in the calibration pool
+
+
+def condition_guard(f, condition, cut):
+    """v4 (R28): an uploaded condition outside the calibration set gets the band widened by the factor measured on
+    known conditions (eval/results/condition_shift.json, edge_speed) and an uncalibrated_condition flag."""
+    p = os.path.join(HERE, "..", "eval", "results", "condition_shift.json")
+    if condition is None or condition in CALIBRATED or not os.path.exists(p):
+        return
+    fac = json.load(open(p)).get("edge_speed", {})
+    if not fac:
+        return
+    lam = fac[min(fac, key=lambda k: abs(float(k) - cut))]["lambda"]
+    lo, med, hi = (np.array(f[k]) for k in ("area_q05", "area_q50", "area_q95"))
+    f["area_q05"] = np.round(np.maximum(med - lam * (med - lo), 0), 4).tolist()
+    f["area_q95"] = np.round(med + lam * (hi - med), 4).tolist()
+    f["flags"].append({"type": "uncalibrated_condition",
+                       "reason": f"'{condition}' is not in the calibration set (WHAD MCF10A CC/C61/N61/NC): band widened x{lam:g}; "
+                                 "calibration did not transfer to a new cell type in our tests."})
+
+
+def run(frames, interval, scale, out, name, exclude_wound=None, condition=None, forecaster="nca"):
     os.makedirs(out, exist_ok=True)
     if not interval or not scale:
         doc = {"version": "1.0", "refused": True, "reasons": ["frame interval and pixel scale are required"]}
@@ -99,26 +120,36 @@ def run(frames, interval, scale, out, name, exclude_wound=None):
     G = np.arange(np.floor(cut) + 1, HORIZON_H + 1e-9, 1.0)
     G_long = np.arange(G[0], 20 * HORIZON_H, 0.25)
     pool = set(S) - {"upload"}
-    if len(masks) >= 2:
-        doc = FB.forecast_file("upload", "upload_vs_whad", "edge_speed", cut, S, {"upload"}, pool, G, G_long, HORIZON_H)
-    else:  # one frame: no rate measured; use the spread of WHAD wounds' observed curves
-        E = np.stack([np.interp(G, s["t"], s["a"]) for k, s in S.items() if k in pool])
-        lq, hq = FB.q_levels(len(E))
-        lo, med, hi = np.quantile(E, [lq, 0.5, hq], axis=0, method="inverted_cdf")
-        r4 = lambda x: [round(float(v), 4) for v in x]
-        ev = {}
-        for lvl, key in FB.EVENTS:
-            tt = np.array([x if (x := FB.event_time(s["t"], s["a"], lvl)) is not None else np.inf for k, s in S.items() if k in pool])
-            q = np.quantile(tt, [lq, 0.5, hq], method="inverted_cdf")
-            fin = lambda x: round(float(x), 2) if np.isfinite(x) else None
-            ev[key] = {"median": fin(q[1]), "q05": fin(q[0]), "q95": fin(q[2]), "censored_prob": round(float(np.mean(tt > G[-1])), 3)}
-        ev["p"] = float(np.mean([(x := FB.event_time(s["t"], s["a"], 0.1)) is not None and x <= HORIZON_H for k, s in S.items() if k in pool]))
-        doc = {"version": "1.0", "model": "whad_population_prior", "dataset": "upload", "fold": "upload_vs_whad", "cutoff_hours": cut,
-               "level": FB.LEVEL, "p_close_by_T_hours": HORIZON_H, "notes": "one frame: spread of WHAD wounds, no measured closure rate",
-               "forecasts": [{"wound_id": "upload", "t_hours": r4(G), "area_q05": r4(lo), "area_q50": r4(med), "area_q95": r4(hi),
-                              "t50": ev["t50"], "t90": ev["t90"], "p_close_by_T": round(ev["p"], 3), "p_stall": None, "flags": [],
-                              "segmentation_quality": {"status": "ok", "reasons": []},
-                              "observed": {"t_hours": r4(t), "area": r4(a)}}]}
+    doc, fallback = None, None
+    if forecaster == "nca":  # real-data NCA v3 (design.md R28); edge speed if anything fails
+        try:
+            if abs(float(interval) - round(float(interval))) > 1e-6:
+                raise ValueError("the NCA steps hourly; frame interval must be a whole number of hours")
+            import upload_nca
+            doc = upload_nca.forecast(masks, t, a, w, exclude_wound)
+        except Exception as e:  # noqa: BLE001 - any failure falls back to the validated statistical forecaster
+            fallback = f"NCA unavailable ({type(e).__name__}: {e}); edge-speed forecaster used"
+    if doc is None:
+        if len(masks) >= 2:
+            doc = FB.forecast_file("upload", "upload_vs_whad", "edge_speed", cut, S, {"upload"}, pool, G, G_long, HORIZON_H)
+        else:  # one frame: no rate measured; use the spread of WHAD wounds' observed curves
+            E = np.stack([np.interp(G, s["t"], s["a"]) for k, s in S.items() if k in pool])
+            lq, hq = FB.q_levels(len(E))
+            lo, med, hi = np.quantile(E, [lq, 0.5, hq], axis=0, method="inverted_cdf")
+            r4 = lambda x: [round(float(v), 4) for v in x]
+            ev = {}
+            for lvl, key in FB.EVENTS:
+                tt = np.array([x if (x := FB.event_time(s["t"], s["a"], lvl)) is not None else np.inf for k, s in S.items() if k in pool])
+                q = np.quantile(tt, [lq, 0.5, hq], method="inverted_cdf")
+                fin = lambda x: round(float(x), 2) if np.isfinite(x) else None
+                ev[key] = {"median": fin(q[1]), "q05": fin(q[0]), "q95": fin(q[2]), "censored_prob": round(float(np.mean(tt > G[-1])), 3)}
+            ev["p"] = float(np.mean([(x := FB.event_time(s["t"], s["a"], 0.1)) is not None and x <= HORIZON_H for k, s in S.items() if k in pool]))
+            doc = {"version": "1.0", "model": "whad_population_prior", "dataset": "upload", "fold": "upload_vs_whad", "cutoff_hours": cut,
+                   "level": FB.LEVEL, "p_close_by_T_hours": HORIZON_H, "notes": "one frame: spread of WHAD wounds, no measured closure rate",
+                   "forecasts": [{"wound_id": "upload", "t_hours": r4(G), "area_q05": r4(lo), "area_q50": r4(med), "area_q95": r4(hi),
+                                  "t50": ev["t50"], "t90": ev["t90"], "p_close_by_T": round(ev["p"], 3), "p_stall": None, "flags": [],
+                                  "segmentation_quality": {"status": "ok", "reasons": []},
+                                  "observed": {"t_hours": r4(t), "area": r4(a)}}]}
     f = doc["forecasts"][0]
     f["segmentation_quality"] = {"status": "ok", "reasons": []}
     f["flags"] = []
@@ -128,6 +159,9 @@ def run(frames, interval, scale, out, name, exclude_wound=None):
     if f["p_stall"] is not None and th is not None and f["p_stall"] >= th:
         f["flags"].append({"type": "stall", "reason": f"{100 * f['p_stall']:.0f}% of plausible futures close less than 10% more "
                            f"by {HORIZON_H:g} h (flag threshold {th:.2f}, tuned leave-one-wound-out on WHAD)."})
+    condition_guard(f, condition, cut)
+    if fallback:
+        doc["notes"] = (doc.get("notes", "") + " | " + fallback).strip(" |")
     doc["schedule"] = schedule_advice(f["p_close_by_T"], cut)
     doc["notes"] = (doc.get("notes", "") + f" | frames={len(masks)}, interval={interval} h, scale={scale} um/px, "
                     f"wound at first frame {100 * w[0]:.1f}% of field").strip(" |")
@@ -168,10 +202,10 @@ if __name__ == "__main__":
     warnings.filterwarnings("ignore")
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", nargs="+"); ap.add_argument("--interval", type=float); ap.add_argument("--scale", type=float)
-    ap.add_argument("--out", default="upload_out"); ap.add_argument("--name", default="upload"); ap.add_argument("--samples", action="store_true")
+    ap.add_argument("--forecaster", choices=["nca", "edge_speed"], default="nca"); ap.add_argument("--condition", default=None, help="e.g. CC; outside CC/C61/N61/NC -> widened band + flag"); ap.add_argument("--out", default="upload_out"); ap.add_argument("--name", default="upload"); ap.add_argument("--samples", action="store_true")
     a = ap.parse_args()
     if a.samples:
         samples()
     else:
-        d = run(a.frames[:5], a.interval, a.scale, a.out, a.name)
+        d = run(a.frames[:5], a.interval, a.scale, a.out, a.name, condition=a.condition, forecaster=a.forecaster)
         print(json.dumps({k: d[k] for k in ("refused", "reasons") if k in d}) if d.get("refused") else f"forecast -> {a.out}/{a.name}.json")

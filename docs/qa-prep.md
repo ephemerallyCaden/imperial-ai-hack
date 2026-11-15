@@ -16,6 +16,9 @@ Five simple forecasters, all with the same calibration: no-change, linear, const
 **Which wins?**
 On WHAD, constant edge speed (wound edge moving at a fixed speed, 2 parameters): quantile score 0.0386 vs 0.0732 for the typical-wound curve at 3.8 h of history. More history helps every model.
 
+**What happens on a condition you haven't seen?**
+"Bands calibrated on control wounds alone under-covered CYR61-knockdown wounds: 0.72 at 9.5 h for the NCA. Calibrating on every other known condition fixes that (0.90). At 1.9 h it stays a bit low (0.81, 0.85 with extra widening). So for a cell line we've never calibrated on, Stitch widens the band and says so with an 'uncalibrated condition' flag, rather than pretending."
+
 **Did you hold out anything harder than random wounds?**
 Two held-out conditions. WHAD control to CYR61 knockdown: coverage 0.92 at 3.8 h, but only 0.78 at 1.9 h. WHiM-BC ordinary to stem-cell-enriched cells: it fails, 15-58% coverage. Stem-cell wounds close about twice as fast, so bands calibrated on ordinary cells do not transfer. We report that as a limit.
 
@@ -32,7 +35,7 @@ Small. Coverage CIs are about +/-0.05 to +/-0.15. That is why we bootstrap over 
 - Time to 90% closed is often beyond the 19 h series, so many t90 ranges are open-ended.
 
 **Why should I trust the stall flag?**
-Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series).
+Thresholds are tuned leave-one-wound-out. AUC 0.77-0.90 across cut-offs; at 3.8 h it is right 57% of the time it fires and catches 62% of real stalls (13 stalls in 55 series). So it is a prompt to look, not a verdict: across the checks it is right 48-75% of the time it fires, and in the agent replay about half of all stall stops were wrong (agent 8 of 17, simple rules 10 of 21). That is why a fired flag forces "ask a human" and never stops the plate on its own.
 
 **How did you pick the cut-offs?**
 After 1.9, 3.8, 5.7 and 9.5 hours (10/20/30/50% of the 19 h series). Every WHAD series has the same hourly frames, so a fixed time cannot leak the outcome. On the embryo and Zaritsky sets series end near closure, so there we use fixed fractions of the median closure time instead.
@@ -43,9 +46,11 @@ After 1.9, 3.8, 5.7 and 9.5 hours (10/20/30/50% of the 19 h series). Every WHAD 
 Frames -> texture segmenter (wound = low-texture region) -> wound area curve -> forecaster -> conformal band -> flags -> forecast file in a fixed JSON schema that the viewer reads. Bad inputs are refused: blank, out of focus (texture score < 1.0; real WHAD frames are >= 1.10), wound < 1% or > 70% of the field, more than 3 large wound regions, or no scale / interval.
 
 **What does the NCA add?** (gate results, design.md R18 and R26)
-"Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes 9 of 12 checks: at 3.8 h its quantile score is 0.0403 vs 0.0386 for edge speed (within 4%), and at 9.5 h it is the best model we have. Training on real data was the difference. Adding a second dataset (Zaritsky) made it worse, so we didn't."
+"Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes. Our cleanest version beats every model at the earliest cut-off (1.9 h: 0.0530 vs 0.0562 for edge speed) and at 9.5 h, and is within a few percent in between. What made it work: training on real frames, giving it the same early parameter estimates it gets at forecast time, and averaging three training runs. Adding a second dataset (Zaritsky) made it worse, so we didn't."
 _Earlier answer (simulator-only NCA):_
-"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0495 vs 0.0385), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
+"Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 30% worse than the 2-parameter edge-speed model (quantile score 0.0502 vs 0.0386), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
+**Which model does the product use?** "The real-data NCA. When a scientist uploads frames, we fit the wound's speed parameters from those frames, roll out the NCA 50 times and calibrate the band with its own errors on held-out wounds. If anything fails, it falls back to the simple edge-speed model and says so in the output."
+
 **Why not just trust the NCA's own spread?** "Uncalibrated, its 90% band covers 14% of what happens (the simulator's 21%): member spread is too small. The same conformal step brings both to 93%."
 
 **Is anything live?**
@@ -65,6 +70,9 @@ Not clearly. C61 looks slower in normalised area, but mostly because its wounds 
 **Is cell division modelled?**
 Off for WHAD: the 19 h assay is treated as migration-dominated (Migliaccio's Phi check). We have not verified it on WHAD separately, so we don't claim it.
 
+**Can you tell cell movement from cell division?**
+"Not from wound area, and we tested that rather than assumed it. We fitted the standard Fisher-KPP model to the Jin 2016 scratch-assay density profiles. With full profiles, movement and division come out separately: D within about 20% and r to one grid step, R^2 0.90-0.95. From the closure curve of the same experiments, D is uncertain over 9 to 63-fold and r over 2 to 39-fold, along a constant-front-speed valley. Stitch only sees wound area, so it doesn't claim to separate them; you'd need density profiles or a division-blocked control."
+
 **What does the fitted migration time Tm mean?**
 It ranks wounds (part II 0.14-0.65 h vs part I 0.4-5 h) but depends on the imaged field size under our rules, so it is not a measured migration time.
 
@@ -77,7 +85,7 @@ An assay scientist running scratch assays. Today tools (TScratch, ImageJ plugins
 Calibration data from their own microscope and cell line: our results show bands do not transfer across cell types. A few dozen wells per condition is enough to calibrate (we used 28 wounds).
 
 **Could a lab actually stop plates early?** (simulation on recorded WHAD data, not a lab trial)
-"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 91% of those calls are right (95% with the real-data NCA), against 75% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 4 of 45 calls were wrong: wounds that did close."
+"With a call rule fixed in advance, 82% of held-out wounds get a call at the first check, 1.9 h in. 91% of those calls are right (the same with the shipped real-data NCA v3), against 75% for always saying the wound won't close. Every early call is 'won't reach 90% closure by 19 h', so the honest use is spotting plates that won't close in this run. We never confidently call early closure, and 4 of 45 calls were wrong: wounds that did close."
 
 **Clinical use?**
 Not claimed. Clinics use a similar early rule for chronic wounds (about 50% area reduction at 4 weeks); large EHR studies predict non-healing with AUC ~0.85-0.90. We have no clinical data, so that is a future direction only.
@@ -95,7 +103,7 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 - "Predicts drug effects" or anything clinical.
 - "The simulated cells are real cells" (they are labelled "simulated, not tracked").
 - "First ever".
-- "Identifies migration vs proliferation" (closure curves cannot separate them; WHAD wounds are mitomycin-treated).
+- "Identifies migration vs proliferation" from wound area (we showed closure curves cannot separate them, Fisher-KPP on Jin; WHAD wounds are mitomycin-treated).
 
 ## Numbers to remember
 | | |
@@ -106,5 +114,5 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 | Stall flag | AUC 0.77-0.90 |
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
-| NCA at 3.8 h | sim-only 0.0499 (fails); real-data fine-tune 0.0403 vs 0.0386 (passes, 9/12); best at 9.5 h |
-| Stop early | 82% called at 1.9 h, 91% right (95% real-data NCA) vs 75% always-no; only "won't close" calls |
+| NCA real-data v3 | best of all models at 1.9 h (0.0530 vs 0.0562) and 9.5 h; within 3-8% at 3.8/5.7 h; sim-only failed |
+| Stop early | 82% called at 1.9 h, 91% right (same with shipped NCA v3) vs 75% always-no; only "won't close" calls |

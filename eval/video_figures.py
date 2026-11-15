@@ -18,6 +18,7 @@ import score_forecasts as sf
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = f"{HERE}/figures/video"
 WOUND, CUT = "exp1_partII_CC_P2", 3.8
+SHIPPED = "nca_realft3"  # the forecaster the upload/agent path uses (design.md R29)
 SURF, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 BLUE, ORANGE, AQUA, GREEN, VIOLET, BAND, RED = "#2a78d6", "#eb6834", "#1baf7a", "#008300", "#6250d6", "#b7d3f6", "#d03b3b"
 plt.rcParams.update({
@@ -35,7 +36,7 @@ def fig(title, sub):
 
 
 def wound_panels():
-    doc = json.load(open(f"{HERE}/forecasts/whad/loo_all/edge_speed_{CUT:g}h.json"))
+    doc = json.load(open(f"{HERE}/forecasts/whad/loo_all/{SHIPPED}_{CUT:g}h.json"))  # out-of-fold: never trained on WOUND
     f = next(x for x in doc["forecasts"] if x["wound_id"] == WOUND)
     t, a = np.array(f["observed"]["t_hours"]), np.array(f["observed"]["area"])
     ft = np.array(f["t_hours"]); lo, med, hi = (np.array(f[k]) for k in ("area_q05", "area_q50", "area_q95"))
@@ -44,8 +45,7 @@ def wound_panels():
     for name, reveal in (("1_forecast", False), ("2_reveal", True)):
         title = ("Forecast for a wound the model has never seen" if not reveal
                  else f"What actually happened: inside the band at {inside} of {fut.sum()} later frames")
-        F, ax = fig(title, "WHAD MCF10A control wound, forecast made after 3.8 h of a 19 h time-lapse. "
-                           "Calibrated on the other 26 wounds only.")
+        F, ax = fig(title, "WHAD control wound. NCA forecast after 3.8 h of 19 h, by a model that never trained on this wound.")
         ax.fill_between(ft, lo, hi, color=BAND, lw=0, label="90% band")
         ax.plot(ft, med, color=BLUE, ls=(0, (6, 3)), label="forecast (median)")
         ax.plot(t[~fut], a[~fut], color=INK, marker="o", mec=SURF, mew=2, label="observed before the forecast")
@@ -62,10 +62,10 @@ def wound_panels():
 
 def scorecard(S):
     g = S[(S.dataset == "whad") & (S.split == "loo_all") & (S.cutoff_h.round(2) == CUT)].set_index("model")
-    rows = [("edge_speed", "Edge speed (2-parameter model)", BLUE), ("nca_realft", "NCA fine-tuned on real frames", VIOLET),
+    rows = [("edge_speed", "Edge speed (2-parameter model)", BLUE), ("nca_realft3", "NCA fine-tuned on real frames (shipped)", VIOLET),
             ("nca_ensemble", "NCA trained on the simulator only", GREEN), ("lvcf", "Typical-wound curve", MUTED)]
-    F, ax = fig("Trained on real frames, the NCA passes our pre-set gate",
-                "Unseen WHAD wounds (27), forecast after 3.8 h. Quantile score: lower is better. All with the same calibration.")
+    F, ax = fig("Trained on real frames, the NCA matches the best simple model",
+                "Unseen WHAD wounds (28), forecast after 3.8 h. Quantile score: lower is better. All with the same calibration.")
     best = g.loc["edge_speed", "qscore"]
     ax.axvline(1.1 * best, color=RED, lw=2.5, ls=(0, (6, 3)))
     ax.text(1.1 * best + 0.0006, 3.45, "gate: within 10%\nof the best simple model", fontsize=18, color=RED, va="top")
@@ -103,7 +103,7 @@ def calibration(S):
 
 
 def failure():
-    doc = json.load(open(f"{HERE}/forecasts/whad/loo_all/edge_speed_{CUT:g}h.json"))
+    doc = json.load(open(f"{HERE}/forecasts/whad/loo_all/{SHIPPED}_{CUT:g}h.json"))
     scored = [(sf.score_series(f, CUT, 19.0) or {}).get("qscore", -1) for f in doc["forecasts"]]
     f = doc["forecasts"][int(np.argmax(scored))]
     t, a = np.array(f["observed"]["t_hours"]), np.array(f["observed"]["area"]); ft = np.array(f["t_hours"])

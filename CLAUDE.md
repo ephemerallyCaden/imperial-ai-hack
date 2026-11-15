@@ -23,9 +23,14 @@ Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is 
 - Lint: none configured; check syntax with `python -m compileall -q data eval contracts sim nca`
 - `python -m pytest -q tests/` to run tests (P1 pipeline: contract, scorer, segmenter, upload refusals, folds; ~40 s)
 - P2 sim (sim/, docs/sim.md): `python sim/calibrate.py` (fits), `python sim/forecast.py` (sim_ensemble gate files), `python sim/upload.py` (masks -> forecast JSON)
+- P2 tests: `python -I sim/tests/test_pool_exclusion.py` (no calibration pool or prior contains the test wound or its sibling part; every gate file matches P1's test sets), `python -I sim/tests/test_rules.py`, `python -I sim/tests/test_alt_start.py`, `python -I nca/tests/test_mass.py`
 - P2 NCA (nca/, see docs/nca.md; needs torch from requirements.txt): `python nca/gen_data.py --out /tmp/nca_data.npz`, `python -u nca/train.py --data /tmp/nca_data.npz --out nca/weights.pt`, `python nca/forecast_gate.py` (nca_* gate files)
 - P1 data (data/, needs CLOSURECALL_DATA): `python -I data/fetch.py`, then `python -I data/build_curves.py`, `build_whad.py`, `build_whad_auto.py`, `build_whimbc.py`
-- P1 eval (eval/): `python eval/forecast_baselines.py`, `python eval/score_forecasts.py eval/forecasts --gate nca_realft` (gate compares against the statistical baselines only), then `flags.py`, `scheduler.py`, `results_table.py`, `figures.py`
+- P1 eval (eval/): `python eval/forecast_baselines.py`, `python eval/score_forecasts.py eval/forecasts --gate nca_realft` (gate compares against the statistical baselines only), then `flags.py`, `scheduler.py`, `results_table.py`, `figures.py`, `web_evidence.py` (writes `web/ops/evidence.json` for the Ops "Forecast evidence" page `web/ops/evidence.js`)
+- Agent tests (offline, stub model): `.venv/bin/python -m pytest -q agent/tests`; see `agent/README.md`
+- Agent replay of one held-out WHAD wound: `.venv/bin/python -m agent.run --wound exp1_partII_C61_P1 --run-id <new id> [--both-branches] [--reject]` (log in `agent/runs/<id>.jsonl`)
+- Agent scoreboard: `.venv/bin/python -m agent.evaluate` (writes `agent/results/scoreboard.csv` and `.md`; no real model calls)
+- Agent real run: load `.env` (`set -a; . ./.env; set +a`, with `STITCH_PROVIDER`, `STITCH_MODEL` and key or AWS profile), then the `agent.run` command above
 - P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`
 
 ## Architecture

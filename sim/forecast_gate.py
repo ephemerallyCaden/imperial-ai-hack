@@ -15,7 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, "..", "eval"))
 import numpy as np
 import forecast_baselines as FB
-import calibrate, forecast as F
+import calibrate, forecast as F, v2
 from cellsim import Params, simulate, SITE_UM
 from start_state import load_png_mask, mask_to_lattice
 
@@ -78,6 +78,8 @@ def main():
     G_all = np.unique(np.concatenate([s["t"] for s in S.values()]))
     rd = lambda v: [round(float(x), 4) for x in v]
     for split, (test, pool) in FB.splits("whad", S).items():
+        if split not in v2.GATE_FOLDS:  # P1's later folds (rest_to_C61, lco_*) have no sim files
+            continue
         for cut in calibrate.CUTOFFS:
             G = G_all[G_all > cut + 1e-9]
             G_long = np.arange(G[0], 20 * G_all[-1], 0.25)

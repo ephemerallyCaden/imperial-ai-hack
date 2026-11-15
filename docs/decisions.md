@@ -69,8 +69,15 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - RESULT: real-data NCA passes the gate (9/12; 3.8 h within 4% of edge speed; best at 9.5 h). Zaritsky extra data hurt; not used.
 - OPEN for P2/P3: use the real-data NCA in the upload/agent path, or keep edge speed (marginally better early, no torch).
 
+## 2026-11-15 01:30 [randodeh] NCA v2/v3 and calibration v4 (R28 in design.md)
+- RESULT: NCA real-data v3 (headline) beats every model at 1.9 h and 9.5 h on unseen wounds; within 3-8% of edge speed at 3.8/5.7 h.
+- DECIDED: calibrate held-out conditions on all other known conditions; band inflation + `uncalibrated_condition` flag only for unknown conditions in uploads.
+
+## 2026-11-15 02:00 [randodeh] Upload/agent forecaster = real-data NCA (R29 in design.md)
+- DECIDED: data/upload.py uses the NCA v3 (fallback edge speed). Agent and demo samples pick it up automatically.
+
 ### Glass-dish 3D look (2026-11-14, P3)
-- DECIDED palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F9D6FB near-white orchid, dividing FFFFFF with a dark centre dot (the dot, not colour, separates it from new tissue; height stays = density). Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/89/100, so states read without colour).
+- SUPERSEDED 2026-11-15 by the skin look below. Was: palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F9D6FB near-white orchid, dividing FFFFFF with a dark centre dot (the dot, not colour, separates it from new tissue; height stays = density). Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/89/100, so states read without colour).
 - DECIDED selection look: cells outside a box selection drop to dark matte greyscale, but each state keeps its own grey step so the rest of the wound still reads as context. Alternatives (rims, dim, flat, dots, lift) kept behind `?ghost=` and compared in `design/prototypes/glass-dish/ghost-variations.html`.
 - DECIDED wordmark: M6 night plate style (condensed caps "STITCH" + italic serif subtitle).
 
@@ -81,3 +88,8 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED: spatial outlines on the 3D dish (spread, outline at 19 h) come from the simulator and are labelled "uncalibrated". Only the data/upload.py curve band is called 90%.
 - DECIDED: Clear shows only after a box selection (Assay) or a drawn wound (Draw). Back, Play, Step and Help are icon-only with tooltips.
 - OPEN (ask P1): number of unseen WHAD wounds. results.md says 28 and the video script says 27. Use one number everywhere; the wireframe shows "n TBC" until this is answered.
+
+## 2026-11-15 04:40 [Caden] Final 3D tissue look: skin palette (P3)
+- DECIDED cell states: intact skin C68B6E, leading edge B3122E, new tissue FFD2C6, dividing FFFFFF + dark dot, wound floor 24120F, scene background 120A09. Re-checked under protan/deutan/tritan (Machado 2009, severity 1): closest pair new vs dividing, ΔE 17.0 / 17.5 / 23.4. Lightness: wound 8, edge 38, intact 63, new 88, dividing 100. Tokens in design/style-guide/tokens.css.
+- DECIDED render: toon shading (3 bands); healed cells coloured by age (new-tissue colour -> intact -> darker intact); cool hue shift of 8 deg x darkness toward blue. Prototype default in design/prototypes/glass-dish/; ported to web/draw/tissue.js (PR #130).
+- Explored and kept as URL options only: materials (skin, wet, gel, glow, pearl, x-ray), height ramp, bloom/grain, age ramps, warm palettes, cell-age heatmap. Edge-speed heatmap is #117; tone from a photo is #119; Draw from photo is #124 (merged, PR #127).
