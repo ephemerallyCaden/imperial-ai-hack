@@ -33,6 +33,7 @@ from start_state import mask_to_lattice, area_error
 
 NCA_DIR = os.environ.get("NCA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nca"))
 NCA_WEIGHTS = os.environ.get("NCA_WEIGHTS", os.path.join(NCA_DIR, "v2", "weights.pt"))  # needs v2/weights.config.json beside it
+USE_REAL_FOLDS = os.environ.get("NCA_REAL_FOLDS") == "1"  # opt-in only: the real-WHAD fine-tune degraded the held-out fold diagnostic (4/4 folds)
 RULE = "follow"
 FITS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fits", "whad_fits_follow.json")
 
@@ -263,9 +264,12 @@ def sha12(path):
 
 
 def nca_weights_for(wound, is_whad):
-    """NCA weights for a series of physical wound `wound`: the real-WHAD fine-tuned fold model that holds the wound out
+    """NCA weights for a series of physical wound `wound`. Default: the v2 base weights. Only with NCA_REAL_FOLDS=1: the
+    real-WHAD fine-tuned fold model that holds the wound out
     (nca/v2/weights_real_fold{k}.pt, k = crc32(wound) % 4, checked against nca/v2/real_folds.json when present), else the v2
     base weights. Non-WHAD uploads are in no fold's training set, so any fold model is out-of-sample (same crc32 rule)."""
+    if not USE_REAL_FOLDS:  # default (user decision): base v2 weights everywhere
+        return NCA_WEIGHTS, None
     d = os.path.dirname(NCA_WEIGHTS)
     k = zlib.crc32(wound.encode()) % N_FOLDS
     w = os.path.join(d, f"weights_real_fold{k}.pt")
