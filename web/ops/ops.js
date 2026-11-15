@@ -128,14 +128,16 @@ export function mount(el, ctx) {
 
   el.innerHTML = `<div class="ops">
     <div class="st-seg" role="tablist" aria-label="Ops views">
-      <button class="st-btn" data-tab="runs" aria-pressed="true">Agent runs</button>
+      <button class="st-btn" data-tab="runs" aria-pressed="true">Overview</button>
       <button class="st-btn" data-tab="evidence" aria-pressed="false">Forecast evidence</button>
     </div>
     <div data-pane="runs"></div>
     <div data-pane="evidence" hidden></div>
+    <div class="ops-tip" role="tooltip" hidden></div>
   </div>`;
   const root = el.querySelector(".ops");
   const panes = { runs: root.querySelector('[data-pane="runs"]'), evidence: root.querySelector('[data-pane="evidence"]') };
+  wireTips(root);
   let evidenceLoaded = false;
   root.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => {
     const t = b.dataset.tab;
@@ -144,8 +146,332 @@ export function mount(el, ctx) {
     if (t === "evidence" && !evidenceLoaded) { evidenceLoaded = true; loadEvidence(panes.evidence); }
   }));
 
-  renderRuns(panes.runs, ctx, () => dead);
+  renderOverview(panes.runs, ctx, () => dead);
   return () => { dead = true; css.remove(); el.replaceChildren(); };
+}
+
+// ---------- overview: what an assay scientist needs at a glance ----------
+// Every value comes from a repo file: eval/results/scheduler.csv (stop-early replay), web/ops/evidence.json (band width
+// per check, band coverage per test), agent/runs/*.jsonl (one card per recorded run), agent/results/adversarial.csv.
+const H = 19;                                   // forecast horizon (h)
+const CHECKS = [1.9, 3.8, 5.7, 9.5];
+const pct = x => Math.round(x * 100) + "%";
+const num = s => (s === "" || s == null) ? null : +s;
+
+function wireTips(root) {
+  const tip = root.querySelector(".ops-tip");
+  const place = (el, x, y) => {
+    tip.textContent = el.dataset.tip; tip.hidden = false;
+    const r = root.getBoundingClientRect();
+    tip.style.left = Math.min(x - r.left + 12, r.width - tip.offsetWidth - 8) + "px";
+    tip.style.top = (y - r.top + root.scrollTop + 14) + "px";
+  };
+  root.addEventListener("pointermove", e => { const t = e.target.closest("[data-tip]"); if (t) place(t, e.clientX, e.clientY); else tip.hidden = true; });
+  root.addEventListener("pointerleave", () => { tip.hidden = true; });
+  root.addEventListener("focusin", e => { const t = e.target.closest("[data-tip]"); if (!t) return; const b = t.getBoundingClientRect(); place(t, b.left + b.width / 2, b.bottom); });
+  root.addEventListener("focusout", () => { tip.hidden = true; });
+}
+
+// Live replay: the recorded run logs are played on one clock (replay hours). Steps inside a check are spaced so the
+// pipeline can be followed; the wait for approval is held a little longer. Labelled "replayed · sped up" on screen.
+const STEP_H = 0.14, WAIT_H = 0.5, SPEEDS = { "1×": 0.6, "4×": 2.4 };   // replay hours per step / per approval / per second
+const NODES = ["Images", "Forecast", "Flags", "Decide", "Numbers", "You", "Report"];
+const short = id => id.replace(/^exp(\d)_part(I+)_/, "E$1·$2·").replace(/_/g, "·");
+
+function nodeOf(r) {
+  if (r.kind === "tool_call") return /forecast/.test(r.tool) ? "Forecast" : r.tool === "flags_schedule" ? "Flags" : r.tool === "investigate" ? "Investigator" : r.tool === "intake" ? "Intake" : null;
+  if (r.kind === "model_call") return r.purpose === "report" ? null : r.purpose === "intake" ? null : "Decide";
+  return { critic: "Numbers", decision: "Decide", approval: "You", human_review: "You", report: "Report", run_end: "Done" }[r.kind] || null;
+}
+function evText(r, end) {
+  const o = r.output || {};
+  if (r.kind === "tool_call" && o.forecasts) return `P(90% closed by ${H} h) ${o.forecasts[0].p_close_by_T}`;
+  if (r.kind === "tool_call" && o.results) { const s = o.results[0]?.stall; return s?.fired ? "stall flag fired" : "no stall"; }
+  if (r.kind === "tool_call" && o.hypotheses) return `top hypothesis: ${o.hypotheses[0]?.name ?? "–"}`;
+  if (r.kind === "model_call") { const p = (r.tool_calls || []).find(t => t.input?.decision_id); return p ? `Claude proposes ${p.input.decision_id.replace(/_/g, " ")}` : "Claude"; }
+  if (r.kind === "critic") return `${r.traced}/${r.traced + r.untraced} numbers traced`;
+  if (r.kind === "decision") return `${r.label}${r.source === "forced" ? " · forced by rule" : ""}`;
+  if (r.kind === "approval") return r.approved ? "you approved" : "you rejected";
+  if (r.kind === "human_review") return "you reviewed";
+  if (r.kind === "report") return "report written";
+  if (r.kind === "run_end") return end.stopped ? `stopped at ${end.stop_h} h · ${(H - end.stop_h).toFixed(1)} h freed` : `imaged to ${H} h`;
+  return r.kind;
+}
+function prep(run, recs) {
+  const end = recs.find(x => x.kind === "run_end") || {};
+  const ev = [], fcs = []; let cut = 0, t = 0;
+  for (const r of recs) {
+    const node = nodeOf(r); if (!node) continue;
+    if (r.kind === "tool_call" && /forecast/.test(r.tool) && r.output?.forecasts?.length) {
+      cut = r.output.cutoff_hours; t = cut;
+      fcs.push({ cut, doc: r.output, f: r.output.forecasts[0] });
+      ev.push({ t, node: "Images", text: `frames to ${cut} h`, r: { kind: "images" } });
+    }
+    t += r.kind === "approval" ? WAIT_H : STEP_H;
+    if (r.kind === "run_end" && !end.stopped) t = H;
+    if (r.kind === "report" && !end.stopped) t = H - STEP_H;
+    ev.push({ t, node, text: evText(r, end), r, ai: r.kind === "model_call" || (r.kind === "decision" && r.source === "llm") });
+  }
+  const f0 = fcs[0]?.f;
+  const obs = f0 ? f0.observed.t_hours.map((x, k) => [x, f0.observed.area[k]]) : [];
+  const stopT = end.stopped ? ev.find(e => e.node === "Done")?.t ?? end.stop_h : null;
+  return { run, end, ev, fcs, obs, cond: f0?.condition ?? "", heldOut: run.kind === "whad_loo", stopT,
+    name: run.kind === "frames" ? "Your upload" : short(run.wound_id) };
+}
+function statusAt(w, c) {
+  if (w.stopT != null && c >= w.stopT) return w.end.stop_kind === "stall" ? ["flag", "▲", `Stall · stopped ${w.end.stop_h} h`] : ["stop", "■", `Stopped ${w.end.stop_h} h`];
+  if (!w.end.stopped && c >= H) return ["go", "→", `Imaged to ${H} h`];
+  const past = w.ev.filter(e => e.t <= c), dec = past.filter(e => e.r.kind === "decision").at(-1);
+  const app = past.filter(e => e.r.kind === "approval").at(-1);
+  if (dec && /stop|stall/.test(dec.r.decision) && !(app && app.r.cut_h === dec.r.cut_h)) return ["flag", "⏸", "Needs you"];
+  if (!past.length) return ["idle", "◌", "Imaging"];
+  if (!dec || dec.r.cut_h !== [...w.fcs].reverse().find(x => x.cut <= c)?.cut) return ["idle", "◌", "Checking…"];
+  return ["go", "→", dec.r.decision === "image_again" ? "Image again" : dec.r.label];
+}
+function verdict(w) {
+  if (!w.heldOut) return "";
+  const closed = w.obs.some(([t, a]) => t <= H && a <= 0.1);
+  if (w.end.stopped && w.end.stop_kind === "unlikely") return closed ? `<span class="warn">✕ it closed</span>` : `<span>✓ right</span>`;
+  return `<span class="dim">${closed ? "closed" : "did not close"}</span>`;
+}
+
+function heroChart(w, c) {
+  const W = 640, Ht = 260, L = 36, R = 16, T = 14, B = 26;
+  const x = t => L + (t / H) * (W - L - R), y = a => T + a * (Ht - T - B);   // closure rises: area 1 (0% closed) at the bottom
+  const path = pts => pts.map(([t, a], k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${y(a).toFixed(1)}`).join("");
+  const fc = [...w.fcs].reverse().find(f => f.cut <= c);
+  const stopH = w.stopT != null && c >= w.stopT ? w.end.stop_h : null;
+  const imgTo = Math.min(c, stopH ?? H);
+  const seen = w.obs.filter(([t]) => t <= imgTo + 1e-6), last = seen.at(-1);
+  const after = w.obs.filter(([t]) => t >= (last?.[0] ?? 0));
+  let g = "";
+  if (fc) {
+    const f = fc.f, b = f.t_hours.map((t, k) => [t, f.area_q95[k]]).concat(f.t_hours.map((t, k) => [t, f.area_q05[k]]).reverse());
+    const at = w.obs.filter(([t]) => t <= fc.cut).at(-1);
+    g += `<path class="band" d="${path(b)}Z" data-tip="90% band from the ${fc.cut} h check"/>
+      <path class="med" d="${path([[fc.cut, at?.[1] ?? f.area_q50[0]], ...f.t_hours.map((t, k) => [t, f.area_q50[k]])])}"/>
+      <line class="cut" x1="${x(fc.cut)}" x2="${x(fc.cut)}" y1="${T}" y2="${Ht - B}"/><text class="ax" x="${x(fc.cut) + 4}" y="${T + 9}">check ${fc.cut} h · P(close) ${f.p_close_by_T}</text>`;
+  }
+  if (c >= H && w.heldOut && stopH != null && after.length > 1) g += `<path class="truth" d="${path(after)}"/>`;
+  g += `<path class="obs" d="${path(seen)}"/>${seen.map(([t, a]) => `<circle class="fr" cx="${x(t)}" cy="${y(a)}" r="2.5"/>`).join("")}`;
+  if (last) g += `<circle class="dot" cx="${x(last[0])}" cy="${y(last[1])}" r="4.5" data-tip="${pct(1 - last[1])} closed at ${last[0]} h"/>`;
+  if (stopH != null) g += `<line class="stop" x1="${x(stopH)}" x2="${x(stopH)}" y1="${T}" y2="${Ht - B}"/><text class="ax stoplab" x="${x(stopH) + 4}" y="${Ht - B - 6}">stopped · ${(H - stopH).toFixed(1)} h freed</text>`;
+  if (c < H) g += `<line class="now" x1="${x(c)}" x2="${x(c)}" y1="${T}" y2="${Ht - B}"/>`;
+  return `<svg class="hero-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${esc(w.name)}: closure observed to ${imgTo.toFixed(1)} h${fc ? `, forecast from ${fc.cut} h` : ""}">
+    ${[0, 0.5, 1].map(a => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(a)}" y2="${y(a)}"/><text class="ax" x="${L - 6}" y="${y(a) + 3}" text-anchor="end">${pct(1 - a)}</text>`).join("")}
+    <line class="grid g90" x1="${L}" x2="${W - R}" y1="${y(0.1)}" y2="${y(0.1)}"/><text class="ax" x="${W - R}" y="${y(0.1) - 3}" text-anchor="end">90% closed</text>
+    <line class="axis" x1="${L}" x2="${W - R}" y1="${Ht - B}" y2="${Ht - B}"/>
+    ${CHECKS.map(k => `<line class="tick ${w.fcs.some(f => f.cut === k && f.cut <= c) ? "on" : ""}" x1="${x(k)}" x2="${x(k)}" y1="${Ht - B}" y2="${Ht - B + 5}"/><text class="ax" x="${x(k)}" y="${Ht - 8}" text-anchor="middle">${k}</text>`).join("")}
+    <text class="ax" x="${W - R}" y="${Ht - 8}" text-anchor="end">${H} h</text><text class="ax" x="${L}" y="${Ht - 8}">0</text>
+    ${g}
+  </svg>`;
+}
+function spark(w, c) {
+  const W = 96, Ht = 26, x = t => (t / H) * W, y = a => 2 + a * (Ht - 4);
+  const stopH = w.stopT != null && c >= w.stopT ? w.end.stop_h : null;
+  const pts = w.obs.filter(([t]) => t <= Math.min(c, stopH ?? H) + 1e-6);
+  return `<svg class="spark" viewBox="0 0 ${W} ${Ht}" aria-hidden="true"><line class="grid" x1="0" x2="${W}" y1="${y(0.1)}" y2="${y(0.1)}"/>
+    <path class="obs" d="${pts.map(([t, a], k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${y(a).toFixed(1)}`).join("")}"/>
+    ${stopH != null ? `<line class="stop" x1="${x(stopH)}" x2="${x(stopH)}" y1="0" y2="${Ht}"/>` : ""}</svg>`;
+}
+function pipeline(w, c) {
+  const i = w.fcs.map(f => f.cut).filter(k => k <= c).length - 1;
+  if (i < 0) return `<ol class="pipe">${NODES.map(n => `<li class="ps ps-wait"><i></i>${n}</li>`).join("")}</ol><div class="pipe-next dim">first check at ${w.fcs[0]?.cut ?? CHECKS[0]} h</div>`;
+  const from = w.fcs[i].cut, to = w.fcs[i + 1]?.cut ?? Infinity;
+  const win = w.ev.filter(e => e.t >= from - 1e-9 && e.t < to && e.node !== "Done");
+  const nodes = [...NODES, ...(win.some(e => e.node === "Investigator") ? ["Investigator"] : [])];
+  const order = n => n === "Investigator" ? 2.5 : NODES.indexOf(n);
+  let active = false;
+  const li = nodes.sort((a, b) => order(a) - order(b)).map(n => {
+    const es = win.filter(e => e.node === n), done = es.length && es.every(e => e.t <= c);
+    let s = done ? "ok" : es.length ? (active ? "wait" : (active = true, "run")) : (win.every(e => e.t <= c) ? "skip" : "wait");
+    if (n === "You" && es.some(e => e.r.kind === "approval" && !e.r.approved && e.t <= c)) s = "x";
+    const ai = es.some(e => e.ai), tip = es.filter(e => e.t <= c).map(e => e.text).join(" · ") || (s === "skip" ? "not needed at this check" : "pending");
+    return `<li class="ps ps-${s}" data-tip="${esc(tip)}"><i></i>${n}${ai ? `<sup>AI</sup>` : ""}</li>`;
+  }).join("");
+  const nextCut = w.fcs[i + 1]?.cut;
+  const waiting = statusAt(w, c)[2] === "Needs you";
+  const tail = waiting ? `<b class="accent">⏸ waiting for your approval</b>` : w.stopT != null && c >= w.stopT ? `<b class="accent">■ stopped at ${w.end.stop_h} h</b>`
+    : nextCut ? `↻ next check ${nextCut} h` : c >= H ? `→ imaged to ${H} h` : `→ imaging to ${H} h`;
+  return `<ol class="pipe">${li}</ol><div class="pipe-next">${tail}</div>`;
+}
+
+async function renderOverview(pane, ctx, isDead) {
+  const d = ctx.data;
+  pane.innerHTML = `<p class="dim">Loading…</p>`;
+  const [idx, schedSrc, ev, advSrc] = await Promise.all([
+    d.runIndex().catch(() => ({ runs: [], base: "agent/runs/" })),
+    maybe(d.text("eval/results/scheduler.csv")), maybe(d.json("web/ops/evidence.json")), maybe(d.text("agent/results/adversarial.csv")),
+  ]);
+  const runs = idx.runs || [];
+  const logs = await Promise.all(runs.map(r => maybe(d.jsonl(idx.base + r.file))));
+  if (isDead()) return;
+  const W = runs.map((r, i) => (!r.branch && logs[i]) ? prep(r, logs[i]) : null).filter(Boolean);
+  const all = W.flatMap(w => w.ev.map(e => ({ ...e, w }))).sort((a, b) => a.t - b.t);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const q = new URLSearchParams(location.search), qt = q.has("replay") ? Math.min(H, Math.max(0, +q.get("replay"))) : null;
+  let c = qt ?? (reduce ? H : 0), playing = qt == null && !reduce, speed = "1×", hold = 0;
+  let sel = Math.max(0, q.has("wound") ? W.findIndex(w => w.run.wound_id === q.get("wound")) : W.findIndex(w => w.fcs.length > 2));
+
+  pane.innerHTML = `<div class="cr">
+    <header class="cr-top">
+      <div class="cr-clock"><span class="live ${playing ? "on" : ""}">● Replay</span><b class="num" data-clock>T+00.0 h</b>
+        <span class="st-seg"><button class="st-btn st-btn--icon" data-play aria-label="Play or pause (Space)"></button>
+        ${Object.keys(SPEEDS).map(k => `<button class="st-btn" data-speed="${k}" aria-pressed="${k === speed}">${k}</button>`).join("")}
+        <button class="st-btn st-btn--icon" data-restart aria-label="Restart">⟲</button></span>
+        <span class="st-chip st-chip--honesty">Recorded runs · replayed · sped up</span></div>
+      ${kpis(schedSrc, ev)}
+    </header>
+    <aside class="cr-list" aria-label="Wounds"><h2>Wounds</h2><div data-list></div></aside>
+    <section class="cr-hero"><div class="hero-head"><h2 data-hname></h2><span class="dim" data-hcond></span><span data-hverdict></span>
+      <button class="st-btn" data-open>Open in Assay ↗</button></div>
+      <div data-hchart></div><div class="hero-pipe" data-hpipe></div>
+      <div class="ov-legend"><i class="lg-obs"></i>observed <i class="lg-med"></i>forecast <i class="lg-band"></i>90% band <i class="lg-truth"></i>what happened</div></section>
+    <aside class="cr-stream" aria-label="Agent events">
+      <div class="cr-counters"><div><b class="num" data-freed>0.0 h</b><span>microscope time freed</span></div>
+        <div><b class="num" data-traced>0</b><span>numbers traced · 0 removed</span></div><div><b class="num" data-asked>0</b><span>asked you</span></div></div>
+      <h2>Agent events</h2><ol class="stream" data-stream aria-live="off"></ol></aside>
+    <section class="cr-a">${chartNarrowing(ev)}</section>
+    <section class="cr-b">${chartCoverage(ev)}</section>
+    <section class="cr-c">${audit(runs, logs, advSrc)}
+      <details class="ov-details"><summary>Agent details · run log, scoreboard, attacks, Investigator</summary><div data-s="details"></div></details></section>
+  </div>`;
+  const $ = s => pane.querySelector(s);
+  const det = $(".ov-details");
+  det.addEventListener("toggle", () => { if (det.open && !det.dataset.done) { det.dataset.done = 1; renderRuns(det.querySelector('[data-s="details"]'), ctx, isDead); } });
+  $("[data-open]").addEventListener("click", () => { ctx.openItem = W[sel].run.run_id; document.querySelector('[data-mode="assay"]')?.click(); });
+  const setPlay = p => { playing = p; $("[data-play]").textContent = p ? "⏸" : "▶"; $(".live").classList.toggle("on", p); };
+  $("[data-play]").addEventListener("click", () => setPlay(!playing));
+  $("[data-restart]").addEventListener("click", () => { c = 0; hold = 0; emitted = 0; $("[data-stream]").replaceChildren(); setPlay(true); });
+  pane.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { speed = b.dataset.speed; pane.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+  const onKey = e => { if (isDead()) return ctx.bus.removeEventListener("key", onKey); if (e.detail.action === "play") setPlay(!playing); };
+  ctx.bus.addEventListener("key", onKey);
+  setPlay(playing);
+
+  let emitted = 0, lastDraw = 0, prev = performance.now();
+  const stream = $("[data-stream]");
+  const draw = () => {
+    $("[data-clock]").textContent = `T+${c.toFixed(1).padStart(4, "0")} h`;
+    $("[data-list]").innerHTML = W.map((w, i) => { const [cls, ic, lab] = statusAt(w, c);
+      return `<button class="cl-row ${i === sel ? "sel" : ""}" data-w="${i}"><span class="cl-name">${esc(w.name)}<i>${esc(w.cond)}</i></span>${spark(w, c)}
+        <span class="cl-st oc-${cls}">${ic} ${esc(lab)}</span>${c >= H ? `<span class="cl-v">${verdict(w)}</span>` : ""}</button>`; }).join("");
+    const w = W[sel];
+    $("[data-hname]").textContent = w.name; $("[data-hcond]").textContent = w.cond;
+    $("[data-hverdict]").innerHTML = c >= H ? verdict(w) : "";
+    $("[data-hchart]").innerHTML = heroChart(w, c); $("[data-hpipe]").innerHTML = pipeline(w, c);
+    const freed = W.reduce((a, x) => a + (x.stopT != null && c >= x.stopT ? H - x.end.stop_h : 0), 0);
+    const crit = all.filter(e => e.r.kind === "critic" && e.t <= c);
+    $("[data-freed]").textContent = freed.toFixed(1) + " h";
+    $("[data-traced]").textContent = crit.reduce((a, e) => a + e.r.traced, 0);
+    $("[data-traced]").nextElementSibling.textContent = `numbers traced · ${crit.reduce((a, e) => a + e.r.untraced, 0)} removed`;
+    $("[data-asked]").textContent = all.filter(e => e.r.kind === "approval" && e.t <= c).length;
+    while (emitted < all.length && all[emitted].t <= c) {
+      const e = all[emitted++];
+      stream.insertAdjacentHTML("afterbegin", `<li class="${e.ai ? "ai" : e.node === "You" ? "you" : ""}"><span class="num">T+${e.t.toFixed(1)}</span><b>${esc(e.w.name)} <em>${esc(e.node)}${e.ai ? " · AI" : ""}</em></b><span></span><span>${esc(e.text)}</span></li>`);
+      while (stream.children.length > 16) stream.lastElementChild.remove();
+    }
+  };
+  pane.querySelector("[data-list]").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) { sel = +b.dataset.w; draw(); } });
+  const tick = now => {
+    if (isDead()) return;
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    if (playing) {
+      if (c < H) c = Math.min(H, c + dt * SPEEDS[speed]);
+      else if ((hold += dt) > 5) { c = 0; hold = 0; emitted = 0; stream.replaceChildren(); }
+    }
+    if (now - lastDraw > 66) { lastDraw = now; draw(); }
+    requestAnimationFrame(tick);
+  };
+  draw(); requestAnimationFrame(tick);
+}
+
+function kpis(schedSrc, ev) {
+  const rows = schedSrc ? parseCSV(schedSrc) : [];
+  const shipped = ev?.shipped || "nca_realft3";
+  const s = rows.find(r => r.model === shipped && r.thresholds.startsWith("<= 0.1")) || rows.find(r => r.thresholds.startsWith("<= 0.1"));
+  const rel = ev?.reliability?.[0];
+  const tile = (big, label, tip) => `<div class="kpi" tabindex="0" data-tip="${esc(tip)}"><b class="num">${big}</b><span>${label}</span></div>`;
+  if (!s) return `<div class="cr-kpis">${NA}: eval/results/scheduler.csv</div>`;
+  return `<div class="cr-kpis">
+    ${tile(pct(+s.share_called), "called at the first check", `${s.called_early} of ${s.n} held-out wounds called by ${s.median_stop_h_if_called} h (replay on recorded data)`)}
+    ${tile((+s.hours_saved_mean).toFixed(1) + " h", `freed per wound, of ${H} h`, "Mean imaging hours not needed after the call (replay on recorded data)")}
+    ${tile(pct(+s.accuracy_of_calls), `calls right · guess ${pct(+s.base_rate_not_closed)}`, `${s.wrong_calls} wrong calls: wounds that did close. Guess = always "won't close"`)}
+    ${rel ? tile(pct(rel.coverage), "inside the 90% band", `${rel.n_wounds} unseen wounds · ${rel.model_label} at ${rel.cut} h · 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}`) : ""}
+  </div>`;
+}
+
+// "When can I call it?": band width per check, shipped model highlighted, baseline in grey (emphasis form).
+function chartNarrowing(ev) {
+  const series = (ev?.narrowing || []).slice(0, 2);
+  if (!series.length) return `<h2>When can I call it?</h2><p>${NA}: web/ops/evidence.json</p>`;
+  const W = 420, Ht = 200, L = 40, R = 96, T = 12, B = 28;
+  const maxW = Math.max(...series.flatMap(s => s.points.map(p => p.width))) * 1.1;
+  const x = t => L + (t / 10) * (W - L - R), y = v => T + (1 - v / maxW) * (Ht - T - B);
+  const ticks = [0, 0.25, 0.5].filter(v => v <= maxW);
+  const ends = series.map(s => y(s.points.at(-1).width) + 4), labY = [...ends];   // direct labels at line ends, never overlapping
+  if (labY.length > 1 && Math.abs(labY[0] - labY[1]) < 13) { const m = (labY[0] + labY[1]) / 2, up = labY[0] <= labY[1] ? 0 : 1; labY[up] = m - 6.5; labY[1 - up] = m + 6.5; }
+  const svg = series.map((s, i) => {
+    const cls = s.kind === "shipped" ? "hi" : "lo";
+    const d = s.points.map((p, k) => `${k ? "L" : "M"}${x(p.cut)},${y(p.width)}`).join("");
+    const lastP = s.points.at(-1);
+    return `<path class="ln ${cls}" d="${d}"/>
+      ${s.points.map(p => `<circle class="pt ${cls}" cx="${x(p.cut)}" cy="${y(p.width)}" r="4" tabindex="0" data-tip="${esc(s.label)} · ${p.cut} h · band width ${p.width.toFixed(2)}"/>`).join("")}
+      <text class="dl ${cls}" x="${x(lastP.cut) + 8}" y="${labY[i]}">${esc(s.kind === "shipped" ? "Stitch (NCA)" : s.label)}</text>`;
+  }).join("");
+  return `<h2>When can I call it?</h2>
+    <div class="ov-key"><span><i class="k-hi"></i>Stitch (NCA, shipped)</span><span><i class="k-lo"></i>${esc(series[1]?.label ?? "")}</span></div>
+    <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="90% band width by hours imaged: ${series.map(s => s.label + " " + s.points.map(p => p.cut + " h " + p.width.toFixed(2)).join(", ")).join("; ")}">
+      ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}</text>`).join("")}
+      <line class="axis" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>
+      ${CHECKS.map(c => `<text class="ax" x="${x(c)}" y="${Ht - 12}" text-anchor="middle">${c}</text>`).join("")}
+      <text class="ax" x="${(L + W - R) / 2}" y="${Ht - 1}" text-anchor="middle">hours imaged</text>
+      <text class="ax" x="${L - 34}" y="${T + 2}">band width</text>
+      ${svg}
+    </svg>`;
+}
+
+// "Can I trust the band?": coverage of the 90% band per test, target line at 90%, failures marked.
+function chartCoverage(ev) {
+  const rows = ev?.reliability || [];
+  if (!rows.length) return `<h2>Can I trust the band?</h2><p>${NA}: web/ops/evidence.json</p>`;
+  const short = { "Unseen wounds, same cells": "Unseen wounds", "Unseen condition (pre-registered)": "Unseen condition",
+    "Unseen condition, wider calibration": "…wider calibration", "Unseen wells, same cells": "MCF-7 wells", "New cell type": "New cell type" };
+  const W = 420, rowH = 30, L = 132, R = 44, T = 8, Ht = T + rows.length * rowH + 22;
+  const x = v => L + v * (W - L - R);
+  const bars = rows.map((r, i) => {
+    const yc = T + i * rowH + rowH / 2, fail = r.coverage < 0.85, h = 14;
+    const lab = short[r.label] ?? r.label;
+    return `<g tabindex="0" data-tip="${esc(r.label)} · ${esc(r.detail)} · ${pct(r.coverage)} (95% CI ${pct(r.cov_lo)}–${pct(r.cov_hi)}) · ${r.n_wounds} ${/wells/.test(r.label) || /cell type/.test(r.label) ? "wells" : "wounds"}">
+      <text class="cat" x="${L - 8}" y="${yc + 4}" text-anchor="end">${fail ? "▲ " : ""}${esc(lab)}</text>
+      <path class="bar ${fail ? "fail" : ""}" d="M${x(0)},${yc - h / 2}H${x(r.coverage) - 4}a4,4 0 0 1 4,4v${h - 8}a4,4 0 0 1 -4,4H${x(0)}Z"/>
+      <line class="ci" x1="${x(r.cov_lo)}" x2="${x(r.cov_hi)}" y1="${yc}" y2="${yc}"/>
+      <text class="val ${fail ? "warn" : ""}" x="${x(Math.max(r.coverage, r.cov_hi)) + 6}" y="${yc + 4}">${pct(r.coverage)}</text>
+    </g>`;
+  }).join("");
+  return `<h2>Can I trust the band?</h2>
+    <div class="ov-key"><span><i class="k-target"></i>target 90%</span><span class="warn">▲ recalibrate per cell type</span></div>
+    <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Share of outcomes inside the 90% band: ${rows.map(r => (short[r.label] ?? r.label) + " " + pct(r.coverage)).join(", ")}">
+      <line class="axis" x1="${x(0)}" x2="${x(0)}" y1="${T}" y2="${Ht - 22}"/>
+      ${bars}
+      <line class="target" x1="${x(0.9)}" x2="${x(0.9)}" y1="${T - 4}" y2="${Ht - 18}"/>
+      ${[0, 0.5, 1].map(v => `<text class="ax" x="${x(v)}" y="${Ht - 6}" text-anchor="middle">${pct(v)}</text>`).join("")}
+    </svg>`;
+}
+
+function audit(runs, logs, advSrc) {
+  const ends = logs.map(l => l?.find(x => x.kind === "run_end")).filter(Boolean);
+  const tr = ends.reduce((a, e) => a + (e.numbers_traced || 0), 0), un = ends.reduce((a, e) => a + (e.numbers_untraced || 0), 0);
+  const adv = advSrc ? parseCSV(advSrc) : [];
+  const met = adv.filter(r => r.met === "met").length;
+  const costs = logs.filter((l, i) => l && !runs[i].branch).map(l => l.reduce((a, x) => a + (typeof x.cost_usd === "number" ? x.cost_usd : 0), 0));
+  const avg = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null;
+  const b = (ok, txt, tip) => `<span class="ab ${ok ? "" : "warn"}" tabindex="0" data-tip="${esc(tip)}">${ok ? "✓" : "▲"} ${txt}</span>`;
+  return `<div class="ov-audit">
+    ${ends.length ? b(un === 0, `${tr}/${tr + un} numbers traced`, "Every number the agent wrote matched a tool output; the code Critic removes any that don't") : ""}
+    ${adv.length ? b(met === adv.length, `${met}/${adv.length} attacks handled`, "Adversarial set (stub models): prompt injection, bad frames, oversized uploads, out-of-scope requests") : ""}
+    ${avg != null ? `<span class="ab" tabindex="0" data-tip="Mean model cost per recorded run">$${avg.toFixed(2)} per run</span>` : ""}
+    <span class="ab dim" tabindex="0" data-tip="Stops always wait for a person; code sets the allowed decisions">Stops need your approval</span>
+  </div>`;
 }
 
 async function loadEvidence(slot) {
