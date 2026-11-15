@@ -65,7 +65,7 @@ def scorecard(S):
     rows = [("edge_speed", "Edge speed (2-parameter model)", BLUE), ("nca_realft3", "NCA fine-tuned on real frames (shipped)", VIOLET),
             ("nca_ensemble", "NCA trained on the simulator only", GREEN), ("lvcf", "Typical-wound curve", MUTED)]
     F, ax = fig("Trained on real frames, the NCA matches the best simple model",
-                "Unseen WHAD wounds (27), forecast after 3.8 h. Quantile score: lower is better. All with the same calibration.")
+                "Unseen WHAD wounds (28), forecast after 3.8 h. Quantile score: lower is better. All with the same calibration.")
     best = g.loc["edge_speed", "qscore"]
     ax.axvline(1.1 * best, color=RED, lw=2.5, ls=(0, (6, 3)))
     ax.text(1.1 * best + 0.0006, 3.45, "gate: within 10%\nof the best simple model", fontsize=18, color=RED, va="top")
