@@ -22,6 +22,8 @@ ap.add_argument("--adapter", help="LoRA dir or the downloaded .tgz")
 ap.add_argument("--test", default=os.path.join(HERE, "test_real.jsonl"))
 ap.add_argument("--out", required=True)
 ap.add_argument("--limit", type=int)
+ap.add_argument("--max-new", type=int, default=512)
+ap.add_argument("--raw-prompt", action="store_true", help="rows carry their own 'prompt' (reporter/triage test sets)")
 a = ap.parse_args()
 rows = [json.loads(l) for l in open(a.test) if l.strip()][: a.limit]
 
@@ -44,11 +46,11 @@ def hf_generate():
         model = PeftModel.from_pretrained(model, adapter)
     model.to(dev).eval()
     for r in rows:
-        msgs = [{"role": "user", "content": build_prompt(r["paragraph"])}]
+        msgs = [{"role": "user", "content": r["prompt"] if a.raw_prompt else build_prompt(r["paragraph"])}]
         enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True,
                                       enable_thinking=False).to(dev)  # extra kwarg is ignored by non-Qwen templates
         with torch.no_grad():
-            out = model.generate(**enc, max_new_tokens=512, do_sample=False,
+            out = model.generate(**enc, max_new_tokens=a.max_new, do_sample=False,
                                  pad_token_id=tok.pad_token_id or tok.eos_token_id)
         yield r["id"], tok.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
