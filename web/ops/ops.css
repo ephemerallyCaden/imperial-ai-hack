@@ -117,3 +117,21 @@ svg g[tabindex]:focus-visible { outline: none; } svg g[tabindex]:focus-visible .
 .ov-details summary { cursor: pointer; color: var(--dim); font-size: var(--fs-small); }
 .ov-details[open] { grid-column: 1 / -1; }
 @media (max-width: 1280px) { .cr { grid-template-columns: 260px minmax(0, 1fr); grid-template-areas: "top top" "list hero" "stream hero" "a a" "b b" "c c"; } }
+
+/* ---------- One look for both Ops tabs (Overview + Forecast evidence) ---------- */
+.ops .evidence { max-width: none; margin: 0; padding: 0; background: transparent; }
+.ops .evidence .ev-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+.ops .evidence .ev-chips { margin: 0; }
+.ops .evidence .ev-tiles { margin-bottom: 0; }
+.ops .evidence .ev-tile { display: grid; gap: 2px; align-content: start; }
+.ops .evidence .ev-tile b, .kpi b { font: 500 30px/1 var(--font-mono); color: var(--ink); margin: 0; }
+.ops .evidence .ev-tile b.is-flag { color: var(--accent); }
+.ops .evidence .ev-tile span, .kpi span { color: var(--dim); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.06em; }
+.ops .evidence .ev-grid { gap: 1px; background: var(--hair); border: 1px solid var(--hair); border-top: 0; }
+.ops .evidence .ev-card { border: 0; padding: var(--s3) var(--s4); }
+.ops .evidence h3, .cr h2 { font: 600 var(--fs-label) var(--font-cond); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s1); }
+.ops .evidence .ev-note, .cr .cap { color: var(--dim); font-size: var(--fs-small); margin: 0 0 var(--s2); }
+.ops .evidence .ev-tip { background: var(--panel-solid); color: var(--ink); border: 1px solid var(--line); font: var(--fs-small)/1.4 var(--font-mono); padding: 6px 8px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.ops-tip { white-space: pre-line; }
+.ops .evidence .ev-foot { margin-top: var(--s3); }
+.cr .hero-head h2 { color: var(--ink); font-size: var(--fs-h2); }

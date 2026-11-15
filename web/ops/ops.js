@@ -2,6 +2,8 @@
 // "Forecast evidence" (slot for web/ops/evidence.js, built separately). Every number shown is read from a
 // file under agent/; a missing file shows "not available". Nothing is invented here.
 
+import { lineChart, reliabilityChart, responsive, legend, colorOf, ensureEvidenceCss } from "./evidence.js";
+
 const NA = `<span class="ops-na">not available</span>`;
 const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const show = v => (v === null || v === undefined || v === "") ? "–" : esc(v);
@@ -147,6 +149,7 @@ export function mount(el, ctx) {
   }));
 
   renderOverview(panes.runs, ctx, () => dead);
+  if (new URLSearchParams(location.search).get("tab") === "evidence") root.querySelector('[data-tab="evidence"]').click();   // ?tab=evidence for screenshots
   return () => { dead = true; css.remove(); el.replaceChildren(); };
 }
 
@@ -166,9 +169,10 @@ function wireTips(root) {
     tip.style.left = Math.min(x - r.left + 12, r.width - tip.offsetWidth - 8) + "px";
     tip.style.top = (y - r.top + root.scrollTop + 14) + "px";
   };
-  root.addEventListener("pointermove", e => { const t = e.target.closest("[data-tip]"); if (t) place(t, e.clientX, e.clientY); else tip.hidden = true; });
+  const own = t => t && !t.closest(".evidence:not(.ev-embed)");
+  root.addEventListener("pointermove", e => { const t = e.target.closest("[data-tip]"); if (own(t)) place(t, e.clientX, e.clientY); else tip.hidden = true; });
   root.addEventListener("pointerleave", () => { tip.hidden = true; });
-  root.addEventListener("focusin", e => { const t = e.target.closest("[data-tip]"); if (!t) return; const b = t.getBoundingClientRect(); place(t, b.left + b.width / 2, b.bottom); });
+  root.addEventListener("focusin", e => { const t = e.target.closest("[data-tip]"); if (!own(t)) return; const b = t.getBoundingClientRect(); place(t, b.left + b.width / 2, b.bottom); });
   root.addEventListener("focusout", () => { tip.hidden = true; });
 }
 
@@ -333,12 +337,22 @@ async function renderOverview(pane, ctx, isDead) {
       <div class="cr-counters"><div><b class="num" data-freed>0.0 h</b><span>Imaging saved</span></div>
         <div><b class="num" data-traced>0</b><span>Numbers traced · 0 removed</span></div><div><b class="num" data-asked>0</b><span>Approvals requested</span></div></div>
       <h2>Agent event log</h2><ol class="stream" data-stream aria-live="off"></ol></aside>
-    <section class="cr-a">${chartNarrowing(ev)}</section>
-    <section class="cr-b">${chartCoverage(ev)}</section>
+    <section class="cr-a"><h2>90% band width by check</h2><p class="cap">Mean width, share of the starting wound area · held-out series</p>
+      <div class="evidence ev-embed"><div data-legend></div><div class="ev-chart" data-c="narrow"></div></div></section>
+    <section class="cr-b"><h2>90% band coverage by test set</h2><p class="cap">NCA on WHAD · best statistical baseline on WHiM-BC</p>
+      <div class="evidence ev-embed"><div class="ev-chart" data-c="rel"></div></div></section>
     <section class="cr-c">${audit(runs, logs, advSrc)}
       <details class="ov-details"><summary>Agent details · run log, scoreboard, attacks, Investigator</summary><div data-s="details"></div></details></section>
   </div>`;
   const $ = s => pane.querySelector(s);
+  ensureEvidenceCss();
+  if (ev?.narrowing && ev?.reliability) {
+    const narrow = ev.narrowing.map(s => ({ ...s, short: s.kind === "shipped" ? "NCA, real frames" : s.label }));
+    $("[data-legend]").replaceWith(legend(narrow.map(s => [colorOf(s), s.short])));
+    responsive($('[data-c="narrow"]'), lineChart(narrow, { key: "width", yLabel: "band width", cuts: ev.cutoffs, fmt: { tick: t => t.toFixed(1), value: x => x.toFixed(2) },
+      label: `Mean 90% band width: ${narrow.map(s => s.short + " " + s.points.map(p => p.width.toFixed(2)).join(", ")).join("; ")}` }));
+    responsive($('[data-c="rel"]'), reliabilityChart(ev.reliability));
+  }
   const det = $(".ov-details");
   det.addEventListener("toggle", () => { if (det.open && !det.dataset.done) { det.dataset.done = 1; renderRuns(det.querySelector('[data-s="details"]'), ctx, isDead); } });
   $("[data-open]").addEventListener("click", () => { ctx.openItem = W[sel].run.run_id; document.querySelector('[data-mode="assay"]')?.click(); });
@@ -400,64 +414,6 @@ function kpis(schedSrc, ev) {
     ${tile(pct(+s.accuracy_of_calls), `Call accuracy · baseline ${pct(+s.base_rate_not_closed)}`, `${s.called_early - s.wrong_calls} of ${s.called_early} calls right (${s.wrong_calls} wounds called "won't close" did close). Baseline: always "won't close", right for ${pct(+s.base_rate_not_closed)} of all series.`)}
     ${rel ? tile(pct(rel.coverage), "90% band coverage", `Share of later observed frames inside the 90% band, forecast at ${rel.cut} h, ${rel.model_label}. 95% CI ${pct(rel.cov_lo)}–${pct(rel.cov_hi)}. Source: web/ops/evidence.json`) : ""}
   </div>`;
-}
-
-// "When can I call it?": band width per check, shipped model highlighted, baseline in grey (emphasis form).
-function chartNarrowing(ev) {
-  const series = (ev?.narrowing || []).slice(0, 2);
-  if (!series.length) return `<h2>90% band width by check</h2><p>${NA}: web/ops/evidence.json</p>`;
-  const W = 420, Ht = 200, L = 40, R = 96, T = 12, B = 28;
-  const maxW = Math.max(...series.flatMap(s => s.points.map(p => p.width))) * 1.1;
-  const x = t => L + (t / 10) * (W - L - R), y = v => T + (1 - v / maxW) * (Ht - T - B);
-  const ticks = [0, 0.25, 0.5].filter(v => v <= maxW);
-  const ends = series.map(s => y(s.points.at(-1).width) + 4), labY = [...ends];   // direct labels at line ends, never overlapping
-  if (labY.length > 1 && Math.abs(labY[0] - labY[1]) < 13) { const m = (labY[0] + labY[1]) / 2, up = labY[0] <= labY[1] ? 0 : 1; labY[up] = m - 6.5; labY[1 - up] = m + 6.5; }
-  const svg = series.map((s, i) => {
-    const cls = s.kind === "shipped" ? "hi" : "lo";
-    const d = s.points.map((p, k) => `${k ? "L" : "M"}${x(p.cut)},${y(p.width)}`).join("");
-    const lastP = s.points.at(-1);
-    return `<path class="ln ${cls}" d="${d}"/>
-      ${s.points.map(p => `<circle class="pt ${cls}" cx="${x(p.cut)}" cy="${y(p.width)}" r="4" tabindex="0" data-tip="${esc(s.label)} · ${p.cut} h · band width ${p.width.toFixed(2)}"/>`).join("")}
-      <text class="dl ${cls}" x="${x(lastP.cut) + 8}" y="${labY[i]}">${esc(s.kind === "shipped" ? "Stitch (NCA)" : s.label)}</text>`;
-  }).join("");
-  return `<h2>90% band width by check · held-out series</h2>
-    <div class="ov-key"><span><i class="k-hi"></i>Stitch (NCA, shipped)</span><span><i class="k-lo"></i>${esc(series[1]?.label ?? "")}</span></div>
-    <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="90% band width by hours imaged: ${series.map(s => s.label + " " + s.points.map(p => p.cut + " h " + p.width.toFixed(2)).join(", ")).join("; ")}">
-      ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="ax" x="${L - 6}" y="${y(v) + 3}" text-anchor="end">${v}</text>`).join("")}
-      <line class="axis" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>
-      ${CHECKS.map(c => `<text class="ax" x="${x(c)}" y="${Ht - 12}" text-anchor="middle">${c}</text>`).join("")}
-      <text class="ax" x="${(L + W - R) / 2}" y="${Ht - 1}" text-anchor="middle">hours imaged</text>
-      <text class="ax" x="${L - 34}" y="${T + 2}">width (share of wound area)</text>
-      ${svg}
-    </svg>`;
-}
-
-// "Can I trust the band?": coverage of the 90% band per test, target line at 90%, failures marked.
-function chartCoverage(ev) {
-  const rows = ev?.reliability || [];
-  if (!rows.length) return `<h2>90% band coverage by test set</h2><p>${NA}: web/ops/evidence.json</p>`;
-  const short = { "Unseen wounds, same cells": "Unseen wounds", "Unseen condition (pre-registered)": "Unseen condition",
-    "Unseen condition, wider calibration": "…wider calibration", "Unseen wells, same cells": "MCF-7 wells", "New cell type": "New cell type" };
-  const W = 460, rowH = 30, L = 220, R = 44, T = 8, Ht = T + rows.length * rowH + 22;
-  const x = v => L + v * (W - L - R);
-  const bars = rows.map((r, i) => {
-    const yc = T + i * rowH + rowH / 2, fail = r.coverage < 0.85, h = 14;
-    const lab = `${short[r.label] ?? r.label} · ${r.model === "nca_realft3" ? "NCA" : r.model_label}`;
-    return `<g tabindex="0" data-tip="${esc(r.label)} · ${esc(r.detail)} · ${pct(r.coverage)} (95% CI ${pct(r.cov_lo)}–${pct(r.cov_hi)}) · ${r.n_wounds} ${/wells/.test(r.label) || /cell type/.test(r.label) ? "wells" : "wounds"}">
-      <text class="cat" x="${L - 8}" y="${yc + 4}" text-anchor="end">${fail ? "▲ " : ""}${esc(lab)}</text>
-      <path class="bar ${fail ? "fail" : ""}" d="M${x(0)},${yc - h / 2}H${x(r.coverage) - 4}a4,4 0 0 1 4,4v${h - 8}a4,4 0 0 1 -4,4H${x(0)}Z"/>
-      <line class="ci" x1="${x(r.cov_lo)}" x2="${x(r.cov_hi)}" y1="${yc}" y2="${yc}"/>
-      <text class="val ${fail ? "warn" : ""}" x="${x(Math.max(r.coverage, r.cov_hi)) + 6}" y="${yc + 4}">${pct(r.coverage)}</text>
-    </g>`;
-  }).join("");
-  return `<h2>90% band coverage by test set</h2>
-    <div class="ov-key"><span><i class="k-target"></i>target 90%</span><span>NCA = Stitch · others = best statistical baseline</span><span class="warn">▲ below 85%</span></div>
-    <svg class="ov-chart" viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Share of outcomes inside the 90% band: ${rows.map(r => (short[r.label] ?? r.label) + " " + pct(r.coverage)).join(", ")}">
-      <line class="axis" x1="${x(0)}" x2="${x(0)}" y1="${T}" y2="${Ht - 22}"/>
-      ${bars}
-      <line class="target" x1="${x(0.9)}" x2="${x(0.9)}" y1="${T - 4}" y2="${Ht - 18}"/>
-      ${[0, 0.5, 1].map(v => `<text class="ax" x="${x(v)}" y="${Ht - 6}" text-anchor="middle">${pct(v)}</text>`).join("")}
-    </svg>`;
 }
 
 function audit(runs, logs, advSrc) {
