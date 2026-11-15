@@ -1,6 +1,6 @@
 // 3D tissue field for Assay, in the approved glass-dish final look (web/vendor-design/look.js, a byte copy of
 // design/prototypes/glass-dish/look.js: toon rig + material, cool hue shift, skin age ramp): hex columns, colour = state
-// and cell age, height = state as in the mockup (wound 0.08 floor, leading edge <= 0.6, new tissue 0.7 -> 1, intact ~1).
+// and cell age, height = state as in the mockup (wound 0.08 floor, leading edge 0.6, new tissue 0.7 -> 1, intact ~1).
 // Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
 // setHeat: the mockup's age heatmap overlay (look.js heatColour) on non-wound hexes, grown from the field centre on and shrunk
 // back to it off; colour = simulated cell age, not a measurement.
@@ -121,14 +121,14 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   controls.enableDamping = true; controls.minDistance = 1.0; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
   addLights(scene, FINAL.mat);   // toon rig: hemisphere 0.4, key 1.25, fill 0.3
 
-  // ---------- graph space: floor grid every 100 µm, box, rulers ----------
+  // ---------- graph space: floor grid every 50 µm (5 hexes, as in the mockup), box, rulers every 200 µm ----------
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const frame = new THREE.Group(); scene.add(frame);
   const lineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.28 });
   const faint = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.08 });
   const seg = (pts, m = lineMat) => frame.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), m));
   const xa = X0 - 1, xb = -X0 + 1, za = Z0 - 1, zb = -Z0 + 1, top = HMAX * 1.25;
-  const step = (100 / SITE_UM) * S, grid = [];
+  const step = (50 / SITE_UM) * S, grid = [];
   for (let x = xa; x <= xb + 1e-6; x += step) grid.push(V(x, 0, za), V(x, 0, zb));
   for (let z = za; z <= zb + 1e-6; z += step) grid.push(V(xa, 0, z), V(xb, 0, z));
   seg(grid, faint);
@@ -138,14 +138,15 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const walls = []; for (let h = 0; h <= top; h += HMAX / 4) walls.push(V(xa, h, za), V(xb, h, za), V(xa, h, za), V(xa, h, zb));
   seg(walls, faint);
   function label(text, p, size = 0.5, color = "#8a949c", group = frame) {
-    const c = document.createElement("canvas"); c.width = 512; c.height = 64;
-    const g = c.getContext("2d"); g.font = "28px ui-monospace, Menlo, monospace"; g.fillStyle = color; g.textBaseline = "middle"; g.fillText(text, 4, 32);
+    const c = document.createElement("canvas"), g = c.getContext("2d"), font = "28px ui-monospace, Menlo, monospace";
+    g.font = font; c.width = Math.max(512, Math.ceil(g.measureText(text).width) + 8); c.height = 64;   // wide enough for the whole text
+    g.font = font; g.fillStyle = color; g.textBaseline = "middle"; g.fillText(text, 4, 32);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-    sp.scale.set(size * 8, size, 1); sp.position.copy(p); sp.center.set(0, 0.5); group.add(sp); return sp;
+    sp.scale.set(size * c.width / 64, size, 1); sp.position.copy(p); sp.center.set(0, 0.5); group.add(sp); return sp;
   }
-  for (let k = 0; k * step <= xb - xa + 1e-6; k += 2) label(`${k * 100}`, V(xa + k * step, 0, zb + 0.9), 0.4);
+  for (let k = 0; k * step <= xb - xa + 1e-6; k += 4) label(`${k * 50}`, V(xa + k * step, 0, zb + 0.9), 0.4);
   label("x (µm)", V(0, 0, zb + 1.9), 0.5, "#e8ecef");
-  for (let k = 0; k * step <= zb - za + 1e-6; k += 2) label(`${k * 100}`, V(xb + 0.6, 0, za + k * step), 0.4);
+  for (let k = 0; k * step <= zb - za + 1e-6; k += 4) label(`${k * 50}`, V(xb + 0.6, 0, za + k * step), 0.4);
   label("y (µm)", V(xb + 1.6, 0, 0), 0.5, "#e8ecef");
   for (let q = 0; q <= 4; q++) label((q / 4).toFixed(2), V(xa - 0.2, q * HMAX / 4, za), 0.4).center.set(1, 0.5);
   label("density", V(xa - 0.2, top + 0.6, za), 0.5, "#e8ecef").center.set(1, 0.5);
@@ -161,51 +162,66 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   for (const m of [cols, dull]) m.setColorAt(0, col);   // allocates instanceColor
   const cm = cols.instanceMatrix.array, dm = dull.instanceMatrix.array, cc = cols.instanceColor.array, dc = dull.instanceColor.array;
   const rnd = Float32Array.from({ length: COUNT }, (_, k) => ((Math.sin(k * 12.9898) * 43758.5453) % 1 + 1) % 1);  // fixed shade jitter
+  const rnd2 = Float32Array.from({ length: COUNT }, (_, k) => ((Math.sin(k * 78.233) * 43758.5453) % 1 + 1) % 1);  // fixed age mottle, independent of rnd
   const hNow = new Float32Array(COUNT).fill(0.5), inSelA = new Uint8Array(COUNT).fill(1);
   const GREY = STATES.map(s => DARK[s]);
   const ramp = makeAgeRamp(PAL, 60);   // skin age ramp; original tissue (age Infinity) gets its darkest stop
   const tgt = new Float32Array(COUNT), age = new Float32Array(COUNT);   // target height (x HMAX) and age per hex
   const lastS = new Uint8Array(COUNT).fill(255), lastAge = new Float32Array(COUNT).fill(NaN);   // state + age each colour was written for
 
-  // ---------- cell age = steps since the hex stopped being wound; never wound = original tissue (age Infinity) ----------
+  // ---------- cell age = simulated time since the hex stopped being wound; never wound = original tissue (age Infinity) ----------
+  // Ages count AGE_STEPS_PER_H steps per simulated hour, about the mockup's step (its ~240-step heal vs a typical drawn
+  // wound's ~13 h), so look.js's 25-step new-tissue rise and the ramp span mean the same for both sources, whatever the
+  // playback's frame interval or the live speed setting.
   // playback: born = first frame a hex is no longer wound after being wound (display mask), found by walking the frames in
-  // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. span 0.6 x frames.
-  // live: born = the step its NCA density is first back at the wound level after its latest carve; step = field.step when
-  // the caller passes one (e.g. NCA substeps), else the count of distinct NCA states received. span 60 steps.
-  let SPAN_PB; const SPAN_LIVE = 60;   // SPAN_PB is set per playback in load()
+  // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. span 0.6 x the
+  // playback's length, as the mockup's is 0.6 x its frames.
+  // live: born = the first NCA state whose density is back at the wound level after the hex's latest carve (its t_hours).
+  // span 175 steps: the colour matures over (175 + 25) / 18 = 11.1 simulated h, tuned on four M-brush strokes to within
+  // ~0.05 of the mockup's ramp t at half area (2-6 hexes behind the edge) and healed.
+  const AGE_STEPS_PER_H = 18, stepOf = f => Math.round(pb.t_hours[f] * AGE_STEPS_PER_H);   // playback frame -> age step
+  let SPAN_PB; const SPAN_LIVE = 175;   // SPAN_PB is set per playback in load()
   const bornPb = new Int32Array(COUNT).fill(-1), woundSeen = new Uint8Array(COUNT); let bornTo = -1;
   function bornUpTo(f) {
     for (let g = bornTo + 1; g <= f; g++) {
       const w = frameData(g, f0.wound).wound;
-      for (let k = 0; k < COUNT; k++) if (w[k]) woundSeen[k] = 1; else if (woundSeen[k] && bornPb[k] < 0) bornPb[k] = g;
+      for (let k = 0; k < COUNT; k++) if (w[k]) woundSeen[k] = 1; else if (woundSeen[k] && bornPb[k] < 0) bornPb[k] = stepOf(g);
     }
     bornTo = Math.max(bornTo, f);
   }
-  const bornLive = new Int32Array(COUNT).fill(-1); let liveSteps = 0, liveData = null;
+  const bornLive = new Int32Array(COUNT).fill(-1);
   // (re)start on a playback: frame cache, frame 0, cell ages and the wound centre for the camera presets
   let woundC = new THREE.Vector3();
   function load(p) {
     if (p.W !== FW || p.H !== FH) throw new Error(`playback ${p.name} is ${p.H}x${p.W} sites, the 3D field is ${FH}x${FW}`);
     pb = p; cache = new Map(); wf0 = pb.wound_frac[0] || 1;
     f0 = frameData(0, null); classify(f0, f0.wound);
-    SPAN_PB = Math.max(60, 0.6 * pb.wound_frac.length); bornPb.fill(-1); woundSeen.fill(0); bornTo = -1;
+    SPAN_PB = Math.max(60, 0.6 * (stepOf(pb.t_hours.length - 1) - stepOf(0))); bornPb.fill(-1); woundSeen.fill(0); bornTo = -1;
     let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { sx += wx[k]; sz += wz[k]; n++; }
     woundC = n ? new THREE.Vector3(sx / n, 0, sz / n) : new THREE.Vector3();
   }
   load(pb);
 
-  // model outline (area-matched contour, smooth.js rule)
+  // model outline (area-matched contour, smooth.js rule), labelled "simulated outline"; off by default (the mockup has
+  // none), shown with setOutline (the HUD's Outline toggle)
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
   const outlineGroup = new THREE.Group(); scene.add(outlineGroup);
+  const outlineLabel = label("simulated outline", V(0, HMAX * 1.1, 0), 0.4, "#e8ecef", scene); outlineLabel.visible = false;
   const siteToWorld = (x, y) => V(X0 + x * S, HMAX * 0.9, Z0 + y * S);
+  let outlineOn = false;
   function drawOutline(disp) {
     outlineGroup.children.forEach(c => c.geometry.dispose()); outlineGroup.clear();
+    if (!outlineOn) disp = null;
     outlineMat.opacity = 0.8 * (disp?.opacity ?? 0);
-    if (!disp || disp.opacity <= 0.05 || !disp.lines.length) return;
+    outlineLabel.visible = !!disp && disp.opacity > 0.05 && disp.lines.length > 0;
+    if (!outlineLabel.visible) return;
+    let best = null;   // label above the outline's back-most point
     for (const l of disp.lines) {
       const pts = []; for (let i = 0; i + 1 < l.length; i += 2) pts.push(siteToWorld(l[i], l[i + 1]));
       outlineGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), outlineMat));
+      for (const p of pts) if (!best || p.z < best.z) best = p;
     }
+    if (best) outlineLabel.position.set(best.x, HMAX * 1.15, best.z - 0.3);
   }
 
   let sel = null, cur = null, moving = true, heat = false;   // heat: age heatmap overlay on non-wound hexes (look.js heatColour)
@@ -235,6 +251,10 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     dull.visible = !!sel; cols.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
     writeColours();
   }
+  // DISPLAY MOTTLE: the mockup's cells fill in at random (main.js simulate), so its new tissue is mottled; here a healed
+  // hex's shown age is its age offset by a fixed per-hex amount, up to +-15% of the ramp period (rnd2), floored at 0.
+  // Display only: it moves the skin colour and height of healed hexes, never the state, the age heatmap or any readout.
+  const mottled = k => age[k] === Infinity ? Infinity : Math.max(0, age[k] + (rnd2[k] - 0.5) * 0.3 * (ramp.span + 25));
   // colours (look.js cellColour, blended toward heatColour by the heat front; wound hexes keep their colour), only for
   // hexes whose state, age or heat mix changed since they were last written
   function writeColours() {
@@ -246,18 +266,18 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
       lastS[k] = s; lastAge[k] = a; lastMix[k] = m; n++;
       const o = 3 * k, g = GREY[s] * (s === 1 ? 0.85 + 0.3 * rnd[k] : 1);
       if (m === 1) heatColour(col, a, ramp);
-      else { cellColour(col, STATES[s], a, rnd[k], ramp); if (m > 0) col.lerp(heatColour(colH, a, ramp), m); }
+      else { cellColour(col, STATES[s], mottled(k), rnd[k], ramp); if (m > 0) col.lerp(heatColour(colH, a, ramp), m); }
       cc[o] = col.r; cc[o + 1] = col.g; cc[o + 2] = col.b; dc[o] = dc[o + 1] = dc[o + 2] = g;
     }
     if (n) cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
   }
-  // mockup heights by state: wound floor, leading edge at most 0.6 (lower where the density is), healed tissue 0.7 -> 1
-  // over its first 25 steps, then intact x (0.92 + 0.16 rnd)
+  // mockup heights by state: wound floor, leading edge 0.6, healed tissue 0.7 -> 1 over its first 25 steps of (mottled)
+  // age, then intact x (0.92 + 0.16 rnd)
   function writeTargets() {
-    const st = cur.state, d = cur.dens;
+    const st = cur.state;
     for (let k = 0; k < COUNT; k++) {
-      const s = st[k];
-      tgt[k] = s === 0 ? HEIGHT.wound : s === 2 ? Math.max(HEIGHT.wound, Math.min(HEIGHT.edge, d[k])) : colHeight(age[k] < 25 ? "fresh" : "intact", age[k], rnd[k]);
+      const s = st[k], a = mottled(k);
+      tgt[k] = s === 0 ? HEIGHT.wound : s === 2 ? HEIGHT.edge : colHeight(a < 25 ? "fresh" : "intact", a, rnd[k]);
     }
   }
   // per frame: ease heights toward their targets, write only the height entry; stop once settled
@@ -398,7 +418,28 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   { const v = views.field(); camera.position.copy(v.p); controls.target.copy(v.t); }
   const easeIO = x => x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ---------- idle orbit: after IDLE_S s with no input on the 3D view the camera turns slowly about the orbit target
+  // (azimuth only, so the user's distance and tilt stay), eased in over ORBIT_EASE s. Pointer or wheel input on the canvas,
+  // a zoom or a camera fly stops it at once and restarts the wait; never while a pointer is down, a fly runs, the tab is
+  // hidden or under prefers-reduced-motion. On by default; assay.js keeps the per-session choice (setIdleOrbit). ----------
+  const IDLE_S = 6, ORBIT_W = 2 * Math.PI / 150, ORBIT_EASE = 1.5;   // rad/s: one turn per 2.5 min
+  let idleOn = true, held = false, lastInput = performance.now(), spin = 0;   // spin 0..1 = eased share of ORBIT_W
+  const wake = () => { lastInput = performance.now(); spin = 0; };
+  const onPress = () => { held = true; wake(); }, onRelease = () => { if (held) { held = false; wake(); } };
+  const onHoverMove = e => { if (!e.buttons) held = false; wake(); };   // a lost pointerup (e.g. alt-tab mid-drag) heals on hover
+  canvas.addEventListener("pointerdown", onPress); canvas.addEventListener("pointermove", onHoverMove); canvas.addEventListener("wheel", wake, { passive: true });
+  window.addEventListener("pointerup", onRelease); window.addEventListener("pointercancel", onRelease); document.addEventListener("visibilitychange", wake);
+  function idleTurn(dt) {
+    if (fly || held || document.hidden) return wake();
+    if (performance.now() - lastInput < IDLE_S * 1000) return;
+    if (spin === 0) onLeave();   // the view starts turning under a resting pointer: drop the hover tip and brush ring
+    spin = Math.min(1, spin + dt / ORBIT_EASE);
+    const a = ORBIT_W * spin * spin * (3 - 2 * spin) * dt, c = Math.cos(a), s = Math.sin(a);
+    const p = camera.position, t = controls.target, dx = p.x - t.x, dz = p.z - t.z;
+    p.x = t.x + dx * c - dz * s; p.z = t.z + dz * c + dx * s;
+  }
   function zoom(dir) {
+    wake();
     const off = camera.position.clone().sub(controls.target).multiplyScalar(dir > 0 ? 0.8 : 1.25);
     const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, off.length()));
     camera.position.copy(controls.target).add(off.setLength(len));
@@ -412,12 +453,13 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // zoom level 0 (whole field) .. 1 (closest), log-scaled camera distance
   const FIELD_D = views.field().p.distanceTo(views.field().t), NEAR_D = controls.minDistance * 1.2;
   const zoomLevel = () => { const d = camera.position.distanceTo(controls.target); return Math.max(0, Math.min(1, Math.log(FIELD_D / d) / Math.log(FIELD_D / NEAR_D))); };
-  function setZoom(z) { const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
+  function setZoom(z) { wake(); const d = FIELD_D * Math.pow(NEAR_D / FIELD_D, Math.max(0, Math.min(1, z))); const off = camera.position.clone().sub(controls.target); camera.position.copy(controls.target).add(off.setLength(d)); }
 
-  // screen length of 100 µm at the orbit target (for the HUD scale bar)
+  // screen length of 100 µm at the orbit target (for the HUD scale bar), along the camera's right axis (horizontal on
+  // screen) rather than world x, so the bar holds as the view turns (idle orbit)
   const sa = new THREE.Vector3(), sb = new THREE.Vector3();
   function pxPer100um() {
-    sa.copy(controls.target); sb.copy(sa); sb.x += (100 / SITE_UM) * S;
+    sa.copy(controls.target); sb.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar((100 / SITE_UM) * S).add(sa);
     sa.project(camera); sb.project(camera);
     return Math.abs(sb.x - sa.x) / 2 * canvas.clientWidth;
   }
@@ -436,6 +478,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (heatAnim) stepHeat();
     if (moving) { ease(reduced ? 1 : dt); if (sel && !moving) emitSel(); }
     if (fly) { fly.t = reduced ? 1 : Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
+    if (idleOn && !reduced) idleTurn(dt);
     controls.update(); renderer.render(scene, camera);
     onFrameCb && onFrameCb();
   });
@@ -445,22 +488,22 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     // swap to another playback of the same field size; shows its frame 0 (cell ages restart)
     setPlayback(p) {
       if (p === pb) return;
+      heatR = heat ? HEAT_R1 : 0; heatAnim = false;   // a running heat front lands at its end: the new field is all on or all off
       load(p); bornUpTo(0); show(f0, bornPb, 0, SPAN_PB); drawOutline(f0.outline);
     },
     playback: () => pb,
     showArea(area) {
       const f = frameForArea(area); if (cur && f === cur.f) return cur;
-      bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline);
+      bornUpTo(f); show(frameData(f, f0.wound), bornPb, stepOf(f), SPAN_PB); drawOutline(cur.outline);
       return cur;
     },
     zoomLevel, setZoom,
-    // live field { data, w, h, perSite, norm?, level, step? } sampled onto the hexes; `fresh` (Uint8Array per hex) is kept
-    // by the caller: pass the same array each time and it accumulates every hex that was ever wound (clear it on reset).
-    // step (optional): the NCA step of this state, for speed-independent cell ages; default = states received so far
+    // live field { data, w, h, perSite, norm?, level, t_hours } sampled onto the hexes; `fresh` (Uint8Array per hex) is
+    // kept by the caller: pass the same array each time and it accumulates every hex that was ever wound (clear it on
+    // reset). t_hours = simulated time of this NCA state (cell ages count it, not states received or the speed setting)
     showLive(field, fresh) {
       const { dens, wound } = liveFd; sample(field, dens);
-      if (field.data !== liveData) { liveData = field.data; liveSteps++; }
-      const now = field.step ?? liveSteps;
+      const now = Math.round(field.t_hours * AGE_STEPS_PER_H);
       for (let k = 0; k < COUNT; k++) {
         wound[k] = dens[k] < field.level ? 1 : 0;
         if (wound[k]) { fresh[k] = 1; bornLive[k] = -2; } else if (!fresh[k]) bornLive[k] = -1; else if (bornLive[k] === -2) bornLive[k] = now;
@@ -476,6 +519,8 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     clearSelection() { setSel(null); emitSel(); },
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
+    // idle orbit on/off (the wait restarts); canIdleOrbit is false under prefers-reduced-motion, where it never runs
+    setIdleOrbit(on) { idleOn = !!on; wake(); }, isIdleOrbit: () => idleOn, canIdleOrbit: !reduced,
     onFrame(cb) { onFrameCb = cb; },
     // age heatmap overlay: recolours only (no change to heights, playback or the live run); animated by the heat front
     setHeat(on) {
@@ -483,11 +528,15 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
       hr0 = heatR; hr1 = r1; ht0 = performance.now(); hDur = Math.max(1, HEAT_MS * Math.abs(hr1 - hr0) / HEAT_R1); heatAnim = true;
     },
     isHeat: () => heat,
+    // simulated outline overlay of the playback frame (none while drawing live)
+    setOutline(on) { outlineOn = !!on; drawOutline(cur && cur !== liveFd ? cur.outline : null); }, isOutline: () => outlineOn,
     snapshot: () => canvas.toDataURL("image/png"),
     dispose() {
       renderer.setAnimationLoop(null); ro.disconnect(); controls.dispose();
       canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp); canvas.removeEventListener("pointerleave", onLeave); canvas.removeEventListener("contextmenu", onContext);
+      canvas.removeEventListener("pointerdown", onPress); canvas.removeEventListener("pointermove", onHoverMove); canvas.removeEventListener("wheel", wake);
+      window.removeEventListener("pointerup", onRelease); window.removeEventListener("pointercancel", onRelease); document.removeEventListener("visibilitychange", wake);
       scene.traverse(o => { o.geometry?.dispose?.(); if (o.material) { o.material.map?.dispose?.(); o.material.dispose?.(); } });
       renderer.dispose(); canvas.remove();
     },

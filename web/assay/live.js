@@ -22,7 +22,7 @@ export function createLive(tissue, { onState } = {}) {
   const { COUNT, u: hu, v: hv } = tissue.grid, CW = FIELD_W / GRAIN, CH = FIELD_H / GRAIN;
   const worker = new Worker(new URL("../public/sim/js/live.js", import.meta.url), { type: "module" });
   const S = { preset: "CC", brush: "M", speed: 2, brushOn: true, status: "loading", t: 0, tCut: null, fromPhoto: false, open: 0, ready: false, active: false };
-  const fresh = new Uint8Array(COUNT), intact = { data: new Float32Array(CW * CH).fill(1), w: CW, h: CH, perSite: 1 / GRAIN, level: WOUND_RHO };
+  const fresh = new Uint8Array(COUNT), intact = { data: new Float32Array(CW * CH).fill(1), w: CW, h: CH, perSite: 1 / GRAIN, level: WOUND_RHO, t_hours: 0 };
   let field = intact;
   // display hex -> coarse NCA cell, and hexes per cell (for the coverage downsample)
   const cellOf = new Int32Array(COUNT), cellN = new Int32Array(CW * CH), hit = new Int32Array(CW * CH);
@@ -41,7 +41,7 @@ export function createLive(tissue, { onState } = {}) {
     if (m.type === "live-ready") { S.ready = true; if (S.active) worker.postMessage({ type: "play" }); return; }
     if (m.type === "live-error") { S.status = "error"; S.error = m.error; onState?.(S); return; }
     if (m.type !== "state") return;
-    field = { ...intact, data: m.rho };
+    field = { ...intact, data: m.rho, t_hours: m.t_hours };   // simulated time: tissue.js counts cell ages in it
     Object.assign(S, { status: m.status, t: m.t_hours, tCut: m.t_cut, open: m.open_frac });
     draw(); onState?.(S);
   };
