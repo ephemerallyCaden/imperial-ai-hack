@@ -15,7 +15,8 @@ Branch `feature/p2-agent1` (on main f51bb86). Details: `docs/sim.md`. Gate numbe
 (`python eval/score_forecasts.py eval/forecasts --gate sim_ensemble`, Sat 22:25). **loo_all rows re-scored Sun 02:20** after P1 dropped the spliced
 series exp1_partII_NC_P3 (`EXCLUDE` in `eval/forecast_baselines.py`): the sim gate files were regenerated with it out of every series list and
 calibration pool (55 loo_all series, was 56), settings unchanged; loo_manual and CC_to_C61 scores did not change. The v1 NCA gate files
-(nca_ensemble, nca_deterministic) were not regenerated: P3 is still in their loo_all pools (the scorer drops it as a test series). qscore = mean pinball loss over q05/q50/q95,
+(nca_ensemble, nca_deterministic) were regenerated the same way (no retraining); the nca_ensemble column below is from the regenerated files. Pass counts are unchanged.
+`sim/tests/test_pool_exclusion.py` checks every pool and file against P1's splits. qscore = mean pinball loss over q05/q50/q95,
 a CRPS approximation, lower is better. cov = 90% band coverage. The gate requires qscore within 10% of the best baseline AND
 coverage 0.85-0.95.
 
@@ -27,10 +28,10 @@ coverage 0.85-0.95.
 ## Gate (WHAD; P1's series, folds, cut-offs 1.9/3.8/5.7/9.5 h and calibration pools; files `eval/forecasts/whad/{fold}/sim_ensemble{,_raw}_{cut}h.json`)
 | fold | cut (h) | best baseline: qscore / cov | sim_ensemble: qscore / cov | gate | sim_ensemble_raw: qscore / cov | nca_ensemble: qscore / cov | NCA gate |
 |---|---|---|---|---|---|---|---|
-| loo_all | 1.9 | edge_speed 0.0562 / 0.93 | 0.0709 / 0.93 | FAIL | 0.1300 / 0.12 | 0.0715 / 0.94 | FAIL |
-| loo_all | 3.8 | edge_speed 0.0386 / 0.92 | 0.0498 / 0.93 | FAIL | 0.0917 / 0.22 | 0.0499 / 0.93 | FAIL |
-| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0412 / 0.92 | FAIL | 0.0679 / 0.17 | 0.0402 / 0.92 | FAIL |
-| loo_all | 9.5 | linear 0.0316 / 0.92 | 0.0304 / 0.92 | PASS | 0.0517 / 0.20 | 0.0307 / 0.92 | PASS |
+| loo_all | 1.9 | edge_speed 0.0562 / 0.93 | 0.0709 / 0.93 | FAIL | 0.1300 / 0.12 | 0.0705 / 0.93 | FAIL |
+| loo_all | 3.8 | edge_speed 0.0386 / 0.92 | 0.0498 / 0.93 | FAIL | 0.0917 / 0.22 | 0.0502 / 0.93 | FAIL |
+| loo_all | 5.7 | edge_speed 0.0327 / 0.93 | 0.0412 / 0.92 | FAIL | 0.0679 / 0.17 | 0.0403 / 0.92 | FAIL |
+| loo_all | 9.5 | linear 0.0316 / 0.92 | 0.0304 / 0.92 | PASS | 0.0517 / 0.20 | 0.0306 / 0.92 | PASS |
 | loo_manual | 1.9 | edge_speed 0.0412 / 0.87 | 0.0572 / 0.87 | FAIL | 0.1542 / 0.14 | 0.0559 / 0.87 | FAIL |
 | loo_manual | 3.8 | gompertz 0.0393 / 0.87 | 0.0464 / 0.87 | FAIL | 0.1028 / 0.20 | 0.0458 / 0.87 | FAIL |
 | loo_manual | 5.7 | edge_speed 0.0362 / 0.87 | 0.0432 / 0.86 | FAIL | 0.0672 / 0.22 | 0.0404 / 0.85 | FAIL |
