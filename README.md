@@ -4,6 +4,8 @@ Early forecasts for scratch-assay wound closure, with an uncertainty band that h
 
 > Research prototype. Advisory only. Not a medical device. No clinical or drug-effect claims.
 
+**Team:** Rand (data and evaluation), Caden (simulator, NCA and Adaption fine-tune), Joanne (web app, Figma design and agent layer).
+
 ## Problem
 
 Scratch (wound-healing) assays are used across cancer migration, fibrosis, wound biology and drug screening. Today's tools (TScratch, ImageJ plugins, Incucyte) **measure** closure after it has happened, so labs spend hours to days of plate and microscope time waiting to see whether a well closes. An assay scientist has no calibrated early answer to "will this well close by the end of the run, and when?"
@@ -70,6 +72,15 @@ nca/        neural cellular automaton: model, training, real-data fine-tuning, g
 web/        viewer (data in web/data)
 docs/       design doc, decisions, results, Q&A prep, related work
 ```
+
+## Run the app
+
+```bash
+python3 -m http.server 8010 --bind 127.0.0.1    # from the repo root
+# open http://127.0.0.1:8010/web/index.html
+```
+
+No keys and no build step. Assay plays the recorded agent runs in `agent/runs/` and the samples; Upload runs the segmenter and an edge-speed forecast in the browser (the NCA forecast needs `python -I data/upload.py`). Ops shows the run log, scoreboard and forecast evidence. Draw runs the cell simulator live. three.js loads from a CDN; offline, everything but the 3D field still works.
 
 ## Reproduce
 

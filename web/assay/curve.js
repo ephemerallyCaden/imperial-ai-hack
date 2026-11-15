@@ -39,7 +39,7 @@ export function curveSVG(fc, { cutoff, t = null, calibrated }) {
     <path d="${path(ft, join(fc.area_q50))}" class="c-med"/>${obs}
     <line x1="${f1(X(cutoff))}" x2="${f1(X(cutoff))}" y1="${T - 6}" y2="${CH - B}" class="c-cut"/>
     <text x="${f1(X(cutoff) + 4)}" y="${T + 2}" class="c-lbl">t0 = ${cutoff} h · forecast from here</text>
-    ${calibrated ? "" : `<text x="${CW - R}" y="${f1(Y(0.62))}" class="c-unc-lbl" text-anchor="end">spread uncalibrated · not a 90% band</text>`}
+    ${calibrated ? "" : `<text x="${CW - R}" y="${T + 14}" class="c-unc-lbl" text-anchor="end">spread uncalibrated · not a 90% band</text>`}
     <line x1="${L}" x2="${CW - R}" y1="${CH - B}" y2="${CH - B}" class="c-axis"/>${xt}${now}
   </svg>
   <div class="as-legend"><span><i class="lg-obs"></i>observed</span>${later.length ? `<span><i class="lg-held"></i>observed after t0 (held out)</span>` : ""}<span><i class="lg-med"></i>median</span>
