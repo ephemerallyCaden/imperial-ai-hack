@@ -13,6 +13,14 @@ At each imaging check (1.9, 3.8, 5.7 and 9.5 h) the agent:
 5. asks a human to approve anything that cannot be undone (stopping a plate);
 6. writes every step to a run log.
 
+## Where the gain comes from
+
+The plate-hours saved come from the forecaster and the policy code, not from the LLM. The forecaster gives the chance
+of closing and the stall flag; the policy code sets the stop thresholds and forces "stall flagged, ask a human" and
+"data refused, ask a human". The LLM only chooses among the options the code allows and explains its choice in plain
+English. Every number it writes is checked by the Critic. That is why the scoreboard calls the replay row "Forecast
+policy (code; replay model, no LLM)", and why the real-model row reports how often Claude picked the same option.
+
 ## What it does not do
 
 - The LLM never makes a number. Every number comes from a tool. The Critic (`critic.py`, plain code) removes any
@@ -52,7 +60,9 @@ Run from the repo root with the project venv (`.venv/bin/python`). None of these
   Add `--reject` to have the simulated human reject every stop, `--both-branches` to also record the rejected branch
   (`<run-id>.reject.jsonl`), `--runs-dir DIR` to write elsewhere. `--wound` also takes a path to an upload result JSON.
 - Evaluation: `python -m agent.evaluate` writes `agent/results/scoreboard.csv` and `scoreboard.md` (assumptions are in
-  the `.md`). Its run logs go to a temp folder, not `agent/runs/`.
+  the `.md`). Its run logs go to a temp folder, not `agent/runs/`. It also adds a real-model row read from recorded
+  logs in `--real-runs DIR` (default `agent/runs/practice`; WHAD wound runs only, no `.reject` or upload runs). The row
+  is skipped with a note if the folder has none. It reads logs only; it never calls a model.
 
 Run IDs must be new: a log is never overwritten.
 
@@ -73,6 +83,14 @@ python -m agent.run --wound exp1_partII_C61_P1 --run-id video-1 --both-branches
 ```
 
 For video runs use `--both-branches` so the UI can play either answer at an approval point.
+
+To record the demo set in one go (four WHAD wounds, the first with both branches, plus a real-frame upload run), and
+check no file holds a username, path, account id or key:
+
+- `python -m agent.record --out agent/runs/practice` for practice runs (git-ignored)
+- `python -m agent.record --out agent/runs` for the final re-record on the submission account (these are committed)
+
+`python -m agent.evaluate --real-runs agent/runs` then scores the final runs instead of the practice ones.
 
 ## Run log records (for the UI)
 
@@ -97,7 +115,8 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 ## Known limitations
 
 - The agent rows in the scoreboard use the offline replay model (`replay_stub`), not a real LLM. It always takes
-  "stop, unlikely" when allowed, else "image again". Real-model numbers come only from recorded runs.
+  "stop, unlikely" when allowed, else "image again". Real-model numbers come only from recorded runs, and the
+  real-model row is a small sample of practice runs until the final re-record replaces them.
 - The stall threshold (`eval/results/flag_thresholds.json`) is tuned on all WHAD wounds, so the stall flag in the replay
   is not strictly leave-one-out. The forecasts are.
 - The stall flag is often wrong: about half of stall stops in the replay are on wounds that kept closing (see

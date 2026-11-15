@@ -133,3 +133,76 @@ def test_scoreboard_says_replay_model(tmp_path):
     md = p.read_text()
     assert "not a real LLM" in md and "#82" in md and "Non-closer imaged to the end" in md
     assert "Stall-stop error rate" in md
+
+
+# ---------------------------------------------------------------- real-model row from recorded run logs
+
+def _allowed(*ids):
+    return [{"id": i, "label": i, "evidence": "", "irreversible": False, "untested": False} for i in ids]
+
+
+def _log(path, wound_id, decisions, end, costs=(), model_id="claude-opus-5-5"):
+    import json
+    recs = [{"kind": "run_start", "wound": {"kind": "whad_loo", "wound_id": wound_id}, "model_id": model_id}]
+    recs += [{"kind": "model_call", "cost_usd": c} for c in costs]
+    recs += [{"kind": "decision", "decision": d, "source": src, "allowed": _allowed(*al)} for d, src, al in decisions]
+    recs.append({"kind": "run_end", **end})
+    path.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
+
+
+def _fake_runs(d):
+    full = ("continue", "ask_human", "image_again", "stop_unlikely")
+    _log(d / "s-exp1_a.jsonl", "a", [("stop_unlikely", "llm", full)],
+         {"stopped": True, "stop_h": 1.9, "stop_kind": "unlikely", "plate_hours_saved": 17.1,
+          "numbers_traced": 3, "numbers_untraced": 1, "tokens": {"total": 100}}, costs=(0.02, None))
+    _log(d / "s-exp1_b.jsonl", "b", [("ask_human_stall", "forced", ("ask_human_stall",))],
+         {"stopped": True, "stop_h": 1.9, "stop_kind": "stall", "plate_hours_saved": 17.1,
+          "numbers_traced": 1, "numbers_untraced": 0, "tokens": {"total": 0}})
+    _log(d / "s-exp1_c.jsonl", "c", [("image_again", "llm", full[:3]), ("ask_human", "llm", full[:2])],
+         {"stopped": False, "stop_h": None, "stop_kind": None, "plate_hours_saved": 0.0,
+          "numbers_traced": 4, "numbers_untraced": 0, "tokens": {"total": 300}}, costs=(0.01, 0.03))
+    # left out: a reject branch and an upload run
+    _log(d / "s-exp1_a.reject.jsonl", "a", [], {"stopped": False, "plate_hours_saved": 0.0}, costs=(9.0,))
+    _log(d / "s-video-upload.jsonl", "a", [], {"stopped": False, "plate_hours_saved": 0.0}, costs=(9.0,))
+
+
+def test_real_model_row_from_fake_logs(tmp_path):
+    _fake_runs(tmp_path)
+    ws = {"a": _w(True), "b": _w(False, stall_true=False), "c": _w(False, stall_true=True)}
+    r = E.real_model_row(ws, str(tmp_path))
+    assert r["n_wounds"] == 3 and r["n_with_truth"] == 3
+    assert r["plate_hours_saved"] == pytest.approx(34.2)
+    assert r["wrong_closure_call"] == 1 and r["wrong_stall_stop"] == 1 and r["missed_stall"] == 1
+    assert r["pct_numbers_traced"] == pytest.approx(88.9)
+    assert r["model_cost_usd_per_run"] == pytest.approx(0.06 / 3, abs=1e-4)
+    assert (r["agree_with_replay"], r["model_checks"]) == (2, 3)   # forced stall left out; ask_human differs
+    assert r["label"] == "Real model (Claude, n=3 recorded runs)"
+
+
+def test_real_model_row_practice_label_and_empty(tmp_path):
+    d = tmp_path / "practice"
+    d.mkdir()
+    assert E.real_model_row({}, str(d)) is None and E.real_model_row({}, str(tmp_path / "missing")) is None
+    _fake_runs(d)
+    r = E.real_model_row({"a": _w(True)}, str(d))
+    assert r["label"] == "Real model (Claude, n=3 practice runs)" and r["n_with_truth"] == 1
+
+
+def test_scoreboard_real_row_and_skip_note(tmp_path):
+    ws = {"a": _w(False)}
+    rows = [{"policy": p, **E.score(ws, {"a": _o()}, rate)} for rate in E.RATES for p in E.POLICIES]
+    xc = {"scheduler_csv_calls_wont_close": None, "scheduler_csv_wrong_calls": None, "scheduler_rule_unlikely_calls": 0,
+          "scheduler_rule_wrong": 0, "agent_unlikely_calls": 0, "agent_unlikely_wrong": 0, "same_wound_same_check": 0,
+          "agent_only": [], "pre_empted_by_stall": [], "pre_empted_wrong": 0}
+    p = tmp_path / "s.md"
+    E.write_md(str(p), rows, xc, str(tmp_path), None, str(tmp_path / "practice"))
+    md = p.read_text()
+    assert "Forecast policy (code; replay model, no LLM)" in md and "Real model row skipped" in md
+    runs = tmp_path / "practice"
+    runs.mkdir()
+    _fake_runs(runs)
+    real = E.real_model_row({"a": _w(True), "b": _w(False), "c": _w(False)}, str(runs))
+    E.write_md(str(p), rows, xc, str(tmp_path), real, str(runs))
+    md = p.read_text()
+    assert "| Real model (Claude, n=3 practice runs) |" in md and "2 / 3 checks" in md
+    assert "small sample" in md and "replace them" in md
