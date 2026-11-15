@@ -28,11 +28,13 @@ const HEIGHT = { intact: 1.0, dividing: 1.0, edge: 0.6, wound: 0.08 };   // rela
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: Q.has('capture') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene(); scene.background = new THREE.Color(parseInt(Q.get('bg') || '050607', 16));   // ?bg=hex look-dev
 const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
 const controls = new OrbitControls(camera, canvas);
+// ?speed=x playback multiplier, ?orbit=deg slow auto-orbit (for recording clips)
+const SPEED = +(Q.get('speed') || 1); if (Q.has('orbit')) { controls.autoRotate = true; controls.autoRotateSpeed = +Q.get('orbit') || 0.5; }
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
 const LIT = Q.get('mat') && Q.get('mat') !== 'matte' ? [0.4, 1.25, 0.3] : [1.1, 1.6, 0.5];   // new materials add env + emissive light, so dim the rig
 // ?light=warm: warm rig (the default sky is cool blue-white, which greys out reds and oranges) with brighter fill so colours stay vivid
@@ -449,11 +451,14 @@ if (composer) {
 function resize() { renderer.setSize(innerWidth, innerHeight, false); composer?.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const clock = new THREE.Clock(); let settle = 0;
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(0.05, clock.getDelta());
-  if (playing) { const nt = Math.min(tEnd(), t + dt * (PHOTO ? 30 : 5)); setTime(nt); if (nt >= tEnd()) { playing = false; playBtn.textContent = 'PLAY'; } }
+// ?capture: no real-time loop; window.__tick(n) advances n fixed 1/30 s frames (frame-exact video capture)
+const CAPTURE = Q.has('capture');
+if (CAPTURE) window.__tick = (n = 1) => { for (let i = 0; i < n; i++) tick(1 / 30); };
+else renderer.setAnimationLoop(() => tick(Math.min(0.05, clock.getDelta())));
+function tick(dt) {
+  if (playing) { const nt = Math.min(tEnd(), t + dt * (PHOTO ? 30 : 5) * SPEED); setTime(nt); if (nt >= tEnd()) { playing = false; playBtn.textContent = 'PLAY'; } }
   if (dirty) { settle = 1.2; dirty = false; }
   if (settle > 0) { settle -= dt; updateColumns(frameNow, dt); selStats(); }
   if (fly) { fly.t = Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
   controls.update(); if (composer) { const g = composer.passes.at(-1).uniforms?.uT; if (g) g.value = clock.elapsedTime % 10; composer.render(); } else renderer.render(scene, camera);
-});
+}
