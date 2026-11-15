@@ -9,6 +9,7 @@
 import { PRESETS_FOLLOW, PRESET_LABEL_FOLLOW, PRESET_CAPTION_FOLLOW, FIELD_H as H, FIELD_W as W, SITE_UM } from '../public/sim/js/engine.js';
 import { viewFrame, agentFrame, densityFrame } from '../public/sim/js/playback.js';
 import { edgeSpeed, stallSpeed, speedColour } from '../edge/edge_speed.js';
+import { PAL, OLD, EDGE_CSS, BG_CSS, Age, shade } from './tissue.js';
 
 const SIM = new URL('../public/sim/', import.meta.url);
 const T_MAX = 24, HPF = 0.1, DEEP_ZOOM = 2.5, BRUSH = 2.2;
@@ -37,30 +38,33 @@ class Field {
     return { x0, y0, vw, vh, s: this.c.width / vw };
   }
   toSite(ev) { const r = this.c.getBoundingClientRect(), v = this.view(); return [v.x0 + ((ev.clientX - r.left) / r.width) * v.vw, v.y0 + ((ev.clientY - r.top) / r.height) * v.vh]; }
-  blit(gw, gh, val, smooth) { // val(i) in 0..1 = occupancy -> wound..intact colour
-    const lo = hex(css('--cell-wound') || '#0B1116'), hi = hex(css('--cell-intact') || '#1F4F5C');
+  blit(gw, gh, rgb, smooth) { // rgb(i) -> [r, g, b]: the final tissue look (tissue.js)
     this.off.width = gw; this.off.height = gh;
     const og = this.off.getContext('2d'), img = og.createImageData(gw, gh);
-    for (let i = 0; i < gw * gh; i++) { const v = val(i); for (let k = 0; k < 3; k++) img.data[4 * i + k] = lo[k] + (hi[k] - lo[k]) * v; img.data[4 * i + 3] = 255; }
+    for (let i = 0; i < gw * gh; i++) { const c = rgb(i); img.data[4 * i] = c[0]; img.data[4 * i + 1] = c[1]; img.data[4 * i + 2] = c[2]; img.data[4 * i + 3] = 255; }
     og.putImageData(img, 0, 0);
     const v = this.view(), sx = gw / W;
     this.g.imageSmoothingEnabled = smooth;
     this.g.clearRect(0, 0, this.c.width, this.c.height);
     this.g.drawImage(this.off, v.x0 * sx, v.y0 * sx, v.vw * sx, v.vh * sx, 0, 0, this.c.width, this.c.height);
   }
-  agents(occ) { this.blit(W, H, (i) => occ[i], false); this.grid(); }
-  smooth(fine, lines, alpha) { this.blit(fine.w, fine.h, (i) => fine.data[i] / 255, true); this.lines(lines, alpha); }
-  density(rho, h, w) { this.blit(w, h, (i) => rho[i], true); }
+  agents(occ, age) { this.blit(W, H, (i) => shade(age ? age.colour(i) : PAL.intact, occ[i]), false); this.grid(); }
+  smooth(fine, lines, alpha, age) {   // fine px -> its lattice site for the age colour
+    const k = fine.w / W;
+    this.blit(fine.w, fine.h, (i) => shade(age ? age.colour(Math.floor(((i / fine.w) | 0) / k) * W + Math.floor((i % fine.w) / k)) : PAL.intact, fine.data[i] / 255), true);
+    this.lines(lines, alpha);
+  }
+  density(rho, h, w) { this.blit(w, h, (i) => shade(OLD, rho[i]), true); }   // no cell ages in a density field: original-tissue stop, matching the sim panel
   grid() { // hairline site grid at deep zoom so single cells read as cells
     const v = this.view(); if (v.s < 9) return;
-    this.g.strokeStyle = 'rgba(5,6,7,.55)'; this.g.lineWidth = 1; this.g.beginPath();
+    this.g.strokeStyle = 'rgba(18,10,9,.55)'; this.g.lineWidth = 1; this.g.beginPath();
     for (let x = Math.ceil(v.x0); x <= v.x0 + v.vw; x++) { const p = (x - v.x0) * v.s; this.g.moveTo(p, 0); this.g.lineTo(p, this.c.height); }
     for (let y = Math.ceil(v.y0); y <= v.y0 + v.vh; y++) { const p = (y - v.y0) * v.s; this.g.moveTo(0, p); this.g.lineTo(this.c.width, p); }
     this.g.stroke();
   }
   edges(sites, perSite, vMax, stallV) {   // edge-speed ring (#117): sites in fine px, perSite fine px per lattice site
     const v = this.view(), sz = v.s / perSite;
-    this.g.save(); this.g.globalAlpha = 0.55; this.g.fillStyle = '#050607'; this.g.fillRect(0, 0, this.c.width, this.c.height); this.g.restore();
+    this.g.save(); this.g.globalAlpha = 0.55; this.g.fillStyle = BG_CSS; this.g.fillRect(0, 0, this.c.width, this.c.height); this.g.restore();
     for (const p of sites) {
       const [r, g, b] = speedColour(p.v, vMax), x = (p.x / perSite - v.x0) * v.s, y = (p.y / perSite - v.y0) * v.s;
       this.g.fillStyle = `rgb(${r},${g},${b})`; this.g.fillRect(x, y, sz + 0.5, sz + 0.5);
@@ -77,7 +81,7 @@ class Field {
   }
   lines(lines, alpha) {
     if (!lines || !alpha) return;
-    const v = this.view(); this.g.save(); this.g.globalAlpha = alpha; this.g.strokeStyle = css('--cell-edge') || '#EE7F2D'; this.g.lineWidth = 2;
+    const v = this.view(); this.g.save(); this.g.globalAlpha = alpha; this.g.strokeStyle = EDGE_CSS; this.g.lineWidth = 2;
     for (const l of lines) { this.g.beginPath(); for (let k = 0; k < l.length; k += 2) this.g[k ? 'lineTo' : 'moveTo']((l[k] - v.x0) * v.s, (l[k + 1] - v.y0) * v.s); this.g.stroke(); }
     this.g.restore();
   }
@@ -108,7 +112,7 @@ const legend = (items) => el('div', { class: 'dr-legend' }, ...items.map(([c, t,
 function drawView(worker) {
   const root = el('div', { class: 'dr-view' });
   const canvas = el('canvas', { width: 660, height: 480, class: 'dr-canvas', 'aria-label': 'Drawing canvas: drag to draw a wound' });
-  const f = new Field(canvas), mask = new Uint8Array(W * H);
+  const f = new Field(canvas), mask = new Uint8Array(W * H), age = new Age(W * H);
   let state = 'draw', preset = 'CC', last = null, curve = { t: [], v: [] }, drawing = false;
   const readT = el('span', { class: 'num' }, '0.0 h'), readF = el('span', { class: 'num' }, '—'), readV = el('span', {}, 'smoothed density');
   const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Wound area over time' });
@@ -116,7 +120,7 @@ function drawView(worker) {
 
   const run = btn('Run', () => (state === 'running' ? pause() : start()), 'st-btn--primary');
   const step = btn('Step', () => { ensure(); worker.postMessage({ type: 'step', hours: 0.5 }); });
-  const reset = btn('Reset', () => { if (state === 'draw') return; pause(); worker.postMessage({ type: 'reset' }); curve = { t: [], v: [] }; });
+  const reset = btn('Reset', () => { if (state === 'draw') return; pause(); age.reset(Uint8Array.from(mask, (m) => 1 - m)); worker.postMessage({ type: 'reset' }); curve = { t: [], v: [] }; });
   const clear = btn('Clear', () => { pause(); mask.fill(0); state = 'draw'; last = null; curve = { t: [], v: [] }; render(); });
   const sample = btn('Sample wound', () => { pause(); mask.fill(0); const r = 9; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x + 0.5 - W / 2) ** 2 + (y + 0.5 - H / 2) ** 2 <= r * r) mask[y * W + x] = 1; state = 'draw'; last = null; curve = { t: [], v: [] }; render(); });
   const segCC = btn('CC', () => setPreset('CC')), segC61 = btn('C61', () => setPreset('C61'));
@@ -127,7 +131,7 @@ function drawView(worker) {
   function ensure() {
     if (state !== 'draw') return true;
     if (!mask.some(Boolean)) { hint.textContent = 'Draw a wound first (or press Sample wound).'; return false; }
-    curve = { t: [], v: [] }; worker.owner = 'draw'; worker.postMessage({ type: 'init', w: W, h: H, wound: mask.slice(), preset, seed: 1, rule: 'follow' }); state = 'paused'; return true;
+    curve = { t: [], v: [] }; age.reset(Uint8Array.from(mask, (m) => 1 - m)); worker.owner = 'draw'; worker.postMessage({ type: 'init', w: W, h: H, wound: mask.slice(), preset, seed: 1, rule: 'follow' }); state = 'paused'; return true;
   }
   function start() { if (!ensure()) return; state = 'running'; run.textContent = 'Pause'; worker.postMessage({ type: 'run', hoursPerFrame: HPF }); }
   function pause() { if (state === 'running') { worker.postMessage({ type: 'pause' }); state = 'paused'; } run.textContent = 'Run'; }
@@ -138,12 +142,12 @@ function drawView(worker) {
     readV.textContent = deep ? 'cells (raw agents)' : 'smoothed density';
     clear.hidden = !mask.some(Boolean);
     if (!last) { f.agents(Uint8Array.from(mask, (m) => 1 - m)); readT.textContent = '0.0 h'; readF.textContent = mask.some(Boolean) ? pct(mask.reduce((a, b) => a + b, 0) / (W * H)) : '—'; }
-    else { deep ? f.agents(last.occ) : f.smooth(last.fine, last.outline.display.lines, last.outline.display.opacity); readT.textContent = last.t_hours.toFixed(1) + ' h'; readF.textContent = pct(last.wound_frac); }
+    else { deep ? f.agents(last.occ, age) : f.smooth(last.fine, last.outline.display.lines, last.outline.display.opacity, age); readT.textContent = last.t_hours.toFixed(1) + ' h'; readF.textContent = pct(last.wound_frac); }
     chart(svg, { tMax: T_MAX, yMax: Math.max(0.05, curve.v[0] || 0.2), series: [{ t: curve.t, v: curve.v, color: 'var(--chart-observed)', width: 1.7 }] });
   }
   worker.addEventListener('message', ({ data: m }) => {
     if (m.type !== 'frame' || state === 'draw' || worker.owner !== 'draw') return;
-    last = m; curve.t.push(m.t_hours); curve.v.push(m.wound_frac);
+    last = m; age.update(m.occ); curve.t.push(m.t_hours); curve.v.push(m.wound_frac);
     if (m.t_hours >= T_MAX - 1e-9 || m.wound_frac === 0) pause();
     render();
   });
@@ -194,7 +198,7 @@ function realView(worker) {
   const readT = el('span', { class: 'num' }, '3.0 h'), readS = el('span', { class: 'num' }), readN = el('span', { class: 'num' }), readO = el('span', { class: 'num' });
   const svg = el('svg', { class: 'dr-chart', role: 'img', 'aria-label': 'Observed, simulated and NCA wound area for exp1_partII_C61_P2' });
   const status = el('p', { class: 'st-caption' }, 'Loading the wound…');
-  let sim, nca, band = null, timer = null, edgeOn = false, stallV = null;
+  let sim, nca, band = null, timer = null, edgeOn = false, stallV = null, occF = null;
   const play = btn('Play', () => (timer ? stop() : go()), 'st-btn--primary');
   const edgeBtn = btn('Edge speed', () => { edgeOn = !edgeOn; edgeBtn.setAttribute('aria-pressed', edgeOn); edgeBox.hidden = !edgeOn; render(); });
   edgeBtn.setAttribute('aria-pressed', 'false'); edgeBtn.title = 'Edge speed heatmap (H)';
@@ -213,8 +217,10 @@ function realView(worker) {
   function render() {
     if (!sim) return;
     const t = +slider.value, i = near(sim.t_hours, t), j = near(nca.t_hours, t), ob = sim.meta.observed, k = near(ob.t_hours, t);
-    const v = viewFrame(sim, i);
-    fs.zoom >= DEEP_ZOOM ? fs.agents(agentFrame(sim, i)) : fs.smooth(v.fine, v.outline.display.lines, v.outline.display.opacity);
+    const v = viewFrame(sim, i), age = new Age(W * H);
+    occF ??= sim.t_hours.map((_, k) => agentFrame(sim, k));
+    age.reset(occF[0]); for (let k = 1; k <= i; k++) age.update(occF[k], occF.length);
+    fs.zoom >= DEEP_ZOOM ? fs.agents(occF[i], age) : fs.smooth(v.fine, v.outline.display.lines, v.outline.display.opacity, age);
     fn.density(densityFrame(nca, j), nca.density.h, nca.density.w);
     if (edgeOn) {
       const back = near(sim.t_hours, t - 2), mk = (f) => { const { fine, outline } = viewFrame(sim, f), m = new Uint8Array(fine.h * fine.w);
@@ -349,7 +355,7 @@ function photoView(worker) {
   const pc = el('canvas', { width: 660, height: 480, class: 'dr-canvas', 'aria-label': 'Photo: drag a box around the wound' });
   const canvas = el('canvas', { width: 660, height: 480, class: 'dr-canvas', 'aria-label': 'Dish: the wound shape from the photo' });
   canvas.hidden = true;
-  const f = new Field(canvas), mask = new Uint8Array(W * H), pg = pc.getContext('2d');
+  const f = new Field(canvas), mask = new Uint8Array(W * H), pg = pc.getContext('2d'), age = new Age(W * H);
   let img = null, box = null, drag = null, state = 'photo', last = null, steps = 0, curve = { t: [], v: [] }, erase = false, brushing = false, preset = 'CC';
   const file = el('input', { type: 'file', accept: 'image/png,image/jpeg', 'aria-label': 'Choose a wound photo' });
   const hint = el('p', { class: 'st-caption' }, 'Choose a photo, then drag a box around the wound. The photo stays in this browser tab.');
@@ -384,18 +390,18 @@ function photoView(worker) {
     state = 'edit'; pc.hidden = true; canvas.hidden = false; last = null; render(); sync();
     hint.textContent = 'Fix the outline with the brush (Erase toggles), then press Run.';
   }
-  function ensure() { if (state !== 'edit') return; worker.owner = 'photo'; steps = 0; curve = { t: [], v: [] };
+  function ensure() { if (state !== 'edit') return; worker.owner = 'photo'; steps = 0; curve = { t: [], v: [] }; age.reset(Uint8Array.from(mask, (m) => 1 - m));
     worker.postMessage({ type: 'init', w: W, h: H, wound: mask.slice(), preset, seed: 1, rule: 'follow' }); state = 'paused'; }
   function start() { ensure(); state = 'running'; run.textContent = 'Pause'; worker.postMessage({ type: 'run', hoursPerFrame: HPF }); }
   function pause() { if (state === 'running') { worker.postMessage({ type: 'pause' }); state = 'paused'; } run.textContent = 'Run'; }
   function render() {
     if (!last) { f.agents(Uint8Array.from(mask, (m) => 1 - m)); readS.textContent = '0'; readF.textContent = '100% (start)'; }
-    else { f.smooth(last.fine, last.outline.display.lines, last.outline.display.opacity); readS.textContent = String(steps); readF.textContent = pct(curve.v[curve.v.length - 1] / curve.v[0]); }
+    else { f.smooth(last.fine, last.outline.display.lines, last.outline.display.opacity, age); readS.textContent = String(steps); readF.textContent = pct(curve.v[curve.v.length - 1] / curve.v[0]); }
     chart(svg, { tMax: Math.max(10, steps), yMax: 1, series: [{ t: curve.t, v: curve.v.map((v) => v / (curve.v[0] || 1)), color: 'var(--chart-observed)', width: 1.7 }], xLabel: (t) => `${t}` });
   }
   worker.addEventListener('message', ({ data: m }) => {
     if (m.type !== 'frame' || worker.owner !== 'photo' || state === 'edit' || state === 'photo') return;
-    last = m; curve.t.push(steps); curve.v.push(m.wound_frac); steps++;
+    last = m; age.update(m.occ); curve.t.push(steps); curve.v.push(m.wound_frac); steps++;
     if (m.wound_frac === 0 || m.t_hours >= T_MAX - 1e-9) pause();
     render();
   });
