@@ -54,6 +54,25 @@ export function isStalled(means, { window = 12, eps = 1e-4 } = {}) {
   return means.length > window && Math.abs(means[means.length - 1] - means[means.length - 1 - window]) < eps;
 }
 
+// deterministic rollout (no noise) from rho0 until healed (isHealed), stalled (isStalled on the hourly mean density) or
+// maxH simulated hours, one frame per substep (1/K h): { frames: [Float32Array(h*w)], t: [h since start], stopped }.
+// Same loop as make_nca_playback.mjs's fixed-length rollout; used for the Assay 3D playbacks (nca_follow_<wound>.json).
+export function rolloutUntilHealed(net, rho0, R, h, w, Tm, bias, { maxH = 200, minRho = 0.95, stallH = 12 } = {}) {
+  const par = net.normParams(Tm, bias), hw = h * w;
+  let rho = new Float32Array(hw), hid = new Float32Array(net.nh * hw);
+  for (let i = 0; i < hw; i++) rho[i] = Math.max(rho0[i], R[i]);
+  const frames = [Float32Array.from(rho)], t = [0], means = [meanRho(rho)];
+  let stopped = 'cap';
+  for (let s = 1; s <= maxH * net.K; s++) {
+    [rho, hid] = net.step(rho, R, hid, par, h, w, null);
+    frames.push(Float32Array.from(rho)); t.push(s / net.K);
+    if (s % net.K === 0) means.push(meanRho(rho));
+    if (isHealed(rho, { minRho })) { stopped = 'healed'; break; }
+    if (isStalled(means, { window: stallH })) { stopped = 'stalled'; break; }
+  }
+  return { frames, t, stopped };
+}
+
 const sigmoid = (x) => 1 / (1 + Math.exp(-x));
 
 export class NCA {
