@@ -204,8 +204,8 @@ docs/       design doc, decisions, results, Q&A prep, Adaption results, video pl
 ## Team
 
 - Rand: data, segmentation, baselines, calibration and evaluation.
-- Caden: cell-agent simulator, NCA and the Adaption fine-tunes.
-- Joanne: web app, Figma design, agent layer and video.
+- Caden: cell-agent simulator, NCA, the Adaption fine-tunes and video.
+- Joanne: web app, Figma design and agent layer.
 
 Claude (Anthropic) was used as a coding assistant, and Claude Opus 5.5 is the agent's model in the product.
 
