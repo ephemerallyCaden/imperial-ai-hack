@@ -12,6 +12,7 @@ call_model() returns a plain dict so callers never touch provider types:
    "usage": {"input_tokens": int, "output_tokens": int}}
 """
 import json
+import re
 import os
 import subprocess
 import tempfile
@@ -85,7 +86,7 @@ def _call_claude_cli(messages, system, tools):
     d = json.loads(r.stdout)
     u = d.get("usage") or {}
     inp = sum(u.get(k, 0) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
-    model = ",".join(d.get("modelUsage", {}).keys()) or "claude_cli"
+    model = ",".join(re.sub(r"^(global|us|eu)\.|^anthropic\.", "", m) for m in d.get("modelUsage", {})) or "claude_cli"
     out = {"text": "" if tools else d.get("result", ""), "tool_calls": [], "model": model,
            "stop_reason": "error" if d.get("is_error") else "end_turn",
            "usage": {"input_tokens": inp, "output_tokens": u.get("output_tokens", 0) or 0},

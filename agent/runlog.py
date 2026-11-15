@@ -5,9 +5,33 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import time
 
-from agent.config import RUNS_DIR
+from agent.config import REPO, RUNS_DIR
+
+
+_TMP = os.path.realpath(tempfile.gettempdir())
+_HOME = os.path.expanduser("~")
+
+
+def scrub(obj):
+    """Never write a local path: repo paths become repo-relative, temp paths <tmp>/name, anything else under the
+    home folder ~/name. Applied to every record before it is written."""
+    if isinstance(obj, str):
+        if REPO and obj.startswith(REPO + os.sep):
+            return os.path.relpath(obj, REPO)
+        for root, tag in ((_TMP, "<tmp>"), ("/tmp", "<tmp>")):
+            if obj.startswith(root + os.sep):
+                return tag + "/" + os.path.basename(obj)
+        if _HOME and _HOME in obj:
+            return obj.replace(_HOME, "~")
+        return obj
+    if isinstance(obj, dict):
+        return {k: scrub(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [scrub(v) for v in obj]
+    return obj
 
 
 def fingerprint(obj):
@@ -33,7 +57,7 @@ class RunLog:
 
     def log(self, kind, **fields):
         """kind: run_start | tool_call | model_call | model_skipped | decision | critic | approval | human_review | warning | run_end."""
-        rec = {"run_id": self.run_id, "seq": self.seq, "ts": round(time.time(), 3), "kind": kind, **fields}
+        rec = scrub({"run_id": self.run_id, "seq": self.seq, "ts": round(time.time(), 3), "kind": kind, **fields})
         with open(self.path, "a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
         self.records.append(rec); self.seq += 1

@@ -72,3 +72,12 @@ def test_claude_cli_provider_parses_structured_output(monkeypatch):
     tool = {"name": "propose_decision", "input_schema": {"type": "object"}}
     out = llm.call_model([{"role": "user", "content": "x"}], system="s", tools=[tool])
     assert out["tool_calls"][0]["input"]["decision_id"] == "continue" and out["usage"]["input_tokens"] == 102
+
+
+def test_runlog_never_writes_local_paths(tmp_path):
+    import os
+    rl = runlog.RunLog("p1", runs_dir=str(tmp_path))
+    home = os.path.expanduser("~")
+    rl.log("tool_call", output={"frames": [os.path.join(config.REPO, "web", "x.png"), "/tmp/abc/y.npz", home + "/z"]})
+    text = open(rl.path).read()
+    assert home not in text and "/tmp/" not in text and "web/x.png" in text

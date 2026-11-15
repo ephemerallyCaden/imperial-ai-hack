@@ -54,7 +54,7 @@ KEY_KINDS = [
 ]
 TEXT_KINDS = {"h": {"time"}, "%": {"frac"}, "p": {"frac"}, "cost": {"cost"}}
 EVIDENCE_KEYS = re.compile(r"^(evidence|call|reason|definition|label)$")
-_TEXT_NUM = re.compile(r"(\d+(?:\.\d+)?)\s*(%|h\b)")
+_TEXT_NUM = re.compile(r"(\d+(?:\.\d+)?)\s*(%|h\b)?")
 
 
 def _kind(path):
@@ -88,6 +88,8 @@ def _leaves(obj, path=()):
                 yield v / 100.0, "frac"
             elif unit == "h":
                 yield v, "time"
+            elif "." in m.group(1):   # bare decimals in evidence text (e.g. band width 0.59 of the starting area)
+                yield v, "frac"
 
 
 def _precision(raw):
