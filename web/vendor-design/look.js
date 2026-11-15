@@ -95,9 +95,9 @@ export function coolShift(c, dark, deg = FINAL.hshift) {   // dark: 0 (as bright
   return c.setHSL((hslT.h + Math.sign(d) * Math.min(Math.abs(d), deg / 360 * Math.min(1, dark)) + 1) % 1, hslT.s, hslT.l);
 }
 
-// ---------- age colouring: cell age = steps since the cell filled in; original tissue counts as oldest ----------
-// ramps (t: 0 = just filled in, 1 = mature). Original tissue is not healed, so it keeps the plain intact colour except in
-// 'pale' (the final look), where it is the oldest and darkest.
+// ---------- age colouring: cell age = steps since the cell filled in; original tissue keeps the plain intact colour ----------
+// ramps (t: 0 = just filled in, 1 = mature). Original tissue is not healed, so it keeps the plain intact colour
+// (all ramps, including 'pale'; decided 15 Nov so untouched skin reads bright like the healed salmon).
 //   pale  new-tissue colour -> intact -> darker intact (light -> dark)
 //   scar  dusky red -> pink -> skin tinted toward the new-tissue colour, like a real scar maturing (ends paler than skin)
 //   ember leading-edge colour cooling to intact (hot -> calm)
@@ -117,7 +117,7 @@ export const RAMPS = {
 // span = age (steps) at which healed tissue is mature, max(60, 0.6 x frames); original tissue: pass age = Infinity
 export function makeAgeRamp(PAL, span, name = 'pale') {
   const r = { PAL, span, name, STOPS: null, ORIG: null };
-  r.rebuild = () => { r.STOPS = (RAMPS[name] || RAMPS.pale)(PAL); r.ORIG = name === 'pale' || !RAMPS[name] ? r.STOPS[2] : C(PAL.intact); return r; };
+  r.rebuild = () => { r.STOPS = (RAMPS[name] || RAMPS.pale)(PAL); r.ORIG = C(PAL.intact); return r; };   // original (untouched) tissue: plain intact colour; only healed tissue runs the ramp (15 Nov)
   r.ageT = age => Math.min(1, Math.max(0, age / (r.span + 25)));
   r.ageSkin = (c, age) => {
     if (age > Math.max(900, r.span + 25)) return c.copy(r.ORIG);
