@@ -116,3 +116,16 @@ def test_unicode_minus_and_bare_thresholds():
     assert trace("19 h, 0.1", [])["untraced"] == 1
     assert trace("the stop threshold is 0.1", [])["untraced"] == 0
     assert trace("probability 0.9", [])["untraced"] == 0
+
+
+def test_numbers_in_code_evidence_text_are_traced():
+    from agent import critic
+    out = critic.trace("Early calls were right 89% of the time.",
+                       [{"schedule": {"evidence": "on held-out WHAD wounds such early calls were right 89% of the time"}}])
+    assert out["untraced"] == 0 and "89%" in out["text"]
+
+
+def test_numbers_in_other_strings_still_not_evidence():
+    from agent import critic
+    out = critic.trace("It is 97% likely.", [{"note": "97% likely to close"}])
+    assert out["untraced"] == 1

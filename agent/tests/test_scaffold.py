@@ -60,3 +60,15 @@ def test_no_secrets_in_agent_code():
             if f.endswith(".py") and f != "test_scaffold.py":
                 t = open(os.path.join(dp, f)).read().lower()
                 assert "arn:aws" not in t and "sk-ant-" not in t and "isengard" not in t
+
+
+def test_claude_cli_provider_parses_structured_output(monkeypatch):
+    import subprocess, json as _j
+    monkeypatch.setenv("STITCH_PROVIDER", "claude_cli")
+    fake = {"structured_output": {"decision_id": "continue", "explanation": "ok"}, "result": "{}", "is_error": False,
+            "usage": {"input_tokens": 2, "cache_creation_input_tokens": 100, "output_tokens": 50},
+            "modelUsage": {"m": {}}, "total_cost_usd": 0.01}
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, _j.dumps(fake), ""))
+    tool = {"name": "propose_decision", "input_schema": {"type": "object"}}
+    out = llm.call_model([{"role": "user", "content": "x"}], system="s", tools=[tool])
+    assert out["tool_calls"][0]["input"]["decision_id"] == "continue" and out["usage"]["input_tokens"] == 102

@@ -229,7 +229,7 @@ class _Run:
         u = resp.get("usage") or {}
         self.tok_in += int(u.get("input_tokens") or 0)
         self.tok_out += int(u.get("output_tokens") or 0)
-        self.log.log("model_call", model=resp.get("model"), stop_reason=resp.get("stop_reason"), usage=u,
+        self.log.log("model_call", model=resp.get("model"), stop_reason=resp.get("stop_reason"), usage=u, cost_usd=resp.get("cost_usd"),
                      tokens_total=self._tokens(), text=resp.get("text", ""), tool_calls=resp.get("tool_calls", []),
                      **rec)
         if self._tokens() >= self.token_budget:   # finish this check (Critic + decision), then stop the run

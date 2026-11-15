@@ -53,6 +53,8 @@ KEY_KINDS = [
     ("frac", re.compile(r"^area|^p$|^p_|closure|prob|^band|_band$|^level$|frac|threshold|^members$|coverage")),
 ]
 TEXT_KINDS = {"h": {"time"}, "%": {"frac"}, "p": {"frac"}, "cost": {"cost"}}
+EVIDENCE_KEYS = re.compile(r"^(evidence|call|reason|definition|label)$")
+_TEXT_NUM = re.compile(r"(\d+(?:\.\d+)?)\s*(%|h\b)")
 
 
 def _kind(path):
@@ -78,6 +80,14 @@ def _leaves(obj, path=()):
     elif isinstance(obj, (list, tuple)):
         for v in obj:
             yield from _leaves(v, path)
+    elif isinstance(obj, str) and path and EVIDENCE_KEYS.search(path[-1].lower()):
+        # code-written evidence text (e.g. schedule_advice: "right 89% of the time") counts, with its unit
+        for m in _TEXT_NUM.finditer(obj):
+            v, unit = float(m.group(1)), m.group(2)
+            if unit == "%":
+                yield v / 100.0, "frac"
+            elif unit == "h":
+                yield v, "time"
 
 
 def _precision(raw):
