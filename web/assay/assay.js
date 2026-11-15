@@ -9,7 +9,8 @@ import { createTimeline } from "./timeline.js";
 import { greyFromFile } from "../upload/segment.js";
 import { runUpload, BROWSER_LABEL } from "../upload/forecast.js";
 import { createLive, livePanel, liveReadouts, LIVE_LABEL } from "./live.js";
-import { photoDialog } from "./photo.js";
+import { photoDialog, COLOUR_MIN, SKIN_MIN } from "./photo.js";
+import { kindOfFile, routeUpload, KIND_LABEL } from "../upload/route.js";
 import { mountHeldout } from "./heldout.js";
 
 const PLAYBACK = "web/public/sim/whad_partII_C61_P2_follow.json";   // P2 cell-agent playback (follow rule), docs/p2-handoff.md
@@ -35,9 +36,8 @@ export async function mount(el, ctx) {
     <div class="as-top">
       <label class="st-kicker" for="as-wound">Wound</label>
       <select id="as-wound" class="as-select"></select>
-      <button class="st-btn st-btn--primary" data-act="upload"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
+      <button class="st-btn st-btn--primary" data-act="upload" title="1-5 phase-contrast frames (forecast) or one skin-wound photo (live NCA, no forecast)"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
       <input type="file" accept="image/*" multiple hidden id="as-file">
-      <input type="file" accept="image/png,image/jpeg" hidden id="as-photo">
       <span class="as-qc" hidden></span>
       <span class="as-honesty" hidden></span>
     </div>
@@ -159,6 +159,7 @@ export async function mount(el, ctx) {
   function renderLivePanel() { panel.innerHTML = livePanel(live.state); liveReadouts(panel, live.state); }
   function liveState(st) {
     if (special !== VIEWS.draw) return;
+    if (pendingPhoto && st.ready) { live.carveMask(pendingPhoto); pendingPhoto = null; renderLivePanel(); }
     $(".as-readout").textContent = `${st.fromPhoto ? "shape from photo" : `simulated t = ${st.t.toFixed(1)} h`} · live NCA · ${st.status === "running" ? "healing" : st.status}`;
     if (panel.querySelector(".as-live")) liveReadouts(panel, st); else renderLivePanel();
     const now = performance.now(); if (now - thumbAt > 1000) { thumbAt = now; drawThumbs(); }
@@ -177,15 +178,10 @@ export async function mount(el, ctx) {
   panel.addEventListener("click", e => {
     const b = e.target.closest("[data-live]"); if (!b || !live) return;
     const [k, v] = b.dataset.live.split(":");
-    if (k === "photo") return $("#as-photo").click();
     if (k === "brush") return useTool("brush");
     if (k === "play") return live.toggle();
     ({ reset: () => live.reset(), preset: () => live.setPreset(v), size: () => live.setBrushSize(v), speed: () => live.setSpeed(+v) })[k]?.();
     renderLivePanel();
-  });
-  $("#as-photo").addEventListener("change", e => {
-    const f = e.target.files[0]; e.target.value = ""; if (!f || !live) return;
-    photoDialog($(".as-notice"), f, mask => { live.carveMask(mask); renderLivePanel(); });
   });
 
   async function select(id) {
@@ -297,10 +293,42 @@ export async function mount(el, ctx) {
   });
   el.addEventListener("input", e => { if (e.target.classList.contains("as-zoomr")) tissue?.setZoom(+e.target.value); });
   // ---------- in-browser upload (#39): same QC + segmentation + edge-speed forecast as data/upload.py, nothing sent ----------
-  let nUploads = 0;
-  $("#as-file").addEventListener("change", e => {
+  // One button for both kinds (web/upload/route.js): every file is typed by photo.js photoKind, then microscopy frames go
+  // to uploadFrames, one skin-wound photo to uploadPhoto; an unsure single image gets one inline choice; the rest is refused.
+  let nUploads = 0, pendingPhoto = null;
+  const pct = x => `${Math.round(100 * x)}%`;
+  $("#as-file").addEventListener("change", async e => {
     const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); e.target.value = "";
     if (!files.length) return;
+    let kinds;
+    try { kinds = await Promise.all(files.map(kindOfFile)); } catch (err) {
+      console.error(err);
+      return notice(`<div class="st-kicker">Could not read images · PNG / JPEG</div><p>${esc(err.message)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+    }
+    const r = routeUpload(kinds.map(k => k.kind));
+    if (r.route === "microscopy") return uploadFrames(files);
+    if (r.route === "photo") return uploadPhoto(files[0]);
+    // what each file was read as; hover: the two tests (a wound photo needs both colour and skin tone)
+    const read = `<ol class="as-list">${files.slice(0, 6).map((f, i) => `<li title="colour ${pct(kinds[i].colour)} (photo ≥ ${pct(COLOUR_MIN)}) · skin tone ${pct(kinds[i].skin)} (photo ≥ ${pct(SKIN_MIN)})">${esc(f.name)} <span class="as-dim">· ${KIND_LABEL[kinds[i].kind]}</span></li>`).join("")}${files.length > 6 ? `<li class="as-dim">+ ${files.length - 6} more</li>` : ""}</ol>`;
+    if (r.route === "ask") {
+      notice(`<div class="st-kicker">Upload · 1 image · in browser</div><p>Microscopy frames or a wound photo?</p>${read}
+        <div class="as-btns"><button class="st-btn" data-route="frames">Microscopy frames</button><button class="st-btn" data-route="photo">Wound photo</button><button class="st-btn" data-notice="close">Cancel</button></div>`);
+      $('.as-notice [data-route="frames"]').addEventListener("click", () => uploadFrames(files));
+      $('.as-notice [data-route="photo"]').addEventListener("click", () => uploadPhoto(files[0]));
+      return;
+    }
+    notice(`<div class="st-kicker">Not used · 1-5 frames or one wound photo</div><p>${esc(r.reason)}</p>${read}<div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
+  });
+  // wound photo: live drawing on the same 3D view, box the wound (photo.js), its outline is carved and the NCA heals it
+  async function uploadPhoto(file) {
+    if (special !== VIEWS.draw) await select("draw_live");
+    if (!live) return;   // no 3D field: the draw view's panel says why
+    photoDialog($(".as-notice"), file, mask => {
+      if (!live.state.ready) { pendingPhoto = mask; return; }   // NCA still loading: liveState carves it on the first state
+      live.carveMask(mask); renderLivePanel();
+    }, "skin");
+  }
+  function uploadFrames(files) {
     const used = files.slice(0, 5);
     notice(`<div class="st-kicker">Upload · ${used.length} image${used.length === 1 ? "" : "s"} · in browser</div>
       <ol class="as-list">${used.map(f => `<li>${esc(f.name)}</li>`).join("")}</ol>
@@ -334,7 +362,7 @@ export async function mount(el, ctx) {
         notice(`<div class="st-kicker">Could not read images · PNG / JPEG</div><p>${esc(err.message)}</p><div class="as-btns"><button class="st-btn" data-notice="close">Close</button></div>`);
       }
     });
-  });
+  }
   // wound mask (1 = wound) -> PNG data URL, white = wound, like data/upload.py's NAME_frameK_mask.png
   function maskURL({ mask, mh, mw }) {
     const cv = Object.assign(document.createElement("canvas"), { width: mw, height: mh }), g = cv.getContext("2d"), im = g.createImageData(mw, mh);

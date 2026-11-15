@@ -79,12 +79,12 @@ export function livePanel(S) {
     <div class="st-kicker">Draw a wound · live</div>
     <div class="as-chips"><span class="st-chip st-chip--honesty">${LIVE_LABEL}</span>${S.fromPhoto ? `<span class="st-chip st-chip--honesty">${PHOTO_LABEL}</span>` : ""}</div>
     <p class="as-caption">Drag on the tissue to remove cells. Right-drag orbits, the wheel zooms. The NCA keeps running and fills the gap;
-      it idles once every cell is back to ${HEAL_PCT}% density, and any new cut restarts it.</p>
+      it idles once every cell is back to ${HEAL_PCT}% density, and any new cut restarts it. Upload images also takes one
+      skin-wound photo: its traced outline becomes the cut.</p>
     <div class="as-btns">
       <button class="st-btn st-btn--primary" data-live="play">${playing ? "Pause" : "Play"}</button>
       <button class="st-btn" data-live="reset">Reset to intact tissue</button>
       <button class="st-btn" data-live="brush" aria-pressed="${S.brushOn}" title="Brush · B">Brush ${S.brushOn ? "on" : "off"}</button>
-      <button class="st-btn" data-live="photo" title="Carve a wound outline traced from a photo">From photo…</button>
     </div>
     <div class="st-row"><span>Condition preset</span>${seg("preset", ["CC", "C61"], S.preset)}</div>
     <p class="as-caption">Follow-rule presets fed to the NCA as (Tm, bias): CC Tm ${p.CC.Tm.toFixed(1)} h, bias ${p.CC.bias.toFixed(2)};

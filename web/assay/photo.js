@@ -38,9 +38,12 @@ export function segmentBox(img, x0, y0, x1, y1) {
   for (let i = 0; i < w * h; i++) if (!seen[i]) out[i] = 1;
   return { mask: out, w, h };
 }
-// Photo-type check before segmenting (thresholds from the look-dev prototype, design/prototypes/glass-dish/photo.js):
-// greyscale microscopy, not skin, or no clear wound -> say so instead of tracing something meaningless.
-export function photoCheck(img, seg) {
+// Photo type from two colour tests (thresholds from the look-dev prototype, design/prototypes/glass-dish/photo.js), over
+// the non-black pixels: colour = share with max - min > 25, skin = share in the YCbCr skin box. Grey pixels are never in
+// the box. kind: "microscopy" (neither), "skin" (both), "other" (colour, little skin), "ambiguous" (skin-toned but
+// almost no colour: a tinted grey frame or a washed-out photo). Assay's upload routes on it (web/upload/route.js).
+export const COLOUR_MIN = 0.05, SKIN_MIN = 0.2;
+export function photoKind(img) {
   const d = img.data; let n = 0, colourful = 0, skin = 0;
   for (let i = 0; i < d.length; i += 16) {   // every 4th pixel
     const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
@@ -49,8 +52,14 @@ export function photoCheck(img, seg) {
     const cb = 128 - 0.169 * r - 0.331 * g + 0.5 * b, cr = 128 + 0.5 * r - 0.419 * g - 0.081 * b;   // YCbCr skin box
     if (cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173) skin++;
   }
-  if (!n || colourful / n < 0.05) return "This looks like greyscale microscopy: use Upload images for cell-culture frames.";
-  if (skin / n < 0.2) return "This does not look like a skin photo.";
+  const colour = n ? colourful / n : 0, sk = n ? skin / n : 0, c = colour >= COLOUR_MIN, s = sk >= SKIN_MIN;
+  return { kind: c ? (s ? "skin" : "other") : (s ? "ambiguous" : "microscopy"), colour, skin: sk };
+}
+// Photo-type check before segmenting: greyscale microscopy, not skin, or no clear wound -> say so instead of tracing
+// something meaningless. `kind` = the type the caller already settled (Assay's upload router); else from photoKind.
+export function photoCheck(img, seg, kind = photoKind(img).kind) {
+  if (kind === "microscopy" || kind === "ambiguous") return "This looks like greyscale microscopy: use Upload images for cell-culture frames.";
+  if (kind === "other") return "This does not look like a skin photo.";
   let a = 0; for (const v of seg.mask) a += v;
   const frac = a / ((img.width * img.height) || 1);
   if (frac < 0.002 || frac > 0.6) return "Skin, but no clear wound in that box: try a tighter box around the wound.";
@@ -70,8 +79,8 @@ export function fitToLattice(seg, fill = 0.6) {
 }
 
 // Box-the-wound dialog inside `host` (Assay's notice panel): file -> photo canvas -> drag a box -> Trace.
-// onMask(Uint8Array(W*H)) gets the fitted outline; the caller carves it into the live tissue.
-export function photoDialog(host, file, onMask) {
+// onMask(Uint8Array(W*H)) gets the fitted outline; the caller carves it into the live tissue. `kind` goes to photoCheck.
+export function photoDialog(host, file, onMask, kind) {
   host.innerHTML = `<div class="st-kicker">Draw from photo · the photo stays in this browser tab</div>
     <canvas class="as-photo" width="420" height="300" aria-label="Photo: drag a box around the wound"></canvas>
     <p class="as-caption as-photo-hint">Drag a box around the wound, then press Trace outline.</p>
@@ -95,7 +104,7 @@ export function photoDialog(host, file, onMask) {
     const a = e.target.closest("[data-photo]")?.dataset.photo; if (!a) return;
     if (a === "close") { host.hidden = true; host.removeEventListener("click", on); return; }
     if (!box || box[2] - box[0] < 12 || box[3] - box[1] < 12) { hint.textContent = "Draw a bigger box around the wound."; return; }
-    const seg = segmentBox(img, ...box), why = photoCheck(img, seg);
+    const seg = segmentBox(img, ...box), why = photoCheck(img, seg, kind);
     if (why) { hint.textContent = why; return; }
     const mask = fitToLattice(seg);
     if (!mask.some(Boolean)) { hint.textContent = "No outline found in that box: try a tighter box."; return; }

@@ -5,6 +5,7 @@
 // the same pixels as the Python pipeline (web/upload/parity.mjs checks this).
 //   checkFrame(grey, h, w, scale) -> { mask: Uint8Array | null, mh, mw, focus, reasons: [string] }   (same texts as upload.py)
 //   greyFromFile(file) -> { grey, h, w }   (browser only: decodes with createImageBitmap, no colour conversion)
+//   rgbaFromFile(file) -> { data, h, w }   (the same decode, RGBA bytes; Assay's upload router classifies on these)
 
 export const DOWN = 4;            // work at 1/4 resolution (0.454 um/px -> 1.8 um/px)
 export const WIN = 9;             // texture window in downsampled pixels (~16 um, about one cell)
@@ -21,13 +22,17 @@ export function greyFromRGBA(data, w, h) {
   return g;
 }
 
-export async function greyFromFile(file) {
+export async function rgbaFromFile(file) {
   const bmp = await createImageBitmap(file, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
   const w = bmp.width, h = bmp.height;
   const cv = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h) : Object.assign(document.createElement("canvas"), { width: w, height: h });
   const g = cv.getContext("2d", { willReadFrequently: true });
   g.drawImage(bmp, 0, 0); bmp.close?.();
-  return { grey: greyFromRGBA(g.getImageData(0, 0, w, h).data, w, h), h, w };
+  return { data: g.getImageData(0, 0, w, h).data, h, w };
+}
+export async function greyFromFile(file) {
+  const { data, h, w } = await rgbaFromFile(file);
+  return { grey: greyFromRGBA(data, w, h), h, w };
 }
 
 const pyRound = x => { const r = Math.round(x); return (r - x === 0.5 && r % 2) ? r - 1 : r; };   // Python round(): half to even
