@@ -486,3 +486,20 @@ def test_loo_doc_cached_and_not_mutated_by_one():
     one["model"] = "changed"
     assert run._one(run._loo_doc(c), NORMAL)["forecasts"][0]["area_q50"] is not None
     assert run._loo_doc(c)["model"] == "edge_speed"
+
+
+def test_uncalibrated_condition_band_is_not_called_90():
+    from agent import run
+    doc = {"model": "nca_realft3", "level": 0.9,
+           "forecasts": [{"flags": [{"type": "uncalibrated_condition", "reason": "condition X"}]}]}
+    assert run.calibrated_band(doc) is False
+    doc["forecasts"][0]["flags"] = []
+    assert run.calibrated_band(doc) is True
+
+
+def test_refusal_sample_files_handled():
+    import json, os
+    from agent import run, config
+    for name in ("bad_blank.json", "bad_blurred.json"):
+        doc = json.load(open(os.path.join(config.REPO, "web", "data", "samples", name)))
+        assert doc.get("refused") and run.calibrated_band(doc) is False

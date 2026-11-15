@@ -460,6 +460,9 @@ def calibrated_band(doc):
         return False
     if doc.get("model") in SIM_MODELS or doc.get("calibrated") is False:
         return False
+    flags = [fl for f in doc.get("forecasts", []) if isinstance(f, dict) for fl in f.get("flags", []) or []]
+    if any(isinstance(fl, dict) and fl.get("type") == "uncalibrated_condition" for fl in flags):
+        return False   # condition outside the calibration set: band widened, not a calibrated 90% band (#108)
     lvl = doc.get("level")
     return isinstance(lvl, (int, float)) and not isinstance(lvl, bool) and abs(float(lvl) - config.BAND_LEVEL) < 1e-9
 
