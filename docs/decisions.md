@@ -73,3 +73,11 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED palette (state colours): wound 0B1116, intact 1F4F5C deep teal, leading edge EE7F2D orange, new tissue F9D6FB near-white orchid, dividing FFFFFF with a dark centre dot (the dot, not colour, separates it from new tissue; height stays = density). Checked under protan/deutan/tritan simulation (Machado 2009; closest pair ΔE ~26) and in greyscale (lightness 5/31/65/89/100, so states read without colour).
 - DECIDED selection look: cells outside a box selection drop to dark matte greyscale, but each state keeps its own grey step so the rest of the wound still reads as context. Alternatives (rims, dim, flat, dots, lift) kept behind `?ghost=` and compared in `design/prototypes/glass-dish/ghost-variations.html`.
 - DECIDED wordmark: M6 night plate style (condensed caps "STITCH" + italic serif subtitle).
+
+### UI wireframe review (2026-11-15, P3; Figma Stitch-UI, page "Wireframes")
+- DECIDED: keep box select, selection stats and the dark greyscale look outside a selection, even though design.md does not mention them (team choice during look-dev). Selection stats describe the simulated field only, and the "simulated cells, not tracked cells" label stays visible.
+- DECIDED: cut the Plate tab from Assay. There is no plate data, and the held-out wounds come from different experiments with a batch effect, so calling them a plate would mislead. Right panel tabs: Forecast · Images · Why.
+- DECIDED: Ops has two tabs, Agent runs (R22 minimum, built first) and Forecast evidence (scorecard, by-cut-off, reliability, band narrowing, stall flag, failure case). Monitoring tiles cut.
+- DECIDED: spatial outlines on the 3D dish (spread, outline at 19 h) come from the simulator and are labelled "uncalibrated". Only the data/upload.py curve band is called 90%.
+- DECIDED: Clear shows only after a box selection (Assay) or a drawn wound (Draw). Back, Play, Step and Help are icon-only with tooltips.
+- OPEN (ask P1): number of unseen WHAD wounds. results.md says 28 and the video script says 27. Use one number everywhere; the wireframe shows "n TBC" until this is answered.
