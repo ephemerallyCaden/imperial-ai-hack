@@ -68,3 +68,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 ## 2026-11-14 23:45 [randodeh] NCA fine-tuned on real frames (R26 in design.md)
 - RESULT: real-data NCA passes the gate (9/12; 3.8 h within 4% of edge speed; best at 9.5 h). Zaritsky extra data hurt; not used.
 - OPEN for P2/P3: use the real-data NCA in the upload/agent path, or keep edge speed (marginally better early, no torch).
+
+## 2026-11-15 [ephemerallyCaden] Video demo (docs/video-demo.md)
+- DECIDED: open in a hospital with the original hook line; audience = doctors and assay scientists. Script assumes the finished product: NCA is the forecaster after the data fine-tune; triage = stalling, discolouration, abnormally fast growth. Light touch on limits; use cases kept, movement-vs-multiplication mentioned once (cancer).
