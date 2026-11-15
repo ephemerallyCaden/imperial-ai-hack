@@ -12,22 +12,30 @@ Interface for P1's upload pipeline (#15; masks from data/segment.py):
 Rules:
   - Refused -> no forecast: seg_quality.status == "refused", missing scale, or any mask covering <1% or >70% of the field.
   - 1 frame -> members drawn from the fitted (Tm, bias) of WHAD wounds of that condition at t0 = 10 (an empirical prior, so a
-    wider band), never including exclude_wound; flagged "measure_again" as preset-based.
-  - 2+ frames -> fit Tm and bias on the observed areas (grid as sim/calibrate.py, frames interval_h apart) + 50 bootstrap members.
+    wider band), never including exclude_wound; noted in `band` and the notes (no flag: design R16, no measure-again flag
+    until a signal passes).
+  - 2+ frames -> fit Tm and bias on the observed areas (follower grid as sim/v2.py, frames interval_h apart) + 50 bootstrap members.
+  - Rule: Params(rule="follow") (P2 v2, adopted for physical realism); prior and fits from sim/fits/whad_fits_follow.json.
   - Forecast grid hourly from the last frame to 19 h (the WHAD horizon the models were validated on).
   - Field size: fitted Tm depends on the field of view (vacancies leave through the border reservoir), so every upload is
     mapped onto the WHAD field extent (32 x 44 sites = 640 x 880 um): a window centred on the first frame's wound, padded with
     cells if the image is smaller. Uploads whose field differs from WHAD by more than 5% are flagged.
-  - NCA band: Agent 2's nca/api.py nca_forecast (start = lattice of the LAST frame), from $NCA_DIR (default <repo>/nca).
+  - NCA band: Agent 2's nca/api.py nca_forecast (start = lattice of the LAST frame), from $NCA_DIR (default <repo>/nca), with the
+    follower-trained weights $NCA_WEIGHTS (default $NCA_DIR/v2/weights.pt + weights.config.json, Agent 2); skipped if absent
+    (never the free-rule weights).
 """
 import sys, os, json, zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
-import calibrate, forecast as F
+import forecast as F, v2
 from cellsim import Params, simulate, SITE_UM
 from start_state import mask_to_lattice, area_error
 
 NCA_DIR = os.environ.get("NCA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nca"))
+NCA_WEIGHTS = os.environ.get("NCA_WEIGHTS", os.path.join(NCA_DIR, "v2", "weights.pt"))  # needs v2/weights.config.json beside it
+USE_REAL_FOLDS = os.environ.get("NCA_REAL_FOLDS") == "1"  # opt-in only: the real-WHAD fine-tune degraded the held-out fold diagnostic (4/4 folds)
+RULE = "follow"
+FITS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fits", "whad_fits_follow.json")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "forecasts", "upload")
@@ -65,17 +73,16 @@ def to_whad_field(masks, um_per_px):
         py, px = (h - crop.shape[0]) // 2, (w - crop.shape[1]) // 2
         c[py:py + crop.shape[0], px:px + crop.shape[1]] = crop
         out.append(c)
-    flag = dict(type="measure_again", reason=f"The image field ({H * um_per_px:.0f} x {W * um_per_px:.0f} um) differs from "
-                f"the {FIELD_UM[0]:.0f} x {FIELD_UM[1]:.0f} um field the parameters were fitted on; the forecast uses a "
-                "window of that size around the wound.")
-    return out, flag
+    note = (f"image field {H * um_per_px:.0f} x {W * um_per_px:.0f} um differs from the {FIELD_UM[0]:.0f} x {FIELD_UM[1]:.0f} um "
+            "WHAD field the parameters were fitted on; forecast uses a window of that size around the wound")
+    return out, note
 
 
 def prior_members(condition, exclude_wound, rng):
     """(Tm, bias) of WHAD training wounds' fits at t0 = 10, same condition if known, sampled with replacement."""
     df = F.load_curves()
     meta = df.drop_duplicates("position").set_index("position")[["wound", "condition"]].to_dict("index")
-    fits = {**json.load(open(calibrate.OUT))["fits"], **json.load(open(F.AUTO_FITS))["fits"]}
+    fits = json.load(open(FITS))["fits"]  # follower fits, manual + auto
     pool = [[fits[p][PRIOR_T0]["Tm"], fits[p][PRIOR_T0]["bias"]] for p in fits
             if fits[p].get(PRIOR_T0) and meta[p]["wound"] != exclude_wound
             and (condition is None or meta[p]["condition"] == condition)]
@@ -86,14 +93,14 @@ def prior_members(condition, exclude_wound, rng):
 def fit_members(occ0, wf, interval_h, rng):
     """Grid fit of (Tm, bias) on observed wound fractions wf (frames interval_h apart) + bootstrap members."""
     hours = (len(wf) - 1) * interval_h
-    err = np.zeros((len(calibrate.TM_GRID), len(calibrate.BIAS_GRID), len(wf)))
-    for i, Tm in enumerate(calibrate.TM_GRID):
-        for j, b in enumerate(calibrate.BIAS_GRID):
-            for s in range(calibrate.SEEDS):
-                r = simulate(occ0, Params(Tm=Tm, bias=b), hours, frame_dt=interval_h, seed=s)
-                err[i, j] += (r["wound_frac"] - wf) ** 2 / calibrate.SEEDS
-    fr = np.arange(len(wf))  # fit_from_cube counts frames with index <= t0
-    return calibrate.fit_from_cube(fr, err, len(wf) - 1, rng)
+    g = v2.GRIDS[RULE]
+    err = np.zeros((len(g), len(v2.BIAS), len(wf)))
+    for i, Tm in enumerate(g):
+        for j, b in enumerate(v2.BIAS):
+            for s in range(v2.SEEDS):
+                r = simulate(occ0, Params(Tm=Tm, bias=b, rule=RULE), hours, frame_dt=interval_h, seed=s)
+                err[i, j] += (r["wound_frac"] - wf) ** 2 / v2.SEEDS
+    return v2.boot_fit(err, len(wf), g, rng)  # near-tie break + off-grid refine, as the WHAD follower fits
 
 
 def build_doc(model, wound_id, condition, t_obs, a_obs, grid, trajs, seg_quality, flags, notes):
@@ -119,10 +126,13 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     if why:
         print("refused:", why)
         return None
-    seg_quality = seg_quality or dict(status="ok", reasons=[])
+    seg_quality = dict(seg_quality or dict(status="ok", reasons=[]))
     rng = np.random.default_rng(zlib.crc32(wound_id.encode()))
-    masks, field_flag = to_whad_field(masks, um_per_px)
-    flags = [field_flag] if field_flag else []
+    masks, field_note = to_whad_field(masks, um_per_px)
+    if field_note:  # a quality note, as data/upload.py does for a scale mismatch (no flag: R16)
+        seg_quality = dict(status="flagged" if seg_quality.get("status") in (None, "ok") else seg_quality["status"],
+                           reasons=list(seg_quality.get("reasons", [])) + [field_note])
+    flags = []
     occ0 = mask_to_lattice(masks[0], um_per_px, SITE_UM)
     lat_err = area_error(occ0, masks[0])
     assert lat_err < 0.02, f"lattice area error {lat_err:.2%}"
@@ -131,9 +141,8 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     a_obs = wf / wf[0]
     if len(masks) == 1:
         members, n_pool = prior_members(condition, exclude_wound, rng)
-        how = f"preset: {N_MEMBERS} draws from the fitted parameters of {n_pool} WHAD wounds ({condition or 'all conditions'})"
-        flags.append(dict(type="measure_again", reason="Only one frame, so this forecast uses typical parameters, "
-                                                       "not this wound's own; upload more frames to narrow the band."))
+        how = (f"single frame: parameters drawn from the training-population prior ({N_MEMBERS} draws from the fitted parameters "
+               f"of {n_pool} WHAD wounds, {condition or 'all conditions'}); band not conformal-calibrated")
     else:
         fit = fit_members(occ0, wf, interval_h, rng)
         members = fit["members"]
@@ -144,30 +153,144 @@ def forecast_upload(masks, um_per_px, interval_h, condition=None, seg_quality=No
     t_last, a_last = float(t_obs[-1]), float(a_obs[-1])
     trajs = []
     for i, (Tm, bias) in enumerate(members):
-        r = simulate(occ_last, Params(Tm=Tm, bias=bias), HORIZON - t_last, seed=1000 + i)  # hourly from t_last
+        r = simulate(occ_last, Params(Tm=Tm, bias=bias, rule=RULE), HORIZON - t_last, seed=1000 + i)  # hourly from t_last
         a = a_last * r["wound_frac"] / r["wound_frac"][0]
         trajs.append(np.interp(grid, t_last + np.arange(len(a)), a))
     notes = (f"Upload forecast (sim/upload.py). Lattice {occ0.shape} at {SITE_UM:g} um/site, area error {lat_err:.2%}. "
-             f"Parameters: {how}. Forecast starts from the last frame's mask, rescaled to its observed area.")
+             f"Rule: {RULE}. Parameters: {how}. Forecast starts from the last frame's mask, rescaled to its observed area.")
     out = {"sim_ensemble": build_doc("sim_ensemble", wound_id, condition, t_obs, a_obs, grid, np.array(trajs),
                                      seg_quality, flags, notes)}
-    nca = nca_band(occ_last, members, t_obs, a_obs, grid)
+    w_up, fold_up = nca_weights_for(exclude_wound or wound_id, is_whad=exclude_wound is not None)
+    nca = nca_band(occ_last, members, t_obs, a_obs, grid, w_up)
     if nca is not None:
-        import hashlib
-        sha = hashlib.sha256(open(os.path.join(NCA_DIR, "weights.pt"), "rb").read()).hexdigest()[:12]
+        which = (f"real-WHAD fold model {os.path.basename(w_up)} (fold {fold_up}, trained without this wound)" if fold_up is not None
+                 else f"v2 base weights {os.path.basename(w_up)}")
         out["nca_ensemble"] = build_doc("nca_ensemble", wound_id, condition, t_obs, a_obs, grid, nca, seg_quality, flags,
-                                        notes + f" NCA emulator band from the same members; weights sha256 {sha}.")
+                                        notes + f" NCA band from the same members: {which}, weights sha256 {sha12(w_up)}.")
+    # 90% band = P1's leave-one-wound-out conformal, as data/upload.py and the gate; the raw ensemble stays as raw_band
+    if len(masks) >= 2:
+        S, jobs = pool_jobs(float(t_obs[-1]), exclude_wound)
+        for model, tr in (("sim_ensemble", np.array(trajs)), ("nca_ensemble", nca)):
+            if model in out:
+                preds = pool_preds_sim(jobs) if model == "sim_ensemble" else pool_preds_nca(jobs, S)
+                calibrate_doc(out[model], conformal(t_obs, a_obs, grid, tr, S, preds, model), len(preds))
+    else:
+        for doc in out.values():
+            calibrate_doc(doc, None, 0)
     return out
 
 
-def nca_band(occ, members, t_obs, a_obs, grid):
+N_POOL = 20  # members per pool series for the conformal point predictions (member median)
+
+
+def pool_jobs(cut, exclude_wound):
+    """WHAD pool series usable at the upload's cut-off (P1's prepare() skips), minus exclude_wound, with follower members
+    fitted on their series frames <= cut (saved cubes; fits at most to 9.5 h)."""
+    S, rows = v2.series_rows()
+    S = {k: v for k, v in S.items() if v["wound"] != exclude_wound}
+    cubes, g = v2.load_cubes(RULE), v2.GRIDS[RULE]
+    jobs = []
+    for k, s in sorted(S.items()):
+        h = s["t"] <= cut + 1e-9
+        if h.sum() < 2 or (~h).sum() == 0 or s["a"][h][-1] <= 0.1:
+            continue
+        n = min(int(h.sum()), cubes[k].shape[2])
+        mem = v2.boot_fit(cubes[k], n, g, np.random.default_rng(zlib.crc32(f"{k}|{cut:g}".encode())))["members"][:N_POOL]
+        jobs.append((k, k, s["source"], s["t"], s["a"], *rows[k], cut, mem, RULE))
+    return S, jobs
+
+
+def pool_preds_sim(jobs):
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(v2.WORKERS) as ex:
+        res = dict(ex.map(v2.run_ens, jobs))
+    return {k: (ts + np.arange(tr.shape[1]), np.median(tr, 0)) for k, (ts, tr) in res.items()}
+
+
+def pool_preds_nca(jobs, S):
+    """Each pool series is rolled out with the NCA fold model that holds ITS wound out (as P1's nca_realft gate files), so the
+    conformal residuals stay out-of-sample; with no fold models, the v2 base weights for all."""
+    sys.path.insert(0, NCA_DIR)
+    from api import nca_forecast
+    out = {}
+    for _, k, source, t, a, frames, wf, cut, mem, _ in jobs:
+        w, _ = nca_weights_for(S[k]["wound"], is_whad=True)
+        ic = v2.n_obs(t, cut) - 1
+        hours = t[ic] + np.arange(1, int(v2.H_SIM - t[ic]) + 1)
+        A = np.asarray(nca_forecast(v2.lattice(k, source, frames[ic], wf[ic]), mem, t[:ic + 1], a[:ic + 1], hours,
+                                    stochastic=True, seed=0, weights=w))
+        out[k] = (np.concatenate([[t[ic]], hours]), np.concatenate([[a[ic]], np.median(A, 0)]))
+    return out
+
+
+def conformal(t_obs, a_obs, grid, up_trajs, S, preds, model):
+    """P1's eval/forecast_baselines.forecast_file with the upload as the only test series (no_truth) and the WHAD pool."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "eval"))
+    import forecast_baselines as FB
+    S = dict(S)
+    S["upload"] = dict(id="upload", wound="upload", cond="upload", source="upload", part="", t=t_obs, a=a_obs, no_truth=True)
+    key = lambda t, a: np.asarray(t, float).tobytes() + np.asarray(a, float).tobytes()
+    cut = float(t_obs[-1])
+    P = {key(S[k]["t"][S[k]["t"] <= cut + 1e-9], S[k]["a"][S[k]["t"] <= cut + 1e-9]): v for k, v in preds.items()}
+    P[key(t_obs, a_obs)] = (grid, np.median(up_trajs, 0))
+    FB.BASELINES[model] = lambda t_h, a_h, G: np.interp(G, *P[key(t_h, a_h)])
+    G_long = np.arange(grid[0], 20 * HORIZON, 0.25)  # as data/upload.py
+    pool = {k for k in preds}  # series with a prediction (P1's prepare() skips the rest anyway)
+    doc = FB.forecast_file("upload", "upload_vs_whad", model, cut, S, {"upload"}, pool, grid, G_long, float(HORIZON))
+    return doc["forecasts"][0] if doc["forecasts"] else None
+
+
+def calibrate_doc(doc, cal, n_pool):
+    fc = doc["forecasts"][0]
+    fc["raw_band"] = dict(label="uncalibrated spread", area_q05=fc["area_q05"], area_q50=fc["area_q50"],
+                          area_q95=fc["area_q95"], t50=fc["t50"], t90=fc["t90"], p_close_by_T=fc["p_close_by_T"])
+    if cal is None:
+        fc["band"] = ("single frame: parameters drawn from the training-population prior; band not conformal-calibrated "
+                      "(as data/upload.py's one-frame case)")
+        return
+    assert np.allclose(cal["t_hours"], fc["t_hours"]), "conformal grid differs"
+    for k in ("area_q05", "area_q50", "area_q95", "t50", "t90", "p_close_by_T"):
+        fc[k] = cal[k]
+    fc["band"] = (f"90% band = P1's leave-one-wound-out conformal (eval/forecast_baselines.forecast_file), pool = {n_pool} "
+                  "WHAD series (the upload's own wound excluded); raw_band = uncalibrated ensemble spread")
+
+
+N_FOLDS = 4  # P1's nca/real_data.py: fold = crc32(wound) % 4
+
+
+def sha12(path):
+    import hashlib
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()[:12]
+
+
+def nca_weights_for(wound, is_whad):
+    """NCA weights for a series of physical wound `wound`. Default: the v2 base weights. Only with NCA_REAL_FOLDS=1: the
+    real-WHAD fine-tuned fold model that holds the wound out
+    (nca/v2/weights_real_fold{k}.pt, k = crc32(wound) % 4, checked against nca/v2/real_folds.json when present), else the v2
+    base weights. Non-WHAD uploads are in no fold's training set, so any fold model is out-of-sample (same crc32 rule)."""
+    if not USE_REAL_FOLDS:  # default (user decision): base v2 weights everywhere
+        return NCA_WEIGHTS, None
+    d = os.path.dirname(NCA_WEIGHTS)
+    k = zlib.crc32(wound.encode()) % N_FOLDS
+    w = os.path.join(d, f"weights_real_fold{k}.pt")
+    if not os.path.exists(w):
+        return NCA_WEIGHTS, None
+    fmap = os.path.join(d, "real_folds.json")
+    if is_whad and os.path.exists(fmap):
+        m = json.load(open(fmap))
+        test = set(m.get("folds", {}).get(str(k), [])) if "folds" in m else {x for x, f in m.items() if int(f) == k}
+        assert wound in test, f"fold {k} test set does not contain {wound} ({fmap})"
+    return w, k
+
+
+def nca_band(occ, members, t_obs, a_obs, grid, weights):
     """Agent 2's NCA (nca/api.py): occ = lattice at the LAST observed frame. Returns (members, len(grid)) areas, or None
     (with a message) if the NCA code or weights are not available here."""
     try:
         sys.path.insert(0, NCA_DIR)
         from api import nca_forecast
         return np.asarray(nca_forecast(occ, members, t_obs, a_obs, grid, stochastic=True, seed=0,
-                                       weights=os.path.join(NCA_DIR, "weights.pt")))
+                                       weights=weights))
     except Exception as e:  # missing module, torch or weights: emit the sim file only
         print(f"NCA band skipped ({type(e).__name__}: {e})")
         return None
