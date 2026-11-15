@@ -29,6 +29,13 @@ skipped (fallback) if it would exceed the token budget left. If the budget runs 
 stops. With record_both_branches, <run_id>.reject.jsonl is created before the first approval is asked, so an existing
 file fails before any stop (the parent log still gets run_end); run_end lists branch_run_ids.
 
+Intake (design.md 9b): an upload of frames whose wound dict has `protocol_text` gets one `intake` tool call before the
+first check (logged as a tool_call, so the Critic can trace its extracted numbers; `source_text` is metadata, never
+evidence). A missing interval_h or scale is filled from Intake's code-checked `feeds_code`; a given value that disagrees
+with Intake by more than INTAKE_TOL is kept and a `warning` is logged. If Intake finds the protocol outside the validated
+scope, its scope notes are added to every decision's evidence and to the Reporter caveats; it never changes a decision.
+If Intake fails or returns ok false, the given values are used; a still-missing interval or scale is refused by QC.
+
 Investigator (issue #87): when a wound is off track at a check (the stall flag fired, or the first 2 observed frames
 after the previous check both fell outside the previous check's forecast band, the eval/flags.py out-of-band rule), code
 calls the `investigate` tool once per run with the observed curve up to this check only. It is logged as a tool_call (so
@@ -60,7 +67,9 @@ from agent.runlog import RunLog, fingerprint
 LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
 HANDOVER = {policy.ASK_HUMAN_REFUSED}   # ends the run with no stop
 STOP_KIND = {policy.ASK_HUMAN_STALL: "stall", policy.STOP_UNLIKELY: "unlikely", policy.STOP_LIKELY: "likely"}
-META_KEYS = ("wound_id", "wound", "condition", "part", "name", "notes", "metadata", "protocol_text", "dataset")
+META_KEYS = ("wound_id", "wound", "condition", "part", "name", "notes", "metadata", "protocol_text", "dataset",
+             "source_text")   # source_text: the protocol text echoed by the intake tool
+INTAKE_TOL = 0.02                          # relative difference above which a given interval / scale disagrees with Intake
 META_STR_MAX, META_TOTAL_MAX = 500, 2000   # chars per metadata string / over all metadata strings
 META_JSON_MAX = 4000                       # whole metadata block (keys and numbers too); bigger is dropped
 CHARS_PER_TOKEN = 4                        # rough prompt-size estimate used before a model call
@@ -107,10 +116,10 @@ class _Source:
         if isinstance(wound, str):
             self.wound_id, self.kind, self.checks = wound, "whad_loo", list(checks)
         elif isinstance(wound, dict) and "frames" in wound:   # frames to run through qc_forecast
-            self.kind, self.frames = "frames", wound
+            self.kind, self.frames = "frames", dict(wound)     # a copy: Intake may fill interval_h / scale
             self.held_out = wound.get("held_out_wound")
             self.wound_id = self.held_out
-            self.checks = [round((len(wound["frames"]) - 1) * float(wound["interval_h"]), 3)]
+            self.refresh_checks()
         elif isinstance(wound, dict):
             self.kind = "upload"
             cut = float(wound.get("cutoff_hours", 0.0))
@@ -133,6 +142,14 @@ class _Source:
                     self.held_out = one["forecasts"][0].get("wound")
                     break
 
+    def refresh_checks(self):
+        """Frames: one check at the last frame's time. With no usable interval, 0 h (QC then refuses the upload)."""
+        f = self.frames
+        try:
+            self.checks = [round((len(f["frames"]) - 1) * float(f["interval_h"]), 3)]
+        except (TypeError, ValueError):
+            self.checks = [0.0]
+
     def describe(self):
         return {"kind": self.kind, "wound_id": self.wound_id, "held_out_wound": self.held_out, "checks_h": self.checks}
 
@@ -140,7 +157,7 @@ class _Source:
         """-> (tool name, input, fn) for the forecast step at this cut-off."""
         if self.kind == "frames":
             f = self.frames
-            inp = {"frames": list(f["frames"]), "interval_h": f["interval_h"], "scale": f["scale"],
+            inp = {"frames": list(f["frames"]), "interval_h": f.get("interval_h"), "scale": f.get("scale"),
                    "name": f.get("name", "upload")}
             if "exclude_wound" in f:
                 inp["exclude_wound"] = f["exclude_wound"]   # overridden by code on held-out replays
@@ -189,9 +206,10 @@ class _Run:
         self.inherited_records = []   # the parent's records up to the branch point (Reporter facts)
         self.budget_out, self.child_log, self.child_used = False, None, False
         self.investigated, self.prev_doc = False, None
+        self.scope_notes = []   # Intake's out-of-scope notes, added to every decision's evidence
         if parent is not None:   # a branch shares the parent's counters and evidence up to the branch point
             for k in ("steps", "tok_in", "tok_out", "traced", "untraced", "last", "last_cut", "budget_out",
-                      "investigated", "prev_doc"):
+                      "investigated", "prev_doc", "scope_notes"):
                 setattr(self, k, copy.deepcopy(getattr(parent, k)))
             self.inherited_outputs = parent.inherited_outputs + parent.log.tool_outputs()
             self.inherited_records = parent.inherited_records + list(parent.log.records)
@@ -225,6 +243,39 @@ class _Run:
         self.log.log("tool_call", step=self.steps, tool=name, input_fp=fingerprint(inp), input=inp, output=out,
                      elapsed_s=round(time.time() - t0, 3), **extra)
         return out
+
+    def intake(self):
+        """Upload with protocol text: the `intake` tool once, before the first check. Fills a missing interval / scale
+        from Intake's code-checked values, warns on a disagreement (the given value is kept) and keeps the out-of-scope
+        notes for the decision evidence. Never touches the decision itself."""
+        f = self.src.frames if self.src.kind == "frames" else {}
+        text = f.get("protocol_text")
+        if not isinstance(text, str) or not text.strip():
+            return
+        out = self._tool("intake", {"protocol_text": text}, lambda i: tools.run_tool("intake", i))
+        if out.get("error") or not out.get("ok"):
+            why = out.get("error") or out.get("fallback_reason") or "could not extract"
+            self.log.log("warning", tool="intake",
+                         message=f"Intake could not extract the settings ({why}); the given values are used")
+            return
+        feeds, applied = out.get("feeds_code") or {}, {}
+        for key, fk in (("interval_h", "frame_interval_h"), ("scale", "pixel_um")):
+            got, given = (feeds.get(fk) or {}).get("value"), f.get(key)
+            if given is None:
+                if got is not None:
+                    f[key] = got
+                applied[key] = {"value": got, "source": "intake" if got is not None else "missing"}
+                continue
+            applied[key] = {"value": given, "source": "given", "intake": got}
+            if _num(given) and _num(got) and abs(given - got) > INTAKE_TOL * max(abs(given), abs(got)):
+                self.log.log("warning", tool="intake", field=key, given=given, intake=got,
+                             message=f"Intake reads {key} {got} from the protocol but {given} was given; "
+                                     "the given value is used")
+        if not out.get("scope_ok"):
+            self.scope_notes = [n for n in out.get("scope_notes") or [] if "outside the validated scope" in n]
+        self.src.refresh_checks()
+        self.log.log("intake_applied", applied=applied, scope_ok=bool(out.get("scope_ok")),
+                     scope_notes=self.scope_notes, checks_h=self.src.checks)
 
     def _investigate(self, doc, cut, state):
         """Once per run, only when off track: the Investigator on the observed curve up to this check. -> output or None."""
@@ -315,6 +366,9 @@ class _Run:
         state = {"refused": refused, "stall": bool(stall.get("fired")), "p_close": sched.get("p_close_by_T"),
                  "cut_h": cut, "next_check_h": nxt}
         allowed = policy.allowed(state)
+        if self.scope_notes:   # Intake: outside the validated scope goes into the evidence; the decisions are unchanged
+            note = "Intake scope: " + "; ".join(self.scope_notes)
+            allowed = [{**d, "evidence": f"{d['evidence']}; {note}"} for d in allowed]
         inv = self._investigate(doc, cut, state)
         self.prev_doc = doc
         forced = refused or state["stall"]
@@ -578,6 +632,10 @@ def _long_series(v):
         all(x is None or (isinstance(x, (int, float)) and not isinstance(x, bool)) for x in v)
 
 
+def _num(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
 def _allowed_item(d):
     return {k: d[k] for k in ("id", "label", "evidence", "irreversible", "untested")}
 
@@ -602,6 +660,10 @@ def run_wound(run_id, wound, checks=config.CHECKS_H, approve=lambda decision: Tr
     r.log.log("run_start", wound=src.describe(), checks_h=src.checks, max_steps=max_steps, token_budget=token_budget,
               record_both_branches=record_both_branches, model_provider=llm._provider(),
               model_id=_model_id())
+    try:
+        r.intake()
+    except _Stop as s:   # max_steps used up by the intake call
+        return r._end(s.reason)
     return r.run_from(0, src.checks)
 
 

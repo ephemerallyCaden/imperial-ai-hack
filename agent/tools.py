@@ -133,6 +133,8 @@ def qc_forecast(frames, interval_h, scale, name="upload", out_dir=None, exclude_
     if not isinstance(frames, (list, tuple)) or not 1 <= len(frames) <= MAX_FRAMES:
         raise ValueError(f"frames must be a list of 1 to {MAX_FRAMES} image paths")
     paths = [_allowed_path(f, FRAME_EXTS) for f in frames]
+    if interval_h is None or scale is None:   # data/upload.py's refusal rule (no interval or scale given)
+        return {"refused": True, "reasons": ["frame interval and pixel scale are required"]}
     interval_h = _positive(interval_h, "interval_h")
     scale = _positive(scale, "scale")
     if not isinstance(name, str) or not name.replace("_", "").replace("-", "").isalnum():

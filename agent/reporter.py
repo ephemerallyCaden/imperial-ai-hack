@@ -19,7 +19,8 @@ own code-computed end facts, or the allowlist; untraced numbers become "[?]").
 Fallback to a deterministic template from the same facts when: no model is set, steps_left <= 0 (MAX_STEPS), the
 estimated call would not fit tokens_left (TOKEN_BUDGET), the call fails, the model refuses, or the reply is invalid.
 `source` is "llm" or "template". Fixed caveats (research use only; simulated cells are labelled; Investigator results
-are hypotheses, not causes, when present; "likely to close" is untested, when it appears) are always added by code
+are hypotheses, not causes, when present; "likely to close" is untested, when it appears; Intake's out-of-scope notes,
+when the protocol is outside the validated scope) are always added by code
 after the guards. Pure apart from the one call_model() call: no I/O.
 """
 import json
@@ -38,6 +39,8 @@ CAVEAT_RESEARCH = "Research use only, not for diagnosis or treatment."
 CAVEAT_SIMULATED = "Simulated cells and simulator bands are labelled as simulation, not observation."
 CAVEAT_HYPOTHESES = "Investigator results are hypotheses, not causes."
 CAVEAT_UNTESTED = '"Stop, likely to close" has never fired on a held-out wound: it is untested.'
+
+CAVEAT_SCOPE = "Protocol outside the validated scope (Intake): "
 
 _LIKELY = re.compile(r"(?<!un)likely to close", re.I)
 
@@ -98,6 +101,11 @@ def facts(records):
                 inv = {"note": "hypotheses, not causes", "check_h": out.get("check_h"), "trigger": r.get("trigger"),
                        "hypotheses": [{"name": _cut(h.get("name")), "rank": h.get("rank"),
                                        "fit_error": h.get("fit_error")} for h in hyps]}
+    scope = None
+    for r in records:   # Intake (uploads with protocol text): code-written out-of-scope notes, never the protocol text
+        out = r.get("output") if r.get("kind") == "tool_call" and r.get("tool") == "intake" else None
+        if isinstance(out, dict) and out.get("ok") and out.get("scope_ok") is False:
+            scope = [_cut(n) for n in out.get("scope_notes") or [] if "outside the validated scope" in str(n)][:3]
     e = _end(records)
     start = next((r for r in records if r.get("kind") == "run_start"), {})
     out = {"input_kind": (start.get("wound") or {}).get("kind"), "checks": checks,
@@ -106,6 +114,8 @@ def facts(records):
            "flags": flags, "refusals": refusals}
     if inv:
         out["investigation"] = inv
+    if scope:
+        out["intake_scope"] = scope
     truncated = False
     while len(json.dumps(out, default=str)) > FACTS_MAX and len(out["checks"]) > 1:
         out["checks"].pop(0)
@@ -194,6 +204,7 @@ def fixed_caveats(f, texts=()):
     out = [CAVEAT_RESEARCH, CAVEAT_SIMULATED]
     if f.get("investigation"):
         out.append(CAVEAT_HYPOTHESES)
+    out += [CAVEAT_SCOPE + n for n in f.get("intake_scope") or []]
     likely = any(c.get("decision") == policy.STOP_LIKELY or c.get("untested") for c in f["checks"]) \
         or f["end"].get("stop_kind") == "likely" or any(_LIKELY.search(t or "") for t in texts)
     if likely:

@@ -4,7 +4,8 @@ Research use only, not for diagnosis or treatment. Design: `docs/design.md` sect
 
 ## What it does
 
-At each imaging check (1.9, 3.8, 5.7 and 9.5 h) the agent:
+For an upload of frames that comes with protocol (Methods) text, code first calls the `intake` tool once (see Intake
+below). Then, at each imaging check (1.9, 3.8, 5.7 and 9.5 h; one check at the last frame for an upload), the agent:
 
 1. runs the fixed steps in code: QC and the calibrated forecast (`data/upload.py`), then the stall flag and schedule advice;
 2. works out in code which decisions are allowed (`policy.py`);
@@ -46,6 +47,15 @@ scale, condition), `informational`, `unit_notes`, `scope_ok`, `scope_notes`, `ba
   (`STITCH_INTAKE_BASE` overrides, `STITCH_INTAKE_OFFLINE=1` uses the local cache only), greedy decoding, chat template
   with thinking off (`STITCH_INTAKE_PROMPT_STYLE=raw` to send the prompt as is).
 - Fallback: adapter or stub -> llm -> "could not extract" (`ok: false`); each skipped step is in `fallback_reason`.
+- In the loop (`run.py`): only for frame uploads whose wound dict has `protocol_text`, one `intake` tool call before
+  the first check, logged as a `tool_call` (its extracted numbers are Critic evidence; its `source_text` echo of the
+  protocol is metadata and never evidence). A missing `interval_h` or `scale` is filled from `feeds_code` (code-checked
+  values only). A given value that differs from Intake by more than 2% is kept and a `warning` is logged. An
+  `intake_applied` record lists each value and where it came from. If `scope_ok` is false, the out-of-scope notes are
+  added to every decision's evidence and to the Reporter caveats; the decision never changes because of Intake. If
+  Intake fails or returns `ok: false`, a `warning` is logged and the given values are used; a still-missing interval
+  or scale is refused by QC ("data refused, ask a human"). `agent.record`'s video upload carries a short Methods
+  paragraph (MCF10A, mitomycin C, hourly, 0.908 um/px) so the demo shows Intake.
 - Eval: `python -m agent.intake --eval [--preds out.jsonl]` scores the configured backend (no fallback) on
   `data/adaption/test_real.jsonl` with `score.py`. It calls the configured model, so it is not run in tests.
 
@@ -90,7 +100,7 @@ appears). It also works on a finished log read back with `runlog.read`.
 | `config.py` | Constants with units (horizon, checks, thresholds, cost units, step and token limits) and the Critic allowlist |
 | `llm.py` | `call_model()`, the only place that talks to a model; stub, Anthropic or Bedrock, picked from env |
 | `runlog.py` | Append-only JSONL writer to `agent/runs/<run_id>.jsonl` |
-| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`, `investigate`: thin wrappers over the existing code; errors come back as `{error}` |
+| `tools.py` | `qc_forecast`, `flags_schedule`, `simulate`, `investigate`, `intake`: thin wrappers over the existing code; errors come back as `{error}` |
 | `policy.py` | `allowed(state)` and `check(proposal, state)` |
 | `critic.py` | `trace(text, tool_outputs)`: returns cleaned text plus traced and untraced counts |
 | `prompts.py` | System prompt, the `propose_decision` tool and the delimited data block |
@@ -101,7 +111,8 @@ appears). It also works on a finished log read back with `runlog.read`.
 | `intake.py` | Intake (#90, 9b): protocol text -> interval, scale, condition with the fine-tune's prompt and schema; unit and scope checks in code |
 | `investigator.py` | Investigator lite (#87): reruns the simulator from alternative starts and ranks them by fit to the observed curve; hypotheses, not causes |
 
-Flow: tools -> policy -> model pick -> policy check -> Critic -> approval -> run log.
+Flow: (upload with protocol text: Intake) -> tools -> policy -> model pick -> policy check -> Critic -> approval ->
+Reporter -> run log.
 
 ## Commands
 

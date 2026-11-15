@@ -5,8 +5,8 @@
 
 Uses whatever STITCH_PROVIDER / STITCH_MODEL are set (e.g. claude_cli, or anthropic with a personal key).
 Records: a few held-out WHAD wounds chosen to show different outcomes (the first with both approval branches),
-plus a real-frame upload through data/upload.py for the video (R13). Fails if any file contains a username, home path,
-account id, ARN, key or session id."""
+plus a real-frame upload through data/upload.py for the video (R13), with a protocol paragraph so Intake runs.
+Fails if any file contains a username, home path, account id, ARN, key or session id."""
 import argparse
 import json
 import os
@@ -17,8 +17,15 @@ import time
 from agent import config, run
 
 SAMPLES = os.path.join(config.REPO, "web", "data", "samples")
+# Methods paragraph for the video upload, so the run shows Intake (design.md 9b). Written by us to match the sample
+# frames (WHAD MCF10A, saved at half resolution: 0.908 um/px); Intake should agree with the given interval and scale.
+VIDEO_PROTOCOL = ("MCF10A cells were grown to confluence in 24-well plates and treated with mitomycin C (10 ug/ml) for "
+                  "2 h to block proliferation. A scratch wound was made in each monolayer with a 200 ul pipette tip and "
+                  "the wells were washed twice with medium. Phase-contrast images were taken every hour for 19 h on an "
+                  "inverted microscope with a 10x objective; the pixel size of the analysed images was 0.908 um.")
 VIDEO_UPLOAD = {"frames": [os.path.join(SAMPLES, f"sample_frame{k}.png") for k in (1, 2, 3)],
-                "interval_h": 1.0, "scale": 0.908, "name": "video_upload", "held_out_wound": "exp1_pos2033"}
+                "interval_h": 1.0, "scale": 0.908, "name": "video_upload", "held_out_wound": "exp1_pos2033",
+                "protocol_text": VIDEO_PROTOCOL}
 WOUNDS = ["exp1_partII_C61_P1", "exp1_partI_C61_P1", "exp1_partII_C61_P2", "exp1_partII_CC_P2"]  # stop early, stall, stop later, imaged to end
 
 

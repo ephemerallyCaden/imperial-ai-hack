@@ -303,7 +303,7 @@ def code_checks(f, text):
     if f["proliferation_blocked"] is True and not mito:
         notes.append("proliferation blocked without mitomycin (e.g. serum starvation): outside the validated scope")
     elif f["proliferation_blocked"] is not True:
-        notes.append("no mitomycin stated: outside the validated scope (WHAD cells were mitomycin-treated, division off)")
+        notes.append("no mitomycin stated: outside the validated scope (WHAD cells had mitomycin C, division off)")
     scope_ok = not notes
     if scope_ok:
         notes.append("MCF10A with mitomycin, 2D monolayer, transmitted-light imaging: inside the validated scope")
