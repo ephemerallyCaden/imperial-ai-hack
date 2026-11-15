@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadPhoto, analyse, outline } from './photo.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { FINAL, HMAX, colHeight, addLights, addEnvironment, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour } from './look.js';   // the shared final look
+import { FINAL, HMAX, colHeight, addLights, addEnvironment, colGeo as hexGeo, makeColumnMaterial, makeAgeRamp, cellColour, HEAT_STOPS, heatColour } from './look.js';   // the shared final look
 
 const data = await (await fetch('./sample/forecast_embryo_20min.json')).json();
 const wound = data.wounds.find(w => w.group === 'WH' && w.p_close_by > 0.8) || data.wounds[0];
@@ -92,12 +92,7 @@ let HEAT = Q.has('heat');
 // ?ageramp= how healed cells change colour as they age: pale (final look) | scar | ember | deep | sat | hue (look.js RAMPS)
 const AGE_RAMP = Q.get('ageramp') || 'pale';
 const AGE = makeAgeRamp(PAL, Math.max(60, frames.length * 0.6), AGE_RAMP);
-// inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow
-const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
-function heatCol(c, age) {
-  const u = (1 - AGE.ageT(age)) * (HEAT_STOPS.length - 1), i = Math.min(HEAT_STOPS.length - 2, Math.floor(u));
-  return c.copy(HEAT_STOPS[i]).lerp(HEAT_STOPS[i + 1], u - i);
-}
+// heatmap: look.js HEAT_STOPS / heatColour (inferno, old = deep purple, new = pale yellow), shared with the app
 
 // ---------- graph space: axis frame, floor grid, rulers ----------
 const S = 0.5;                           // world units per lattice unit
@@ -174,7 +169,7 @@ function updateColumns(f, dt) {
     const [x, z] = pos(k), h = Math.max(0.02, hNow[k]) * HMAX;
     const on = inSel(k), lifted = sel && on && GHOST === 'lift';
     m4.makeScale(1, h, 1).setPosition(x, lifted ? LIFT : 0, z);
-    if (HEAT && st !== 'wound') heatCol(col, age);
+    if (HEAT && st !== 'wound') heatColour(col, age, AGE);
     else cellColour(col, st, age, rnd[k], AGE, { age: AGE_SKIN, hshift: HSHIFT });
     let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
     if (!on) {

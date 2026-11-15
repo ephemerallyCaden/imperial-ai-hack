@@ -29,6 +29,12 @@
 .as-legend3d span { display: inline-flex; align-items: center; gap: 5px; }
 .sw { display: inline-block; width: 10px; height: 10px; outline: 1px solid var(--hair); }
 .sw-wound { background: var(--cell-wound); } .sw-intact { background: var(--cell-intact); } .sw-edge { background: var(--cell-edge); } .sw-fresh { background: var(--cell-new); }
+/* age heatmap legend (mockup age-leg): state entries dimmed under the overlay, 200 px gradient of the stops */
+.as-legend3d.is-heat .as-st { opacity: .35; }
+.as-ageleg { flex-basis: 100%; display: grid; gap: 3px; margin-top: 4px; }
+.as-ageleg[hidden] { display: none; }
+.as-agebar { display: block; width: 200px; height: 8px; margin: 2px 0 0; }
+.as-ageends { display: flex; justify-content: space-between; width: 200px; }
 .as-tip { position: absolute; z-index: 3; white-space: nowrap; }
 .as-cover { position: absolute; inset: 0; z-index: 4; background: var(--bg); display: grid; place-content: center; text-align: center; color: var(--dim); }
 .as-notice { position: absolute; z-index: 5; top: 56px; left: 50%; transform: translateX(-50%); width: min(460px, 90%); padding: var(--s4); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
