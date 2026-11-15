@@ -78,6 +78,9 @@ def test_runlog_never_writes_local_paths(tmp_path):
     import os
     rl = runlog.RunLog("p1", runs_dir=str(tmp_path))
     home = os.path.expanduser("~")
-    rl.log("tool_call", output={"frames": [os.path.join(config.REPO, "web", "x.png"), "/tmp/abc/y.npz", home + "/z"]})
-    text = open(rl.path).read()
-    assert home not in text and "/tmp/" not in text and "web/x.png" in text
+    import tempfile
+    tmp = os.path.join(tempfile.gettempdir(), "abc", "y.npz")
+    rl.log("tool_call", output={"frames": [os.path.join(config.REPO, "web", "x.png"), tmp, os.path.join(home, "z")]})
+    recs = runlog.read(rl.path)
+    frames = recs[0]["output"]["frames"]
+    assert frames[0] == "web/x.png" and frames[1] == "<tmp>/y.npz" and home not in frames[2]

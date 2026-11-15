@@ -7,8 +7,10 @@ def test_video_upload_scale_is_half_resolution():
 
 
 def test_leaks_windows_home_does_not_crash(monkeypatch):
+    import os
     home = "C:\\Users\\x"                                          # "\\U" is a bad escape if used as a regex
-    monkeypatch.setenv("HOME", home)
+    # patch expanduser itself: on Windows it reads USERPROFILE, not HOME, so setting HOME alone does nothing there
+    monkeypatch.setattr(os.path, "expanduser", lambda p: home if p == "~" else p)
     monkeypatch.setenv("USER", "xuser")
     assert record.leaks("a clean run log") == []
     assert record.leaks("written to " + home + "\\runs\\r.jsonl") == ["home folder"]
@@ -29,3 +31,11 @@ def test_leaks_still_finds_fixed_patterns(monkeypatch):
     monkeypatch.setenv("USER", "nobodyhere")
     assert record.leaks("see /home/someone/file") == ["/home/"]
     assert record.leaks("account 123456789012") == [r"\b\d{12}\b"]
+
+
+def test_json_escaped_windows_home_is_caught(monkeypatch):
+    import json, os
+    from agent import record
+    monkeypatch.setattr(os.path, "expanduser", lambda p: "C:\\Users\\rand" if p == "~" else p)
+    line = json.dumps({"path": "C:\\Users\\rand\\stitch\\x.png"})
+    assert "home folder" in record.leaks(line)
