@@ -98,6 +98,11 @@ sim (follower) and the NCA v2. At 19 h the observed 0.06 is inside both bands (s
 sits just above the band's top (by up to 0.02), because both models close this wound too fast mid-course: sim median 0.13 at 10 h vs observed 0.38. Not
 tuned. Suggested narration: "the band catches the endpoint, but this wound closed more slowly mid-way than the model expected." The 1-frame sample
 uses a wide population-prior band (not conformal) and contains the observation at all 19 hours.
+**Real-data fine-tune of NCA v2: not used.** Agent 2 fine-tuned v2 on real WHAD frames with P1's recipe (4 wound-level folds,
+`nca/v2/weights_real_fold{k}.pt`, feature/p2-v2-nca 6e4d514). It degraded P1's held-out fold diagnostic in 4 of 4 folds (e.g. 0.052 -> 0.081), so the
+uploads use the base v2 weights (`nca/v2/weights.pt`, sha256 ccf3c4acdddf). On the demo sample alone the fold-1 model happened to look better (observed
+inside the band at 17 of 17 hours, vs 13 of 17 for base v2), but we did not select weights on one wound. `sim/upload.py` keeps the fold selection behind
+an explicit opt-in (`NCA_REAL_FOLDS=1`).
 
 **Which NCA is the demo forecaster (user decision, Sun 00:20):** NCA v2 (trained on follower-rule simulations, Agent 2, `nca/v2/`), for
 consistency with the follower-rule cells shown in the draw tool and playback. This is a stated choice, not the best score: **nca_realft** (P1, #71: the
