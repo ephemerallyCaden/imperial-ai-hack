@@ -1,0 +1,11 @@
+policy,label,cost_rate_plate_hour,n_wounds,plate_hours_saved,wrong_stall_stop,wrong_closure_call,missed_stall,missed_non_closer,non_closer_to_end,stall_stops,stall_stop_error_rate,unlikely_calls,likely_calls,frames_used,plate_hours_used,total_cost,cost_per_run,pct_numbers_traced,numbers_untraced,model_tokens_per_run,n_stall,n_not_closed,model_cost_usd_per_run,agree_with_replay,model_checks,n_with_truth,n_distinct_wounds,n_skipped_no_run_end
+fixed,Fixed schedule (image to 19 h),5,55,0.0,0,0,14,41,41,0,,0,0,1090,1045.0,6315.0,114.818,,,,14,41,,,,,,
+rules,Simple rules (stop on stall flag),5,55,338.2,10,0,2,41,20,21,0.476,0,0,737,706.8,4271.0,77.655,,,,14,41,,,,,,
+agent,"Forecast policy (code; replay model, no LLM)",5,55,761.9,8,4,0,17,0,17,0.471,28,0,293,283.1,1708.5,31.064,100.0,0,0.0,14,41,,,,,,
+fixed,Fixed schedule (image to 19 h),2,55,0.0,0,0,14,41,41,0,,0,0,1090,1045.0,3180.0,57.818,,,,14,41,,,,,,
+rules,Simple rules (stop on stall flag),2,55,338.2,10,0,2,41,20,21,0.476,0,0,737,706.8,2150.6,39.102,,,,14,41,,,,,,
+agent,"Forecast policy (code; replay model, no LLM)",2,55,761.9,8,4,0,17,0,17,0.471,28,0,293,283.1,859.2,15.622,100.0,0,0.0,14,41,,,,,,
+fixed,Fixed schedule (image to 19 h),20,55,0.0,0,0,14,41,41,0,,0,0,1090,1045.0,21990.0,399.818,,,,14,41,,,,,,
+rules,Simple rules (stop on stall flag),20,55,338.2,10,0,2,41,20,21,0.476,0,0,737,706.8,14873.0,270.418,,,,14,41,,,,,,
+agent,"Forecast policy (code; replay model, no LLM)",20,55,761.9,8,4,0,17,0,17,0.471,28,0,293,283.1,5955.0,108.273,100.0,0,0.0,14,41,,,,,,
+real,"Real model (Claude, n=4 practice runs)",5,4,47.5,0,1,0,1,0,1,0.0,2,0,30,28.5,172.5,43.125,100.0,0,20270.5,1,2,0.0516,8,8,4,4,0

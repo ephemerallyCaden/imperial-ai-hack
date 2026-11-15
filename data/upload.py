@@ -43,12 +43,12 @@ def schedule_advice(p, cut):
     nxt = next((c for c in checks if c > cut + 1e-9), None)
     if p <= 0.1:
         return {"action": "call", "call": "unlikely to reach 90% closure by 19 h",
-                "evidence": "on held-out WHAD wounds such early calls were right 89% of the time (always saying no: 73%)"}
+                "evidence": "on held-out WHAD wounds such early calls were right 91% of the time (always saying no: 75%)"}
     if p >= 0.9:
         return {"action": "call", "call": "likely to reach 90% closure by 19 h",
                 "evidence": "untested: no held-out WHAD wound got this call early"}
     return {"action": "image_again", "next_image_hours": nxt,
-            "evidence": "the 90% band narrows on average from 0.59 (1.9 h) to 0.32 (3.8 h) of the starting area"}
+            "evidence": "the 90% band narrows on average from 0.49 (1.9 h) to 0.34 (3.8 h) of the starting area (held-out WHAD, real-data NCA)"}
 
 
 def check_frame(img, scale):

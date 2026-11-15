@@ -18,7 +18,7 @@ VAR = {"nca_ensemble": "NCA sim-trained", "sim_ensemble": "cell-agent simulator"
 NAMES.update({"nca_realft": "NCA real-data v1 (calibrated)", "nca_realplus": "NCA real + Zaritsky (calibrated)",
               "nca_realft3": "NCA real-data v3 (calibrated)"})
 MAIN_CUT = {"whad": 3.8, "whimbc": 6.0, "embryo": 0.22, "zaritsky": 2.51}  # ~20% of the series / of median t90
-SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 56 series)"),
+SPLITS = [("whad", "loo_all", "WHAD MCF10A", "unseen wounds (28 wounds, 55 series)"),
           ("whad", "loo_manual", "WHAD MCF10A", "unseen wounds, manual masks only (9)"),
           ("whad", "CC_to_C61", "WHAD MCF10A", "held-out condition: CC to C61"),
           ("whimbc", "loo", "WHiM-BC MCF-7", "unseen wells (24)"),
@@ -43,7 +43,7 @@ lines = ["# Stitch: results", "",
          "calibrates its own forecast. CIs: 95%, bootstrap over physical wounds.", "",
          "## Data", "",
          "| Dataset | Cells | Wounds | Frames | Masks | Role |", "|---|---|---|---|---|---|",
-         "| WHAD (Zenodo 12806149, CC BY 4.0) | MCF10A, control (CC) vs CYR61 knockdown (C61) | 31 physical wounds (9 manual masks + 22 auto-segmented); 28 pass QC, 56 series | hourly, 20 per part | authors' + our segmenter | **main benchmark** |",
+         "| WHAD (Zenodo 12806149, CC BY 4.0) | MCF10A, control (CC) vs CYR61 knockdown (C61) | 31 physical wounds (9 manual masks + 22 auto-segmented); 28 pass QC, 56 series (55 scored: one spliced series excluded) | hourly, 20 per part | authors' + our segmenter | **main benchmark** |",
          "| WHiM-BC (Zenodo 8131123, CC BY 4.0) | MCF-7 ordinary (monolayer) vs cancer-stem-cell-enriched (sphere) | 24 wells | 0-27 h, 6-7 per well | authors' | held-out condition |",
          "| Fly embryo (Zenodo 7660424, CC BY 4.0) | Drosophila epidermis, laser wounds | 62 | 1 per min | authors' | secondary |",
          "| Zaritsky 2015 (GigaDB 100118, CC0) | DA3, MDCK, +/- HGF, Met inhibitor | 19 wells | 14.5 min | authors' (noisy) | secondary |",
@@ -92,12 +92,15 @@ lines += ["", f"Stall across cut-offs: AUC {st.auc.min():.2f}-{st.auc.max():.2f}
           "Policy fixed in advance: at each check (1.9, 3.8, 5.7, 9.5 h), if P(90% closed by 19 h) <= 0.1 or >= 0.9, make the call "
           "and stop imaging; otherwise keep imaging. Held-out WHAD wounds, edge-speed forecaster. This is a simulation on recorded "
           "data, not a lab trial.", ""] + (lambda R: [
-          f"- **{int(R.called_early)} of {int(R.n)} wounds ({R.share_called:.0%}) get a call by the first check** (median {R.median_stop_h_if_called:.1f} h); "
+          f"- **{int(R.called_early)} of {int(R.n)} series ({R.share_called:.0%}) get a call by the first check** (median {R.median_stop_h_if_called:.1f} h); "
           f"{R.accuracy_of_calls:.0%} of calls are right ({int(R.wrong_calls)} wrong), vs {R.base_rate_not_closed:.0%} for always saying 'won't close'.",
           f"- Every early call is **'won't reach 90% closure by 19 h'** ({int(R.calls_wont_close)} calls); the forecaster never confidently calls early closure. "
           "The wrong calls are wounds that did close: stopping them would have been a mistake.",
-          f"- Simulated imaging saved: {R.hours_saved_mean:.1f} h per wound on average (of 19 h)."])(
-          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'edge_speed' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + ["",
+          f"- Simulated imaging saved: {R.hours_saved_mean:.1f} h per series on average (of 19 h)."])(
+          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'edge_speed' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + (lambda R: [
+          f"- Same policy with the shipped forecaster (real-data NCA v3): {int(R.called_early)} of {int(R.n)} series called by the first check, "
+          f"{R.accuracy_of_calls:.0%} of calls right ({int(R.wrong_calls)} wrong)."])(
+          pd.read_csv(f"{HERE}/results/scheduler.csv").query("model == 'nca_realft3' and thresholds == '<= 0.1 or >= 0.9'").iloc[0]) + ["",
           "## NCA vs baselines (gate, design.md 5.3)", "",
           "Passable = quantile score within 10% of the best *statistical* baseline AND coverage 0.85-0.95. NCA and simulator "
           "forecasts get the same leave-one-wound-out conformal step as the baselines (P1's code, called unchanged).", "",

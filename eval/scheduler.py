@@ -50,7 +50,7 @@ def simulate(rows, lo, hi):
 
 def main():
     res, widths = [], []
-    for model in ("edge_speed", "nca_ensemble", "nca_realft"):
+    for model in ("edge_speed", "nca_ensemble", "nca_realft", "nca_realft3"):
         if not os.path.exists(f"{SRC}/{model}_3.8h.json"):
             continue
         rows = load(model)

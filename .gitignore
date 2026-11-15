@@ -35,3 +35,6 @@ secrets/
 *.pem
 *.key
 upload_out/
+
+# Agent practice runs (local model login; re-record on the submission account)
+agent/runs/practice/
