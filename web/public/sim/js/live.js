@@ -57,7 +57,7 @@ function tick() {
   if (s) post(s);   // only when the NCA stepped: the hex resample runs at the NCA step rate
   if (status === 'running') timer = setTimeout(tick, TICK_MS);
 }
-function run() { if (status === 'running') return; status = 'running'; acc = 0; resetStall(); if (!timer) timer = setTimeout(tick, TICK_MS); }
+function run() { if (status === 'running') return; status = 'running'; acc = 0; resetStall(); post(); if (!timer) timer = setTimeout(tick, TICK_MS); }
 function pause() { status = 'paused'; clearTimeout(timer); timer = null; }
 
 onmessage = async ({ data: m }) => {
@@ -73,7 +73,7 @@ onmessage = async ({ data: m }) => {
   if (m.type === 'carve') {
     if (tCut == null || idle(status)) tCut = t;
     for (const i of m.cells) if (i >= 0 && i < HW) { rho[i] = 0; R[i] = 0; for (let c = 0; c < nca.nh; c++) hid[c * HW + i] = 0; }
-    if (userPaused) post(); else { run(); resetStall(); post(); }
+    if (userPaused || status === 'running') post(); else run();   // a restart posts the new status itself
   } else if (m.type === 'play') { userPaused = false; if (isHealed(rho, { minRho: HEAL_RHO })) { status = 'healed'; post(); return; } run(); }
   else if (m.type === 'pause') { userPaused = true; pause(); post(); }
   else if (m.type === 'reset') { userPaused = true; pause(); intact(); post(); }

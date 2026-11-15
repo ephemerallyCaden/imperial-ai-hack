@@ -546,7 +546,8 @@ export async function mount(el, ctx) {
   ctx.bus.addEventListener("key", onKey);
 
   markView();
-  const first = S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
+  const first = S.items.find(i => i.id === ctx.openItem) || S.items.find(i => i.kind === "run" && i.run.wound_id === PLAYBACK_WOUND) || S.items[0];
+  delete ctx.openItem;
   if (first) await select(first.id);
 
   return () => {

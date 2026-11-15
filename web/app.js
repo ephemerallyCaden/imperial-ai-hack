@@ -9,6 +9,7 @@ const root = document.getElementById("mode-root");
 let unmount = null, current = null;
 
 async function show(mode) {
+  if (mode === "draw") { ctx.openItem = "draw_live"; mode = "assay"; }   // old #draw links open live drawing in Assay
   if (!MODES[mode]) mode = "assay";
   if (mode === current) return;
   if (unmount) { try { unmount(); } catch (e) { console.error(e); } }
