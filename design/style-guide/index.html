@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stitch · style guide</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { padding: 32px 40px 80px; max-width: 1280px; }
+  section { margin: 40px 0; } h2 { margin: 0 0 4px; } .lead { color: var(--dim); margin: 0 0 16px; max-width: 760px; }
+  .grid { display: grid; gap: 12px; } .g4 { grid-template-columns: repeat(4, 1fr); } .g5 { grid-template-columns: repeat(5, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g2 { grid-template-columns: 1fr 1fr; }
+  .sw { border: 1px solid var(--hair); } .sw > div { height: 56px; } .sw p { margin: 0; padding: 6px 8px; font-size: 10px; color: var(--dim); } .sw b { color: var(--ink); font-weight: 500; display: block; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .box { border: 1px solid var(--hair); padding: 16px; }
+  .hex { width: 34px; height: 30px; clip-path: polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%); display: inline-grid; place-items: center; }
+  .dot::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--cell-wound); }
+  .do { border-left: 2px solid var(--ink); padding-left: 10px; } .dont { border-left: 2px solid var(--faint); padding-left: 10px; color: var(--dim); }
+  ul { margin: 6px 0; padding-left: 18px; } li { margin: 3px 0; }
+  .tight { margin: 0; } code { color: var(--accent); }
+</style>
+</head>
+<body>
+<header class="row" style="justify-content:space-between">
+  <div class="st-wordmark"><b>Stitch</b><i>Early wound-closure forecast</i></div>
+  <span class="st-chip st-chip--honesty">Style guide · v1 · 15 Nov 2026</span>
+</header>
+<p class="lead" style="margin-top:12px">Tokens and components for the web viewer. Use <code>tokens.css</code>; don't hard-code colours. Dark, square, technical-figure look; one accent (amber); every state has a non-colour cue.</p>
+
+<section>
+  <div class="st-kicker">1 · Surfaces, text, lines, accent</div>
+  <div class="grid g5" id="core"></div>
+</section>
+
+<section>
+  <div class="st-kicker">2 · Cell states (3D columns + legend)</div>
+  <p class="lead">Skin look. Checked under protan / deutan / tritan simulation (closest pair ΔE ≥ 17) and in greyscale (wound 8 · edge 38 · intact 63 · new 88 · dividing 100). Rendered with toon shading, age colouring and an 8° cool hue shift. Height = local density; colour = state; dividing = dark centre dot.</p>
+  <div class="grid g5" id="cells"></div>
+  <p class="st-caption">Outside a box selection: matte greyscale, one step per state so the rest of the wound still reads.</p>
+  <div class="row" id="ghost"></div>
+</section>
+
+<section>
+  <div class="st-kicker">3 · Type</div>
+  <div class="grid g2">
+    <div class="box grid">
+      <div class="st-wordmark"><b>Stitch</b><i>Early wound-closure forecast</i></div>
+      <div><span class="st-kicker">Kicker · condensed caps 10 / 0.1em</span></div>
+      <div style="font:500 15px var(--font-mono)">Card title · mono 15 medium</div>
+      <div>Body + data · mono 12 · tabular numbers 0.0386 [0.0338–0.0445]</div>
+      <div style="font-size:11px;color:var(--dim)">Secondary · mono 11 dim</div>
+      <div class="st-caption">Figure caption · serif italic 10</div>
+    </div>
+    <div class="box">
+      <div class="st-kicker">Numbers and units</div>
+      <ul>
+        <li>Times: <code>9.1 h</code>, one decimal; ranges with an en dash <code>3.6–9.1 h</code></li>
+        <li>Censored: <code>not reached by 19 h</code>; open end <code>7.3 h – open</code></li>
+        <li>Probabilities: 2 decimals <code>P = 0.23</code> (the Critic matches these)</li>
+        <li>Coverage + CI: <code>0.92 [0.88–0.96]</code></li>
+        <li>Lengths <code>µm</code>, speed <code>µm/h</code>, area <code>% of start</code></li>
+        <li>Never show more precision than the tool output</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="st-kicker">4 · Buttons, chips, tabs, menus</div>
+  <div class="grid g2">
+    <div class="box grid">
+      <div class="row"><button class="st-btn st-btn--primary" data-i="upload">Upload images…</button><button class="st-btn" data-i="flask">Try a sample</button><button class="st-btn" data-i="select">Select area</button><button class="st-btn" data-i="trash">Clear</button></div>
+      <div class="row"><button class="st-btn st-btn--icon" aria-label="Back" data-i="back"></button><button class="st-btn st-btn--icon st-btn--primary" aria-label="Play" data-i="play"></button><button class="st-btn st-btn--icon" aria-label="Step" data-i="step"></button><span class="st-tip">Play · Space</span>
+        <span class="st-seg"><button class="st-btn">0.5×</button><button class="st-btn" aria-pressed="true">1×</button><button class="st-btn">2×</button></span></div>
+      <p class="tight st-caption">Icon only: transport + help (aria-label + tooltip with shortcut). Icon + word: anything with consequences (upload, approve, reject, select, draw, clear). Clear appears only after a selection or a drawn wound.</p>
+      <div class="row"><span class="st-chip st-chip--honesty">Simulated cells · not tracked cells</span><span class="st-chip st-chip--honesty">Recorded run</span><span class="st-chip st-chip--flag">QC flagged · scale resampled</span><span class="st-chip">stall · off</span></div>
+    </div>
+    <div class="box grid">
+      <div class="st-tabs" role="tablist"><button role="tab" aria-selected="true">Forecast</button><button role="tab">Images</button><button role="tab">Why</button></div>
+      <div class="row" style="align-items:flex-start;gap:16px">
+        <div class="st-menubar"><button aria-expanded="true">File</button><button>View</button><button>Analysis</button><button>Help</button></div>
+        <div class="st-dropdown" role="menu"><div role="menuitem">New analysis <kbd>Ctrl N</kbd></div><div role="menuitem">Open images… <kbd>Ctrl O</kbd></div><div role="menuitem">Try a sample</div><hr><div role="menuitem">Export forecast <kbd>JSON</kbd></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="st-kicker">5 · Panels, tables, decision card</div>
+  <div class="grid g3">
+    <div class="st-panel">
+      <div class="st-kicker" style="margin-bottom:4px">Key numbers</div>
+      <div class="st-row"><span>Time to 50% closed</span><span>9.1 h (3.6 h – open)</span></div>
+      <div class="st-row"><span>Time to 90% closed</span><span>not reached by 19 h</span></div>
+      <div class="st-row"><span>P(90% closed by 19 h)</span><span>0.23</span></div>
+    </div>
+    <div class="st-panel--solid" style="padding:12px">
+      <table class="st-table"><tr><th>model</th><th>quantile score ↓</th><th>90% cov.</th></tr>
+        <tr class="is-shipped"><td>Edge speed (ships)</td><td>0.0386</td><td>0.92</td></tr><tr><td>NCA real-data v3</td><td>0.0397</td><td>0.92</td></tr><tr><td>Linear</td><td>0.0447</td><td>0.93</td></tr></table>
+    </div>
+    <div class="grid">
+      <div class="st-card"><div class="st-kicker">Agent proposal</div><h3>Image again at the next check (3.8 h)</h3><p>P(90% closed by 19 h) = 0.23 · between the stop thresholds 0.1 and 0.9</p><div class="row"><button class="st-btn st-btn--primary" data-i="check">Approve</button><button class="st-btn" data-i="x">Reject</button><button class="st-btn" data-i="info">Why?</button></div></div>
+      <div class="st-card st-card--forced"><div class="st-kicker">Forced by code</div><h3>Data refused · ask a human</h3><p>frame 1: blank frame</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="st-kicker">6 · Charts</div>
+  <div class="grid g2">
+    <div class="box"><svg id="curve" width="560" height="220" role="img" aria-label="Example closure curve"></svg><p class="st-caption tight">Observed = ink solid with dots per image · median = amber dashed · 90% band = amber 18% (only the calibrated data/upload.py band) · members = faint ink · t0 = dashed. Simulator / NCA spatial outputs are labelled “uncalibrated” and never get the band style.</p></div>
+    <div class="box grid">
+      <div class="st-kicker">Timeline ribbon + flag strip</div>
+      <div class="st-ribbon"><div class="obs" style="width:10.5%"></div><div class="t0" style="left:10.5%"></div><div class="fc"></div></div>
+      <div class="row" style="justify-content:space-between;color:var(--dim);font-size:10px"><span>observed (solid)</span><span>t0 = forecast origin</span><span>forecast (hatched)</span></div>
+      <div style="height:12px;border:1px solid var(--hair);position:relative"><div style="position:absolute;left:55%;width:15%;top:0;bottom:0;background:var(--hatch-flag)"></div></div>
+      <p class="st-caption tight">Amber hatch = stall window. Out-of-band = small ink ticks, labelled as an observation, not a prediction.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="st-kicker">7 · Honesty labels (required)</div>
+  <div class="grid g2"><div class="box"><ul>
+    <li><b>Simulated cells, not tracked cells</b> · always visible on the dish</li>
+    <li><b>Recorded run</b> · on Assay playback; <b>Sped up</b> · whenever speed &gt; 1×</li>
+    <li><b>Simulation on recorded data</b> · Ops scoreboard and scheduler</li>
+    <li><b>Simulation, preset parameters (WHAD part II fits, follow rule)</b> · Draw</li>
+    <li><b>Uncalibrated</b> · simulator / NCA spread and outlines</li>
+    <li><b>Untested</b> · “stop, likely to close”</li>
+    <li><b>Research use only, not for diagnosis or treatment</b> · footer + Help</li>
+    <li><b>Colours illustrative, not clinically calibrated</b> · tissue tone help</li>
+  </ul></div>
+  <div class="box grid"><div class="do">Do: state the decision first, then the number that drove it.</div><div class="do">Do: pair every colour with a word, icon, hatch or dot.</div><div class="dont">Don't: call any simulator or NCA spread a “90% interval”.</div><div class="dont">Don't: use the leading-edge red for text (it's a cell state, not a status colour).</div><div class="dont">Don't: add a second accent colour; status uses amber + words.</div></div></div>
+</section>
+
+<section>
+  <div class="st-kicker">8 · Accessibility + motion</div>
+  <div class="box"><ul>
+    <li>Contrast on <code>--bg</code>: ink 17:1 · dim 6.6:1 · amber 9.3:1 · faint 3.4:1 (decoration only)</li>
+    <li>Focus ring: 2 px amber with a 2 px background gap (<code>--focus</code>); every control reachable by keyboard</li>
+    <li>Shortcuts: Space play · ←/→ step · +/− zoom · S select · Esc clear · R reset camera · ? shortcuts</li>
+    <li>Camera fly 1.4 s (<code>--ease</code>); panels 240 ms; all motion off under <code>prefers-reduced-motion</code></li>
+    <li>Charts get <code>role="img"</code> + an aria-label that states the key number</li>
+  </ul></div>
+</section>
+
+<script>
+const ICON = {
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>', back: '<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/>', step: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>', check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', flask: '<path d="M9 3h6"/><path d="M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2.2h12.4a1.5 1.5 0 0 0 1.3-2.2L14 9V3"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  select: '<path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1M9 21h1M14 3h1M14 21h1M3 9v1M21 9v1M3 14v1M21 14v1"/>',
+};
+document.querySelectorAll('[data-i]').forEach(b => b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24">${ICON[b.dataset.i]}</svg>`));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const sw = (host, items) => items.forEach(([v, name, note, outline]) => host.insertAdjacentHTML('beforeend', `<div class="sw"><div style="background:var(${v});${outline ? 'outline:1px solid var(--hair);outline-offset:-1px' : ''}"></div><p><b>${name}</b><code>${v}</code> ${css(v)}<br>${note}</p></div>`));
+sw(document.getElementById('core'), [['--bg', 'Background', 'page + scene'], ['--panel-solid', 'Panel', 'menus, tables, side panels'], ['--ink', 'Ink', 'text, observed data · 17:1'], ['--dim', 'Dim', 'secondary text · 6.6:1'], ['--accent', 'Accent (amber)', 'median, band, selection, focus · 9.3:1']]);
+const C = document.getElementById('cells');
+[['--cell-wound', 'Wound', 'floor · near-black · L8', ''], ['--cell-intact', 'Intact', 'skin · L63', ''], ['--cell-edge', 'Leading edge', 'shorter column · L38', ''], ['--cell-new', 'New tissue', 'rising column · L88', ''], ['--cell-dividing', 'Dividing', 'dark centre dot · L100', 'dot']].forEach(([v, n, note, dot]) =>
+  C.insertAdjacentHTML('beforeend', `<div class="sw" style="padding:10px"><span class="hex ${dot}" style="background:var(${v});${v === '--cell-wound' ? 'outline:1px solid var(--hair)' : ''}"></span><p style="padding:6px 0 0"><b>${n}</b><code>${v}</code> ${css(v)}<br>${note}</p></div>`));
+['wound', 'intact', 'edge', 'new', 'dividing'].forEach(k => document.getElementById('ghost').insertAdjacentHTML('beforeend', `<span class="hex" style="background:var(--ghost-${k});outline:1px solid var(--hair)"></span><span style="font-size:10px;color:var(--dim);margin-right:10px">${k}</span>`));
+// example curve from web/data/samples/sample_3frame.json
+const ft = [3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19], q05 = [.658,.555,.437,.311,.287,.196,.143,.109,.023,0,0,0,0,0,0,0,0], q50 = [.706,.625,.555,.486,.424,.363,.306,.257,.209,.139,.108,.067,.044,.043,.047,.047,.023], q95 = [.765,.685,.65,.63,.607,.571,.516,.492,.488,.47,.442,.437,.422,.404,.389,.377,.391];
+const W = 560, H = 220, x0 = 40, x1 = 540, y0 = 14, y1 = 190, X = t => x0 + t / 19 * (x1 - x0), Y = a => y0 + (1 - a) * (y1 - y0), P = (ts, ys) => ts.map((t, i) => `${i ? 'L' : 'M'}${X(t)},${Y(ys[i])}`).join('');
+document.getElementById('curve').innerHTML = [0, .5, 1].map(a => `<line x1="${x0}" x2="${x1}" y1="${Y(a)}" y2="${Y(a)}" stroke="var(--chart-grid)"/><text x="8" y="${Y(a) + 3}" fill="var(--dim)" font-size="9">${a * 100}</text>`).join('') +
+  `<path d="${P(ft, q95)}L${[...ft].reverse().map((t, i) => `${X(t)},${Y(q05[q05.length - 1 - i])}`).join('L')}Z" fill="var(--chart-band)"/>` +
+  `<path d="${P([2, ...ft], [.79, ...q50])}" fill="none" stroke="var(--chart-median)" stroke-width="1.3" stroke-dasharray="4 3"/>` +
+  `<path d="${P([0, 1, 2], [1, .903, .79])}" fill="none" stroke="var(--chart-observed)" stroke-width="1.7"/>` + [[0, 1], [1, .903], [2, .79]].map(([t, a]) => `<circle cx="${X(t)}" cy="${Y(a)}" r="2.5" fill="var(--ink)"/>`).join('') +
+  `<line x1="${X(2)}" x2="${X(2)}" y1="${y0}" y2="${y1}" stroke="var(--chart-cut)" stroke-dasharray="2 3"/><text x="${X(2) + 4}" y="${y0 + 8}" fill="var(--dim)" font-size="9">forecast from here</text>` +
+  `<line x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}" stroke="var(--chart-axis)"/>` + [0, 5, 10, 15, 19].map(t => `<text x="${X(t) - 6}" y="${y1 + 14}" fill="var(--dim)" font-size="9">${t} h</text>`).join('');
+</script>
+</body>
+</html>

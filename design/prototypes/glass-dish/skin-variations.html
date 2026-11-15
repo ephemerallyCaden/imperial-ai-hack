@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch · skin palettes + materials</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050607; color: #e8ecef; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; padding: 20px 24px; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 500; letter-spacing: .18em; }
+  p.sub { margin: 0 0 12px; color: #8a949c; max-width: 900px; }
+  .bar { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; color: #8a949c; letter-spacing: .1em; font-size: 10px; text-transform: uppercase; }
+  .seg { display: flex; } .seg button { background: none; border: 1px solid rgba(232,236,239,.4); color: #8a949c; font: inherit; padding: 6px 10px; cursor: pointer; letter-spacing: .12em; }
+  .seg button + button { border-left: 0; } .seg button.on { background: #e8ecef; color: #050607; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid rgba(232,236,239,.18); text-decoration: none; color: inherit; display: block; }
+  .card:hover { border-color: #e0a458; }
+  iframe { width: 100%; aspect-ratio: 16 / 10; border: 0; display: block; pointer-events: none; }
+  .meta { padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .name { letter-spacing: .12em; } .note { color: #8a949c; font-size: 10px; margin-top: 2px; } .warn { color: #e0a458; }
+  .sw { display: flex; gap: 4px; } .sw i { width: 14px; height: 14px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); }
+</style>
+</head>
+<body>
+<h1>// STITCH · SKIN PALETTES + MATERIALS</h1>
+<p class="sub">Same frame (t = 30 min). Swatches: intact · leading edge · new tissue · dividing · wound. L = CIELAB lightness of intact / edge / new; the CVD-safe rule wants them rising with ≥ 15 between steps (amber = fails). None of these has been through the colour-blindness simulation yet. Click a card to open it full size.</p>
+<div class="bar">
+  <span>Material</span><div class="seg" id="mat"></div>
+  <span>View</span><div class="seg" id="view"></div>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+// [name, note, intact, edge, new, dividing, wound]
+const P = [
+  ['Current',          'teal + orange (CVD-checked baseline)',      '1F4F5C','EE7F2D','F9D6FB','FFFFFF','0B1116'],
+  ['Teal, hot',        'current, saturated: deep teal + vermilion', '0E7383','FF5A1F','FFC6F0','FFFFFF','03181C'],
+  ['Dermis',           'crimson dermis, coral edge, pink epithelium','8C1C3A','FF5B3A','FFC4D0','FFFFFF','14050A'],
+  ['Perfusion',        'oxygenated blood red, orange edge',          '9E0F2F','FF6A00','FFB5C8','FFFFFF','12030A'],
+  ['Melanin',          'deep brown skin, orange edge, peach new',   '6B2E14','FF7A2E','FFD3B0','FFFFFF','0F0705'],
+  ['Keloid',           'rose scar tissue, apricot edge',            'B0305A','FF8A3D','FFD9C2','FFFFFF','1A0610'],
+  ['H&E, saturated',   'haematoxylin violet, eosin pink',           '5A2BB0','FF3D8B','FFB8DD','FFFFFF','0B0618'],
+  ['Thermal',          'indigo cool tissue, hot edge, yellow new',  '3D1AB8','FF5A1F','FFD23F','FFFFFF','07031A'],
+  ['Iodine',           'betadine brown, red edge, straw new',       '7A3B00','FF3B3B','FFD08A','FFFFFF','120800'],
+  ['GFP / mCherry',    'live-imaging fluorescence',                 '0B6B35','FF2E63','8CFFB8','FFFFFF','030B06'],
+  ['DAPI / FITC',      'nuclear blue tissue, green edge',           '2342E8','1FE07A','B8FFD6','FFFFFF','040616'],
+  ['Bioluminescent',   'deep ocean tissue, cyan edge, pink new',    '0A5C7A','00C9A7','FFC2EE','FFFFFF','020C12'],
+];
+const MATS = [['skin', 'Skin sheen'], ['wet', 'Wet'], ['gel', 'Gel'], ['glow', 'Glow'], ['matte', 'Matte (old)']];
+const VIEWS = [['close', 'Close'], ['cells', 'Cells'], ['overview', 'Overview']];
+const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+  const Y = .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; return Math.round(116 * (Y > .008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16); };
+const half = h => [0, 2, 4].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * .5).toString(16).padStart(2, '0')).join('');   // bg = wound tint at half
+const st = { mat: 'skin', view: 'close' };
+try { Object.assign(st, JSON.parse(localStorage.getItem('stitch-skin') || '{}')); } catch {}
+function seg(id, opts, key) {
+  const el = document.getElementById(id); el.innerHTML = '';
+  for (const [v, label] of opts) { const b = document.createElement('button'); b.textContent = label.toUpperCase(); b.classList.toggle('on', st[key] === v);
+    b.onclick = () => { st[key] = v; try { localStorage.setItem('stitch-skin', JSON.stringify(st)); } catch {} render(); }; el.appendChild(b); }
+}
+function render() {
+  seg('mat', MATS, 'mat'); seg('view', VIEWS, 'view');
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  for (const [name, note, ...hex] of P) {
+    const pal = hex.join(','), q = `pal=${pal}&mat=${st.mat}&bg=${half(hex[4])}`;
+    const ls = hex.slice(0, 3).map(L), ok = ls[1] - ls[0] >= 15 && ls[2] - ls[1] >= 15;
+    const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
+    a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=30&view=${st.view}&${q}"></iframe>
+      <div class="meta"><div><div class="name">${name}</div><div class="note">${note}</div>
+      <div class="note ${ok ? '' : 'warn'}">L ${ls.join(' / ')}${ok ? '' : ' · ladder too tight'}</div></div>
+      <div class="sw">${hex.map((h, i) => `<i style="background:#${h}${i === 4 ? ';outline:1px solid #3A3F52' : ''}"></i>`).join('')}</div></div>`;
+    g.appendChild(a);
+  }
+}
+render();
+</script>
+</body>
+</html>

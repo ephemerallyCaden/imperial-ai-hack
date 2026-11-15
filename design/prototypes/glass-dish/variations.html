@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitch · colour variations</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050607; color: #e8ecef; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; padding: 20px 24px; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 500; letter-spacing: .18em; }
+  p.sub { margin: 0 0 16px; color: #8a949c; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid rgba(232,236,239,.18); cursor: pointer; text-decoration: none; color: inherit; display: block; }
+  .card:hover { border-color: #e0a458; }
+  iframe { width: 100%; aspect-ratio: 16 / 10; border: 0; display: block; pointer-events: none; }
+  .meta { padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .name { letter-spacing: .12em; } .note { color: #8a949c; font-size: 10px; margin-top: 2px; }
+  .sw { display: flex; gap: 4px; } .sw i { width: 14px; height: 14px; clip-path: polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%); }
+</style>
+</head>
+<body>
+<h1>// STITCH · COLOUR VARIATIONS</h1>
+<p class="sub">Same frame (t = 30 min, close view). Swatches: intact · leading edge · new tissue · dividing · wound. Click a card to open it full size.</p>
+<div class="grid" id="grid"></div>
+<script>
+const P = [
+  ['★ · Teal + coral, CVD-safe', 'chosen default · colour-blind checked',  '1F4F5C,EE7F2D,F9D6FB,FFFFFF,0B1116'],
+  ['P2 · Teal + orange + cream', 'CVD-safe alt · warm new tissue', '2F6F7E,E8743B,EDE6B0,9DE0FF,0B1116'],
+  ['A · Old default (magma)',     'warm on indigo, high contrast',            '4B4FA8,F1605D,C0388A,FCFDBF,14141f'],
+  ['B · Teal + coral',        'calm tissue, hot wound edge',             '2F6F7E,FF7A59,F2B134,FFF3D6,0B1116'],
+  ['C · Slate + amber',       'mono tissue, matches UI amber accent',    '5A6270,E0A458,B9C2CC,FFFFFF,0D0F12'],
+  ['D · H&E stain',           'reads like a histology slide',            '8E5EA2,E85D8A,F4A6C0,FFE9F0,1A1016'],
+  ['E · Fluorescence',        'GFP tissue, mCherry edge, microscope feel','1E8F4E,FF3B6B,6FE39A,E8FFF0,050A07'],
+  ['F · Slate + cyan/violet', 'cool, clinical, edge pops',               '6C7A89,4FD1C5,8B7CF6,F5F7FA,0A0C10'],
+];
+const g = document.getElementById('grid');
+for (const [name, note, pal] of P) {
+  const a = document.createElement('a'); a.className = 'card'; a.target = '_blank';
+  a.href = `index.html?pal=${pal}`;
+  a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=30&view=close&pal=${pal}"></iframe>
+    <div class="meta"><div><div class="name">${name}</div><div class="note">${note}</div></div>
+    <div class="sw">${pal.split(',').map(h => `<i style="background:#${h}${h === pal.split(',')[4] ? ';outline:1px solid #3A3F52' : ''}"></i>`).join('')}</div></div>`;
+  g.appendChild(a);
+}
+</script>
+</body>
+</html>
