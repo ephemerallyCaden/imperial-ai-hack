@@ -35,6 +35,7 @@ Three modes:
   - A Claude lead agent works inside code-enforced policy: refusals and stall flags force "ask a human".
   - A plain-code Critic removes any number it can't trace to a tool output.
   - Every run is logged and replayed on held-out wounds.
+- **Adaption fine-tune (Intake):** a small model, `Qwen/Qwen3.5-2B`, fine-tuned with Adaption AutoScientist reads a lab's Methods paragraph and fills in the upload settings. On 30 real open-access Methods paragraphs it never trained on, it got 80.4% of fields right vs 47.4% for the base model. Most paragraphs still have at least one wrong field, so a person confirms the settings next to the source text.
 - **Front end:** plain ES modules in the browser, with a design system made in Figma. Figma file: https://www.figma.com/design/vTCApH2oLBShNu4Oi9dsGg. We drew the style guide (colour tokens, type, the colour-blind-safe cell-state palette) and wireframes for Assay, Ops and Draw in Figma first, with shared components (menu bar, panel tabs, decision card, refusal panel). The app's `web/tokens.css` is exported from that style guide. Details in `docs/figma-usage.md`.
 
 ## Results (held-out data)
@@ -70,10 +71,10 @@ Three modes:
 ## What's next
 - Calibrate on a lab's own microscope and cell line. Our results suggest a few dozen wells per condition is enough (we used 28 wounds).
 - Validate on more cell types and assay conditions.
-- [P2: Adaption fine-tune for the Intake step, if it ships]
+- Extend the Adaption fine-tune beyond Intake (Triage and the Reporter), and to more labs' protocol styles.
 
 ## Built with
-Python, NumPy, SciPy, pandas, PyTorch, matplotlib, Pillow, tifffile, JSON Schema, JavaScript (ES modules, no build step), three.js 0.170 (3D cell field), Claude (Anthropic), Figma
+Python, NumPy, SciPy, pandas, PyTorch, matplotlib, Pillow, tifffile, JSON Schema, JavaScript (ES modules, no build step), three.js 0.170 (3D cell field), Claude (Anthropic), Adaption (Qwen3.5-2B fine-tune), Figma
 
 **Research use only. Not for diagnosis or treatment.**
 
