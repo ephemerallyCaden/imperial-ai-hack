@@ -9,7 +9,7 @@ examples. hf: the model's chat template (training used data_format "chat"), gree
 claude: claude-opus-5-5, zero-shot, same prompt (sampling params are not settable on this model; effort "low").
 Output rows: {"id", "completion"}.
 """
-import argparse, json, os, sys, tarfile, tempfile
+import argparse, json, os, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from prompt import build_prompt
@@ -32,7 +32,8 @@ def hf_generate():
     adapter = a.adapter
     if adapter and adapter.endswith((".tgz", ".tar.gz")):
         d = tempfile.mkdtemp()
-        tarfile.open(adapter).extractall(d, filter="data")
+        import subprocess  # Adaption serves zstd despite the .tgz name and gzip content-type; bsdtar/GNU tar autodetect
+        subprocess.run(["tar", "-xf", adapter, "-C", d], check=True)
         hits = [r for r, _, fs in os.walk(d) if "adapter_config.json" in fs]
         adapter = hits[0]
     dev = "mps" if torch.backends.mps.is_available() else "cpu"

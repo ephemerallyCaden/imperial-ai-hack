@@ -10,6 +10,7 @@ runs launched by mistake on Mixtral-8x7B were cancelled (`data/adaption/run_ids.
 | run_id | `695c8c20-b2c8-4848-ac36-e1ed443281fb` (`data/adaption/run_ids.json`) |
 | model | Qwen/Qwen3.5-2B (smallest chat model that fits local eval; 9B needs ~18 GB disk) |
 | settings | training_method instruction, data_format chat, max_iterations 1, target_win_rate 0.7; recommended hyperparams: LoRA r16/alpha32 all-linear, 1 epoch, lr 5e-5 cosine |
+| adapter | `best.tgz` (44 MB, zstd despite the name; not in git): LoRA r16/alpha32 on all 7 linear projections, base `togethercomputer/Qwen3.5-2B` (loaded locally on `Qwen/Qwen3.5-2B`; rendered chat prompt identical), final eval loss 0.032 |
 | best_win_rate (platform, held-out templated rows) | **0.9471** vs base (target 0.7). Judged by Adaption on a held-out split of OUR synthetic rows, not on the real test set |
 
 ## Real test set (30 open-access paragraphs, never trained on)
