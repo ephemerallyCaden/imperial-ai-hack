@@ -53,7 +53,7 @@ export async function mount(el, ctx) {
           </div>
           <div class="as-hud as-hud-bl">
             <div class="as-scalebar"><i></i><span></span></div>
-            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = local density</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span></div>
+            <div class="as-legend3d">${Object.entries(STATE_LABEL).map(([k, v]) => `<span><i class="sw sw-${k}"></i>${v}</span>`).join("")}<span class="as-dim as-divnote">dividing: off in this simulation</span><span class="as-dim">height = state (wound floor, leading edge, new tissue rising)</span><span class="as-dim">hexes are ${T?.SITE_UM / T?.DISPLAY_K || 10} µm display samples of the density (interpolated), not cells</span></div>
           </div>
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
