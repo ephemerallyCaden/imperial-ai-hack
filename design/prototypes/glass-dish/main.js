@@ -31,9 +31,11 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.minDistance = 4; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
 const LIT = Q.get('mat') && Q.get('mat') !== 'matte' ? [0.4, 1.25, 0.3] : [1.1, 1.6, 0.5];   // new materials add env + emissive light, so dim the rig
-scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, LIT[0]));
-const key = new THREE.DirectionalLight(0xffffff, LIT[1]); key.position.set(-30, 60, 25); scene.add(key);
-const fill = new THREE.DirectionalLight(0xe4e6ea, LIT[2]); fill.position.set(40, 20, -30); scene.add(fill);
+// ?light=warm: warm rig (the default sky is cool blue-white, which greys out reds and oranges) with brighter fill so colours stay vivid
+const WARM = Q.get('light') === 'warm'; if (WARM) LIT[0] *= 1.6;
+scene.add(new THREE.HemisphereLight(WARM ? 0xffe6d6 : 0xdfe8ff, WARM ? 0x2a0c10 : 0x101018, LIT[0]));
+const key = new THREE.DirectionalLight(WARM ? 0xfff0e2 : 0xffffff, LIT[1]); key.position.set(-30, 60, 25); scene.add(key);
+const fill = new THREE.DirectionalLight(WARM ? 0xffd2c2 : 0xe4e6ea, LIT[2]); fill.position.set(40, 20, -30); scene.add(fill);
 
 // ---------- hex lattice + simulation (stand-in for P2's cell simulator) ----------
 const NX = 90, NY = 104, HY = Math.sqrt(3) / 2;

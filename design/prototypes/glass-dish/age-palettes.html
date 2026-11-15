@@ -34,12 +34,20 @@ const GROUPS = [
     ['Skin, medium', 'tan skin; coral edge, peach new tissue', '9A6248', 'FF5A3C', 'FFD9C7', 'FFFFFF', '1C0F0A', '0E0806'],
     ['Skin, deep', 'deep brown skin; orange-red edge, rose new tissue', '6B3F2A', 'FF6A45', 'F2BFA3', 'FFFFFF', '140A07', '0A0504'],
   ]],
+  ['Warm + vibrant (warm light)', [
+    ['Magma', 'deep magenta-red skin, orange edge, cream new tissue', 'B0174F', 'FF8A00', 'FFE3C4', 'FFFFFF', '1A0508', '0D0204', 'warm'],
+    ['Sunset', 'pink-red skin, golden edge, warm white new tissue', 'D6336C', 'FFC21A', 'FFF1E0', 'FFFFFF', '1A060C', '0D0306', 'warm'],
+    ['Blood orange', 'scarlet skin, tangerine edge, peach-white new tissue', 'C22A1E', 'FFA62B', 'FFE6D6', 'FFFFFF', '1A0604', '0D0302', 'warm'],
+    ['Flamingo', 'hot pink skin, apricot edge, blush-white new tissue', 'E8457A', 'FFB347', 'FFF0F4', 'FFFFFF', '1C070F', '0E0408', 'warm'],
+    ['Ember', 'oxblood skin, vermilion edge, apricot-white new tissue', '8F1D14', 'FF5A1F', 'FFD9B8', 'FFFFFF', '170604', '0C0302', 'warm'],
+    ['Berry, warm light', 'Berry with the warm light rig', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E', 'warm'],
+  ]],
   ['Medical', [
     ['Surgical green', 'theatre-drape green; red edge reads hot against it, no red afterimage', '1F6B5C', 'FF5A4E', 'C4F2E4', 'FFFFFF', '07120F', '040A08'],
     ['Clinical blue', 'hospital-software blue; coral edge, ice-white new tissue', '1E4E8C', 'FF5D5D', 'C7E6FF', 'FFFFFF', '060B14', '04070D'],
     ['Radiology', 'imaging console: neutral greys, one red signal', '4A5561', 'FF4D3D', 'E6EEF5', 'FFFFFF', '07090C', '040506'],
     ['H&E, soft', 'histology slide: haematoxylin violet, eosin pink', '6A3E8C', 'FF5C93', 'FBD3E9', 'FFFFFF', '0E0814', '08050C'],
-    ['Berry', 'Petal Rouge pink new tissue (blends to pink, not white)', '883955', 'FF3E41', 'FF7099', 'FFFFFF', '1E141D', '0E090E'],
+    ['Berry', 'last round, for comparison', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E'],
   ]],
 ];
 const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
@@ -62,7 +70,7 @@ function render() {
   for (const [title, pals] of GROUPS) {
     out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`); const g = document.createElement('div'); g.className = 'grid'; out.appendChild(g);
     for (const [name, why, ...hex] of pals) {
-      const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}&mat=toon&age=skin&ageramp=${st.ramp}${st.mode === 'heat' ? '&heat' : ''}`;
+      const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}${hex[6] ? '&light=' + hex[6] : ''}&mat=toon&age=skin&ageramp=${st.ramp}${st.mode === 'heat' ? '&heat' : ''}`;
       const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
       a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=${st.t}&view=${st.view}&${q}"></iframe>
         <div class="meta"><div><div class="name">${name}</div><div class="note">${why}</div><div class="note">L ${hex.slice(0, 3).map(L).join(' / ')}</div></div>
