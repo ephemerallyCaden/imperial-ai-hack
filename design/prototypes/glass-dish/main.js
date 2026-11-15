@@ -78,12 +78,30 @@ function stateOf(f, k) {
 // new tissue colour -> intact -> darker, quieter intact as they mature. ?heat (or the AGE HEATMAP button): age heatmap overlay
 const AGE_SPAN = Math.max(60, frames.length * 0.6), AGE_SKIN = Q.get('age') === 'skin';
 let HEAT = Q.has('heat');
-const ageT = age => Math.min(1, Math.max(0, (age - 25) / AGE_SPAN));
-const cA = new THREE.Color(), cB = new THREE.Color();
-function ageSkin(c, age) {   // young -> fresh colour, mid -> intact, old -> intact at 45%, slightly toward the wound tone
-  const t = ageT(age); cA.setHex(PAL.fresh); cB.setHex(PAL.intact);
-  if (t < 0.35) return c.copy(cA).lerp(cB, t / 0.35);
-  cA.copy(cB).multiplyScalar(0.45).lerp(new THREE.Color(PAL.wound), 0.15); return c.copy(cB).lerp(cA, (t - 0.35) / 0.65);
+// ?ageramp= how healed cells change colour as they age (t: 0 = just filled in, 1 = mature). Original tissue is not healed,
+// so it keeps the plain intact colour except in 'pale', where it is the oldest and darkest (the first version).
+//   pale  new-tissue colour -> intact -> darker intact (light -> dark)
+//   scar  dusky red -> pink -> skin tinted toward the new-tissue colour, like a real scar maturing (ends paler than skin)
+//   ember leading-edge colour cooling to intact (hot -> calm)
+//   deep  dark intact -> intact (dark -> normal)
+//   sat   over-saturated intact -> intact (same lightness, colour drains)
+//   hue   intact with hue rotated -> intact (same lightness, hue drifts)
+const AGE_RAMP = Q.get('ageramp') || 'pale';
+const C = h => new THREE.Color(h), hsl = (h, dh, ds, dl) => { const c = C(h), o = {}; c.getHSL(o); return c.setHSL((o.h + dh + 1) % 1, Math.min(1, Math.max(0, o.s * ds)), Math.min(1, o.l * dl)); };
+const RAMPS = {
+  pale: () => [C(PAL.fresh), C(PAL.intact), C(PAL.intact).multiplyScalar(0.45).lerp(C(PAL.wound), 0.15)],
+  scar: () => [C(PAL.edge).lerp(C(PAL.wound), 0.35).lerp(C(0x6A1B4D), 0.3), C(PAL.fresh).lerp(C(PAL.edge), 0.25), C(PAL.intact).lerp(C(PAL.fresh), 0.35)],
+  ember: () => [C(PAL.edge), C(PAL.edge).lerp(C(PAL.intact), 0.6), C(PAL.intact)],
+  deep: () => [C(PAL.intact).multiplyScalar(0.35), C(PAL.intact).multiplyScalar(0.7), C(PAL.intact)],
+  sat: () => [hsl(PAL.intact, 0, 2.2, 1.05), hsl(PAL.intact, 0, 1.4, 1), C(PAL.intact)],
+  hue: () => [hsl(PAL.intact, -0.12, 1.3, 1), hsl(PAL.intact, -0.05, 1.1, 1), C(PAL.intact)],
+};
+const STOPS = (RAMPS[AGE_RAMP] || RAMPS.pale)();
+const ORIG = AGE_RAMP === 'pale' || !RAMPS[AGE_RAMP] ? STOPS[2] : C(PAL.intact);
+const ageT = age => Math.min(1, Math.max(0, age / (AGE_SPAN + 25)));
+function ageSkin(c, age) {   // age < 0 never happens for healed cells; original tissue has age > 999
+  if (age > 900) return c.copy(ORIG);
+  const t = ageT(age); return t < 0.3 ? c.copy(STOPS[0]).lerp(STOPS[1], t / 0.3) : c.copy(STOPS[1]).lerp(STOPS[2], (t - 0.3) / 0.7);
 }
 // inferno, trimmed so the oldest cells stay above the wound floor: old = deep purple, new = pale yellow
 const HEAT_STOPS = [0x2A0B52, 0x6A176E, 0xA52C60, 0xDD513A, 0xFCA50A, 0xFCFFA4].map(h => new THREE.Color(h));
@@ -200,7 +218,7 @@ function updateColumns(f, dt) {
     col.setHex(PAL[st]);
     const age = f.step - f.born[k];
     if (HEAT && st !== 'wound') heatCol(col, age);
-    else if (AGE_SKIN && st === 'intact') ageSkin(col, age).multiplyScalar(0.92 + 0.16 * rnd[k]);
+    else if (AGE_SKIN && (st === 'intact' || st === 'fresh')) ageSkin(col, age).multiplyScalar(0.92 + 0.16 * rnd[k]);
     else if (st === 'intact') col.multiplyScalar(0.85 + 0.3 * rnd[k]);
     let showCol = on, showGhost = false, showRim = false, showDot = false, showDull = false;
     if (!on) {
@@ -243,9 +261,9 @@ function ageLegend() {
   const on = HEAT || AGE_SKIN; $('age-leg').style.display = on ? '' : 'none'; $('btn-heat').classList.toggle('on', HEAT);
   document.querySelectorAll('.legend > .st').forEach(el => { el.style.opacity = HEAT ? 0.35 : 1; });   // state colours are hidden under the overlay
   const hx = c => '#' + c.getHexString(), stops = HEAT ? HEAT_STOPS.slice().reverse().map(hx)
-    : [0, 0.2, 0.35, 0.7, 1].map(t => hx(ageSkin(new THREE.Color(), 25 + t * AGE_SPAN)));
+    : [0, 0.3, 0.65, 1].map(t => hx(ageSkin(new THREE.Color(), t * (AGE_SPAN + 25))));
   $('age-bar').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
-  $('age-title').textContent = HEAT ? 'Cell age · heatmap overlay' : 'Intact cells · colour = age';
+  $('age-title').textContent = HEAT ? 'Cell age · heatmap overlay' : `Healed cells · colour = age (${AGE_RAMP})`;
 }
 $('btn-heat').addEventListener('click', () => { HEAT = !HEAT; ageLegend(); dirty = true; });
 ageLegend();

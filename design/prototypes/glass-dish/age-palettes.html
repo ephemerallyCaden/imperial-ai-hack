@@ -23,8 +23,8 @@
 </head>
 <body>
 <h1>// STITCH · AGEING PALETTES (TOON)</h1>
-<p class="sub">Toon shading, intact cells coloured by age (new tissue colour → intact → darker intact). Swatches: intact · leading edge · new tissue · wound, then the age ramp. L = lightness of intact / edge / new (all ≥ 14 apart; none colour-blind simulated yet). Click a card for the full UI; the AGE HEATMAP button works there too.</p>
-<div class="bar"><span>Mode</span><div class="seg" id="mode"></div><span>Time</span><div class="seg" id="time"></div><span>View</span><div class="seg" id="view"></div></div>
+<p class="sub">Toon shading, healed cells coloured by age; the Age ramp buttons change how (Pale→dark was the first version). Swatches: intact · leading edge · new tissue · wound, then the age ramp. L = lightness of intact / edge / new (all ≥ 14 apart; none colour-blind simulated yet). Click a card for the full UI; the AGE HEATMAP button works there too.</p>
+<div class="bar"><span>Mode</span><div class="seg" id="mode"></div><span>Age ramp</span><div class="seg" id="ramp"></div><span>Time</span><div class="seg" id="time"></div><span>View</span><div class="seg" id="view"></div></div>
 <div id="out"></div>
 <script>
 // [name, why, intact, edge, new, dividing, wound, bg]
@@ -39,14 +39,14 @@ const GROUPS = [
     ['Clinical blue', 'hospital-software blue; coral edge, ice-white new tissue', '1E4E8C', 'FF5D5D', 'C7E6FF', 'FFFFFF', '060B14', '04070D'],
     ['Radiology', 'imaging console: neutral greys, one red signal', '4A5561', 'FF4D3D', 'E6EEF5', 'FFFFFF', '07090C', '040506'],
     ['H&E, soft', 'histology slide: haematoxylin violet, eosin pink', '6A3E8C', 'FF5C93', 'FBD3E9', 'FFFFFF', '0E0814', '08050C'],
-    ['Berry (current)', 'last round, for comparison', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E'],
+    ['Berry', 'Petal Rouge pink new tissue (blends to pink, not white)', '883955', 'FF3E41', 'FF7099', 'FFFFFF', '1E141D', '0E090E'],
   ]],
 ];
 const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
   const Y = .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; return Math.round(116 * (Y > .008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16); };
 const mix = (a, b, t) => '#' + [0, 2, 4].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
 const dark = (h, w) => [0, 2, 4].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * .45 * .85 + parseInt(w.slice(i, i + 2), 16) * .15).toString(16).padStart(2, '0')).join('');
-const st = { mode: 'skin', t: '70', view: 'close' };
+const st = { mode: 'skin', ramp: 'pale', t: '70', view: 'close' };
 try { Object.assign(st, JSON.parse(localStorage.getItem('stitch-age') || '{}')); } catch {}
 function seg(id, opts, key) {
   const el = document.getElementById(id); el.innerHTML = '';
@@ -55,18 +55,18 @@ function seg(id, opts, key) {
 }
 function render() {
   seg('mode', [['skin', 'Skin ages'], ['heat', 'Heatmap overlay']], 'mode');
+  seg('ramp', [['pale', 'Pale→dark'], ['scar', 'Scar'], ['ember', 'Ember'], ['deep', 'Dark→normal'], ['sat', 'Saturation'], ['hue', 'Hue drift']], 'ramp');
   seg('time', [['40', '40 min'], ['70', '70 min'], ['110', '110 min']], 't');
   seg('view', [['close', 'Close'], ['overview', 'Overview']], 'view');
   const out = document.getElementById('out'); out.innerHTML = '';
   for (const [title, pals] of GROUPS) {
     out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`); const g = document.createElement('div'); g.className = 'grid'; out.appendChild(g);
     for (const [name, why, ...hex] of pals) {
-      const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}&mat=toon&age=skin${st.mode === 'heat' ? '&heat' : ''}`;
-      const ramp = `linear-gradient(90deg, #${hex[2]}, #${hex[0]} 35%, #${dark(hex[0], hex[4])})`;
+      const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}&mat=toon&age=skin&ageramp=${st.ramp}${st.mode === 'heat' ? '&heat' : ''}`;
       const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
       a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=${st.t}&view=${st.view}&${q}"></iframe>
         <div class="meta"><div><div class="name">${name}</div><div class="note">${why}</div><div class="note">L ${hex.slice(0, 3).map(L).join(' / ')}</div></div>
-        <div class="sw">${[hex[0], hex[1], hex[2], hex[4]].map(h => `<i style="background:#${h}"></i>`).join('')}<span class="ramp" style="background:${ramp}"></span></div></div>`;
+        <div class="sw">${[hex[0], hex[1], hex[2], hex[4]].map(h => `<i style="background:#${h}"></i>`).join('')}</div></div>`;
       g.appendChild(a);
     }
   }
