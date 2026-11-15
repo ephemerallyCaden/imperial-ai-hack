@@ -69,4 +69,4 @@ Stall-stop error rate (wrong stall stops / stall stops, simulated human approves
 | exp2_partI_N61_P3 | stall | 1.9 | 1.9 |
 | exp2_partI_N61_P4 | stall | 1.9 | 1.9 |
 
-Agent run logs for this evaluation were written to a temporary directory (agent_eval_runs_gcetui5g), not agent/runs/.
+Agent run logs for this evaluation were written to a temporary directory, not agent/runs/.

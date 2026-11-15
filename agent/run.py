@@ -218,7 +218,7 @@ class _Run:
         self._step()
         t0 = time.time()
         try:
-            resp, err = llm.call_model(messages, system=system, tools=[tool], max_tokens=1024), None
+            resp, err = llm.call_model(messages, system=system, tools=[tool], max_tokens=MODEL_MAX_TOKENS), None
         except Exception as e:  # noqa: BLE001 - a failed call falls back like an invalid proposal
             resp, err = None, f"{type(e).__name__}: {e}"
         rec = {"step": self.steps, "input_fp": fingerprint({"system": system, "messages": messages, "tools": [tool]}),
@@ -439,7 +439,7 @@ def estimate_tokens(system, messages, tools_):
 
 
 def _model_id():
-    return os.environ.get("STITCH_MODEL", llm.DEFAULT_MODEL)
+    return llm._model_id(os.environ.get("STITCH_PROVIDER", "stub").strip().lower())
 
 
 def run_wound(run_id, wound, checks=config.CHECKS_H, approve=lambda decision: True, record_both_branches=False,

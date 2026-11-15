@@ -32,7 +32,7 @@ class RunLog:
         self.records = []
 
     def log(self, kind, **fields):
-        """kind: run_start | tool_call | model_call | decision | critic | approval | run_end."""
+        """kind: run_start | tool_call | model_call | model_skipped | decision | critic | approval | human_review | warning | run_end."""
         rec = {"run_id": self.run_id, "seq": self.seq, "ts": round(time.time(), 3), "kind": kind, **fields}
         with open(self.path, "a") as f:
             f.write(json.dumps(rec, default=str) + "\n")

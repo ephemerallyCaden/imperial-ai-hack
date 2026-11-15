@@ -278,8 +278,7 @@ def write_md(path, rows, xc, runs_dir):
         L += ["| Wound | Agent stop | Agent stop h | Scheduler call h |", "|---|---|---|---|"]
         L += [f"| {k} | {kind} | {sh:g} | {sc:g} |" for k, kind, sh, sc in xc["pre_empted_by_stall"]]
         L.append("")
-    L += [f"Agent run logs for this evaluation were written to a temporary directory ({os.path.basename(runs_dir)}), "
-          "not agent/runs/.", ""]
+    L += ["Agent run logs for this evaluation were written to a temporary directory, not agent/runs/.", ""]
     open(path, "w").write("\n".join(L))
 
 
