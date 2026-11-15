@@ -1,12 +1,19 @@
-// 3D tissue field for Assay (look from web/vendor-design/glass-dish-main.js): one hex column per lattice site,
-// height = local density, colour = cell state. Box-select keeps the selection in colour and drops the rest to matte
-// greyscale (one grey step per state). The cells are SIMULATED (P2's cell-agent playback, web/public/sim), never
-// tracked cells: the frame shown is the playback frame whose wound area matches the area curve at time t.
+// 3D tissue field for Assay (look from web/vendor-design/glass-dish-main.js): hex columns, height = local density,
+// colour = state. Box-select keeps the selection in colour and drops the rest to matte greyscale (one grey step per state).
+// The cells are SIMULATED (P2's cell-agent playback, web/public/sim), never tracked cells: the frame shown is the
+// playback frame whose wound area matches the area curve at time t. Live drawing (web/assay/live.js) feeds the same
+// columns from the live NCA instead (showLive) and paints through setBrush.
+// DISPLAY INTERPOLATION: the hexes are a display grid, DISPLAY_K per lattice site along x (10 µm hexes, about the M10
+// mockup's density), independent of the model grid. Each hex samples its source density field bilinearly at its centre
+// (playback: the smoothed fine density, smooth.js; live: the coarse NCA density). A hex is a sample, not one cell.
+// Performance: two InstancedMeshes (colour + matte grey); per frame only the height entry of each instance matrix is
+// written in place, colours only when the field changes, nothing is allocated in the frame loop.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { viewFrame } from "../public/sim/js/playback.js";
 
 export const SITE_UM = 20;                               // one lattice site = one cell = 20 µm (docs/p2-handoff.md)
+export const DISPLAY_K = 2;                              // display hexes per lattice site along x
 // colours from tokens.css (--cell-*, --scene-bg, final skin look #131), read once at import; hex = fallback if missing
 const tok = (name, hex) => { let v = ""; try { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch { /* no DOM */ } return /^#[0-9a-f]{6}$/i.test(v) ? v : hex; };
 const hexNum = (h) => parseInt(h.slice(1), 16);
@@ -15,40 +22,74 @@ const PAL = { intact: hexNum(tok("--cell-intact", "#C68B6E")), edge: hexNum(tok(
 const SCENE_BG = hexNum(tok("--scene-bg", "#120A09"));
 const DARK = { wound: 0.0, intact: 0.010, edge: 0.045, fresh: 0.11 };                // tokens.css --ghost-* (linear)
 export const STATE_LABEL = { wound: "wound (no cells)", intact: "intact sheet", edge: "leading edge", fresh: "new tissue" };
-const HY = Math.sqrt(3) / 2, S = 0.5, HMAX = 0.7;
+const STATES = ["wound", "intact", "edge", "fresh"];     // state codes 0..3
+const HY = Math.sqrt(3) / 2, S = 0.5, HMAX = 0.7;        // S = world units per lattice site
 
 export function createTissue(host, pb, { onSelection, onHover } = {}) {
-  const NX = pb.W, NY = pb.H, COUNT = NX * NY;
-  const cxOf = (i, j) => i + (j & 1) * 0.5, cyOf = j => j * HY;
-  const W = NX - 0.5, D = (NY - 1) * HY;
-  const X0 = -W * S / 2, Z0 = -D * S / 2;
-  const nb = [];
+  // ---------- display hex grid over the true W x H site field (pointy-top hexes, odd rows shifted half a hex) ----------
+  const FW = pb.W, FH = pb.H, DX = 1 / DISPLAY_K, DZ = DX * HY;   // hex spacing in sites
+  const NX = Math.round(FW / DX), NY = Math.floor(FH / DZ), COUNT = NX * NY;
+  const X0 = -FW * S / 2, Z0 = -FH * S / 2;
+  const hu = new Float32Array(COUNT), hv = new Float32Array(COUNT), wx = new Float32Array(COUNT), wz = new Float32Array(COUNT);
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const k = j * NX + i; hu[k] = (i + 0.25 + (j & 1) * 0.5) * DX; hv[k] = (j + 0.5) * DZ + (FH - NY * DZ) / 2;
+    wx[k] = X0 + hu[k] * S; wz[k] = Z0 + hv[k] * S;
+  }
+  const nb = new Int32Array(6 * COUNT).fill(-1);
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
     const n = (j & 1) ? [[i - 1, j], [i + 1, j], [i, j - 1], [i + 1, j - 1], [i, j + 1], [i + 1, j + 1]]
       : [[i - 1, j], [i + 1, j], [i - 1, j - 1], [i, j - 1], [i - 1, j + 1], [i, j + 1]];
-    nb.push(n.filter(([a, b]) => a >= 0 && b >= 0 && a < NX && b < NY).map(([a, b]) => b * NX + a));
+    n.forEach(([a, b], q) => { if (a >= 0 && b >= 0 && a < NX && b < NY) nb[6 * (j * NX + i) + q] = b * NX + a; });
   }
-  const pos = k => { const i = k % NX, j = (k / NX) | 0; return [X0 + cxOf(i, j) * S, Z0 + cyOf(j) * S]; };
+  // nearest display hex to a point in site units (row first, then column within the row)
+  const hexAt = (u, v) => {
+    const j = Math.min(NY - 1, Math.max(0, Math.round((v - hv[0]) / DZ)));
+    const i = Math.min(NX - 1, Math.max(0, Math.round(u / DX - 0.25 - (j & 1) * 0.5)));
+    return j * NX + i;
+  };
 
-  // ---------- per-frame site data from the playback (cached): density per site + wound mask at the outline level ----------
-  const cache = new Map();
-  function frameData(f) {
-    if (cache.has(f)) return cache.get(f);
-    const { fine, outline } = viewFrame(pb, f), k = fine.scale, dens = new Float32Array(COUNT), wound = new Uint8Array(COUNT);
-    const level = outline.level == null ? -1 : outline.level * 255;
-    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-      let a = 0; for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) a += fine.data[(j * k + dy) * fine.w + i * k + dx];
-      a /= k * k; dens[j * NX + i] = a / 255; wound[j * NX + i] = a < level ? 1 : 0;
+  // ---------- sampling a source field onto the hexes (bilinear; taps cached per field shape) ----------
+  const tapCache = new Map();
+  function taps(fw, fh, perSite) {
+    const key = `${fw}x${fh}@${perSite}`; if (tapCache.has(key)) return tapCache.get(key);
+    const idx = new Int32Array(4 * COUNT), wt = new Float32Array(4 * COUNT);
+    for (let k = 0; k < COUNT; k++) {
+      const cx = Math.min(fw - 1, Math.max(0, hu[k] * perSite - 0.5)), cy = Math.min(fh - 1, Math.max(0, hv[k] * perSite - 0.5));
+      const x0 = Math.min(fw - 2, Math.floor(cx)), y0 = Math.min(fh - 2, Math.floor(cy)), fx = cx - x0, fy = cy - y0;
+      idx.set([y0 * fw + x0, y0 * fw + x0 + 1, (y0 + 1) * fw + x0, (y0 + 1) * fw + x0 + 1], 4 * k);
+      wt.set([(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy], 4 * k);
     }
+    const t = { idx, wt }; tapCache.set(key, t); return t;
+  }
+  // field = { data (typed array), w, h, perSite (field cells per lattice site), norm (data value of density 1) }
+  function sample(field, out) {
+    const { idx, wt } = taps(field.w, field.h, field.perSite), d = field.data, s = 1 / (field.norm || 1);
+    for (let k = 0, q = 0; k < COUNT; k++, q += 4) out[k] = (wt[q] * d[idx[q]] + wt[q + 1] * d[idx[q + 1]] + wt[q + 2] * d[idx[q + 2]] + wt[q + 3] * d[idx[q + 3]]) * s;
+    return out;
+  }
+  // frame = { dens, wound, state } per hex; fresh = was wound in `ref` (playback frame 0, or live: ever carved)
+  function classify(fd, ref) {
+    const st = fd.state || new Uint8Array(COUNT);
+    for (let k = 0; k < COUNT; k++) {
+      if (fd.wound[k]) { st[k] = 0; continue; }
+      let e = 0; for (let q = 6 * k; q < 6 * k + 6; q++) if (nb[q] >= 0 && fd.wound[nb[q]]) { e = 1; break; }
+      st[k] = e ? 2 : ref[k] ? 3 : 1;
+    }
+    fd.state = st; return fd;
+  }
+
+  // ---------- per-frame data from the playback (cached): density per hex + wound mask at the outline level ----------
+  const cache = new Map();
+  function frameData(f, ref) {
+    if (cache.has(f)) return cache.get(f);
+    const { fine, outline } = viewFrame(pb, f), dens = sample({ data: fine.data, w: fine.w, h: fine.h, perSite: fine.scale, norm: 255 }, new Float32Array(COUNT));
+    const level = outline.level == null ? -1 : outline.level, wound = new Uint8Array(COUNT);
+    for (let k = 0; k < COUNT; k++) wound[k] = dens[k] < level ? 1 : 0;
     const d = { f, dens, wound, outline: outline.display, t: pb.t_hours[f], wf: pb.wound_frac[f] };
+    if (ref) classify(d, ref);
     cache.set(f, d); return d;
   }
-  const f0 = frameData(0);
-  const stateOf = (fd, k) => {
-    if (fd.wound[k]) return "wound";
-    for (const m of nb[k]) if (fd.wound[m]) return "edge";
-    return f0.wound[k] ? "fresh" : "intact";
-  };
+  const f0 = frameData(0, null); classify(f0, f0.wound);
   const wf0 = pb.wound_frac[0];
   // frame whose wound area (relative to its own start) best matches `area` (relative to the wound's first frame)
   function frameForArea(area) {
@@ -64,7 +105,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const scene = new THREE.Scene(); scene.background = new THREE.Color(SCENE_BG);
   const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 400);
   const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true; controls.minDistance = 1.5; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
+  controls.enableDamping = true; controls.minDistance = 1.0; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
   scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x101018, 1.1));
   const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-30, 60, 25); scene.add(key);
   const fill = new THREE.DirectionalLight(0xe4e6ea, 0.5); fill.position.set(40, 20, -30); scene.add(fill);
@@ -99,19 +140,26 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   label("local density (simulated)", V(xa - 0.2, top + 0.6, za), 0.5, "#e8ecef").center.set(1, 0.5);
 
   // ---------- columns: coloured + matte greyscale (outside a selection) ----------
-  const colGeo = new THREE.CylinderGeometry(0.5 * S * 1.1, 0.5 * S * 1.1, 1, 6); colGeo.translate(0, 0.5, 0); colGeo.rotateY(Math.PI / 6);
+  // pointy-top hex prism (CylinderGeometry puts its first vertex on +z), circumradius a little under the packing
+  // radius so the dark floor shows as a thin outline between hexes (the M10 mockup's "outlines on" look)
+  const R = DX * S / Math.sqrt(3) * 0.93;
+  const colGeo = new THREE.CylinderGeometry(R, R, 1, 6); colGeo.translate(0, 0.5, 0);
   const cols = new THREE.InstancedMesh(colGeo, new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 }), COUNT);
   const dull = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial(), COUNT);
+  cols.frustumCulled = dull.frustumCulled = false;   // one draw each; the instance bounds never need computing
   scene.add(cols, dull);
+  const col = new THREE.Color();
+  for (const m of [cols, dull]) m.setColorAt(0, col);   // allocates instanceColor
+  const cm = cols.instanceMatrix.array, dm = dull.instanceMatrix.array, cc = cols.instanceColor.array, dc = dull.instanceColor.array;
   const rnd = Float32Array.from({ length: COUNT }, (_, k) => ((Math.sin(k * 12.9898) * 43758.5453) % 1 + 1) % 1);  // fixed shade jitter
-  const hNow = new Float32Array(COUNT).fill(0.5), states = new Array(COUNT).fill("intact");
-  const m4 = new THREE.Matrix4(), col = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+  const hNow = new Float32Array(COUNT).fill(0.5), inSelA = new Uint8Array(COUNT).fill(1);
+  const LIN = STATES.map(s => new THREE.Color(PAL[s])), GREY = STATES.map(s => DARK[s]);
 
   // simulated outline (area-matched contour from smooth.js), labelled uncalibrated
   const outlineMat = new THREE.LineBasicMaterial({ color: 0xe8ecef, transparent: true, opacity: 0.8 });
   const outlineGroup = new THREE.Group(); scene.add(outlineGroup);
   const outlineLabel = label("simulated outline (uncalibrated)", V(0, HMAX * 1.1, 0), 0.4, "#e8ecef", scene);
-  const siteToWorld = (x, y) => V(X0 + (x - 0.25) * S, HMAX * 0.9, Z0 + (y - 0.5) * HY * S);
+  const siteToWorld = (x, y) => V(X0 + x * S, HMAX * 0.9, Z0 + y * S);
   function drawOutline(disp) {
     outlineGroup.children.forEach(c => c.geometry.dispose()); outlineGroup.clear();
     outlineMat.opacity = 0.8 * (disp?.opacity ?? 0);
@@ -126,32 +174,78 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (best) outlineLabel.position.set(best.x, HMAX * 1.15, best.z - 0.3);
   }
 
-  let sel = null, cur = f0, dirty = true, settle = 0;
-  const inSel = k => { if (!sel) return true; const [x, z] = pos(k); return x >= sel.x0 && x <= sel.x1 && z >= sel.z0 && z <= sel.z1; };
-  function updateColumns(dt) {
-    const ease = Math.min(1, dt * 6);
+  let sel = null, cur = null, moving = true;
+  const liveFd = { dens: new Float32Array(COUNT), wound: new Uint8Array(COUNT), state: new Uint8Array(COUNT) };   // reused per live step
+  // full write: instance placement + membership (colour mesh inside the selection, grey mesh outside) + colours
+  function writeAll() {
     for (let k = 0; k < COUNT; k++) {
-      const st = stateOf(cur, k); states[k] = st;
-      hNow[k] += (cur.dens[k] - hNow[k]) * ease;
-      const [x, z] = pos(k), h = Math.max(0.03, hNow[k]) * HMAX, on = inSel(k);
-      m4.makeScale(1, h, 1).setPosition(x, 0, z);
-      if (on) { col.setHex(PAL[st]); if (st === "intact") col.multiplyScalar(0.85 + 0.3 * rnd[k]); cols.setColorAt(k, col); }
-      else { const g = DARK[st] * (st === "intact" ? 0.85 + 0.3 * rnd[k] : 1); col.setRGB(g, g, g); dull.setColorAt(k, col); }
-      cols.setMatrixAt(k, on ? m4 : ZERO); dull.setMatrixAt(k, on ? ZERO : m4);
+      const on = inSelA[k], o = 16 * k, h = Math.max(0.03, hNow[k]) * HMAX;
+      for (const [m, mine] of [[cm, on], [dm, !on]]) {
+        m.fill(0, o, o + 16); m[o + 15] = 1;
+        if (mine) { m[o] = 1; m[o + 5] = h; m[o + 10] = 1; m[o + 12] = wx[k]; m[o + 14] = wz[k]; }
+      }
+    }
+    dull.visible = !!sel; cols.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
+    writeColours();
+  }
+  function writeColours() {
+    const st = cur.state;
+    for (let k = 0; k < COUNT; k++) {
+      const s = st[k], j = s === 1 ? 0.85 + 0.3 * rnd[k] : 1, c = LIN[s], o = 3 * k, g = GREY[s] * j;
+      cc[o] = c.r * j; cc[o + 1] = c.g * j; cc[o + 2] = c.b * j; dc[o] = dc[o + 1] = dc[o + 2] = g;
+    }
+    cols.instanceColor.needsUpdate = dull.instanceColor.needsUpdate = true;
+  }
+  // per frame: ease heights toward the density, write only the height entry; stop once settled
+  function ease(dt) {
+    const a = Math.min(1, dt * 6), d = cur.dens; let mx = 0;
+    for (let k = 0; k < COUNT; k++) {
+      const e = d[k] - hNow[k]; if (e > mx) mx = e; else if (-e > mx) mx = -e;
+      hNow[k] += e * a; const h = (hNow[k] < 0.03 ? 0.03 : hNow[k]) * HMAX;
+      (inSelA[k] ? cm : dm)[16 * k + 5] = h;
     }
     cols.instanceMatrix.needsUpdate = dull.instanceMatrix.needsUpdate = true;
-    if (cols.instanceColor) cols.instanceColor.needsUpdate = true;
-    if (dull.instanceColor) dull.instanceColor.needsUpdate = true;
+    moving = mx > 1e-3;
   }
+  function show(fd) { cur = fd; writeColours(); moving = true; }
 
-  // ---------- selection: drag a box on the floor ----------
+  // ---------- picking: march the ray down through the height field (no mesh raycast) ----------
   const ray = new THREE.Raycaster(), floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), ndc = new THREE.Vector2();
-  const selMesh = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0a458 })); scene.add(selMesh);
-  let selecting = false, dragStart = null;
-  function floorHit(e) {
+  const pA = new THREE.Vector3(), pB = new THREE.Vector3(), topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -HMAX);
+  function setRay(e) {
     const r = canvas.getBoundingClientRect();
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, camera);
-    const p = new THREE.Vector3(); return ray.ray.intersectPlane(floor, p) ? p : null;
+  }
+  function floorHit(e) { setRay(e); const p = new THREE.Vector3(); return ray.ray.intersectPlane(floor, p) ? p : null; }
+  const inField = (u, v) => u >= 0 && v >= 0 && u <= FW && v <= FH;
+  function pick(e) {   // -> hex k under the pointer (top of its column), or -1
+    setRay(e);
+    if (!ray.ray.intersectPlane(floor, pB)) return -1;
+    if (!ray.ray.intersectPlane(topPlane, pA)) pA.copy(pB);
+    for (let s = 0; s <= 32; s++) {
+      const t = s / 32, x = pA.x + (pB.x - pA.x) * t, y = pA.y + (pB.y - pA.y) * t, z = pA.z + (pB.z - pA.z) * t;
+      const u = (x - X0) / S, v = (z - Z0) / S; if (!inField(u, v)) continue;
+      const k = hexAt(u, v); if (y <= Math.max(0.03, hNow[k]) * HMAX + 1e-6) return k;
+    }
+    const u = (pB.x - X0) / S, v = (pB.z - Z0) / S; return inField(u, v) ? hexAt(u, v) : -1;
+  }
+
+  // ---------- tools: one slot, "select" (drag a box on the floor) or a brush ----------
+  // brush = { radius (sites), onPaint({ k, u, v, radius }) }. While on, left drag / one finger paints and the orbit
+  // moves to right drag / two fingers (wheel still zooms).
+  const selMesh = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0a458 })); scene.add(selMesh);
+  const ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0a458 })); ring.visible = false; scene.add(ring);
+  let tool = null, brush = null, dragStart = null, painting = false, lastK = -1;
+  function setTool(t, b = null) {
+    tool = t; brush = t === "brush" ? b : null; painting = false; dragStart = null; ring.visible = false; lastK = -1;
+    controls.enabled = t !== "select";
+    controls.mouseButtons.LEFT = brush ? -1 : THREE.MOUSE.ROTATE; controls.mouseButtons.RIGHT = brush ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    controls.touches.ONE = brush ? -1 : THREE.TOUCH.ROTATE;
+    canvas.style.cursor = t ? "crosshair" : "";
+    if (brush) {   // ring built once per brush; it only moves afterwards
+      const pts = []; for (let a = 0; a < 48; a++) { const th = a / 48 * 2 * Math.PI; pts.push(V(Math.cos(th) * brush.radius * S, 0, Math.sin(th) * brush.radius * S)); }
+      ring.geometry.dispose(); ring.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    }
   }
   function drawSelBox() {
     selMesh.geometry.dispose();
@@ -160,45 +254,58 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     selMesh.geometry = new THREE.BufferGeometry().setFromPoints([V(x0, y, z0), V(x1, y, z0), V(x1, y, z0), V(x1, y, z1), V(x1, y, z1), V(x0, y, z1), V(x0, y, z1), V(x0, y, z0),
       V(x0, 0, z0), V(x0, h, z0), V(x1, 0, z0), V(x1, h, z0), V(x1, 0, z1), V(x1, h, z1), V(x0, 0, z1), V(x0, h, z1)]);
   }
+  function setSel(s) {
+    sel = s; for (let k = 0; k < COUNT; k++) inSelA[k] = !sel || (wx[k] >= sel.x0 && wx[k] <= sel.x1 && wz[k] >= sel.z0 && wz[k] <= sel.z1) ? 1 : 0;
+    drawSelBox(); writeAll();
+  }
   function selStats() {
     if (!sel) return null;
     const c = { intact: 0, edge: 0, fresh: 0, wound: 0 }; let n = 0, h = 0;
-    for (let k = 0; k < COUNT; k++) if (inSel(k)) { c[states[k]]++; n++; h += cur.dens[k]; }
+    for (let k = 0; k < COUNT; k++) if (inSelA[k]) { c[STATES[cur.state[k]]]++; n++; h += cur.dens[k]; }
     if (!n) return null;
-    return { w_um: Math.round((sel.x1 - sel.x0) / S * SITE_UM), d_um: Math.round((sel.z1 - sel.z0) / (S * HY) * SITE_UM),
+    return { w_um: Math.round((sel.x1 - sel.x0) / S * SITE_UM), d_um: Math.round((sel.z1 - sel.z0) / S * SITE_UM),
       sites: n, open: c.wound / n, density: h / n, counts: c };
   }
   const emitSel = () => onSelection && onSelection(selStats());
-  const onDown = e => { if (selecting) dragStart = floorHit(e); };
+  function hover(e, k) {
+    if (!onHover) return;
+    if (k < 0) return onHover(null);
+    const r = canvas.getBoundingClientRect(), i = k % NX, j = (k / NX) | 0;
+    onHover({ i, j, x_um: Math.round(hu[k] * SITE_UM), y_um: Math.round(hv[k] * SITE_UM), state: STATES[cur.state[k]], density: cur.dens[k], px: e.clientX - r.left, py: e.clientY - r.top });
+  }
+  function paint(e) {
+    const k = pick(e); ring.visible = k >= 0;
+    if (k >= 0 && k !== lastK) ring.position.set(wx[k], Math.max(0.03, hNow[k]) * HMAX + 0.02, wz[k]);
+    if (k >= 0 && painting && k !== lastK) brush.onPaint({ k, u: hu[k], v: hv[k], radius: brush.radius });
+    lastK = k; return k;
+  }
+  const onDown = e => {
+    if (brush && e.button === 0) { painting = true; lastK = -1; canvas.setPointerCapture(e.pointerId); paint(e); return; }
+    if (tool === "select") dragStart = floorHit(e);
+  };
   const onMove = e => {
-    if (selecting && dragStart) {
+    if (tool === "select" && dragStart) {
       const p = floorHit(e); if (!p) return;
       sel = { x0: Math.min(dragStart.x, p.x), x1: Math.max(dragStart.x, p.x), z0: Math.min(dragStart.z, p.z), z1: Math.max(dragStart.z, p.z) };
-      drawSelBox(); dirty = true; return;
+      drawSelBox(); return;
     }
-    if (!onHover) return;
-    const p = floorHit(e); if (!p) return onHover(null);
-    const j = Math.round((p.z - Z0) / (HY * S)), i = Math.round((p.x - X0) / S - (j & 1) * 0.5);
-    if (i < 0 || j < 0 || i >= NX || j >= NY) return onHover(null);
-    const k = j * NX + i, r = canvas.getBoundingClientRect();
-    onHover({ i, j, x_um: i * SITE_UM, y_um: j * SITE_UM, state: states[k], density: cur.dens[k], px: e.clientX - r.left, py: e.clientY - r.top });
+    hover(e, brush ? paint(e) : pick(e));
   };
   const onUp = () => {
-    if (!selecting || !dragStart) return; dragStart = null; setSelecting(false);
-    if (sel && (sel.x1 - sel.x0 < 0.5 || sel.z1 - sel.z0 < 0.5)) { sel = null; drawSelBox(); }
-    dirty = true; emitSel();
+    painting = false;
+    if (tool !== "select" || !dragStart) return; dragStart = null; setTool(null);
+    setSel(sel && (sel.x1 - sel.x0 < 0.5 || sel.z1 - sel.z0 < 0.5) ? null : sel); emitSel();
   };
-  const onLeave = () => onHover && onHover(null);
+  const onLeave = () => { ring.visible = false; lastK = -1; onHover && onHover(null); };
   canvas.addEventListener("pointerdown", onDown); canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerup", onUp); canvas.addEventListener("pointerleave", onLeave);
-  function setSelecting(on) { selecting = on; controls.enabled = !on; canvas.style.cursor = on ? "crosshair" : ""; }
 
-  // ---------- camera presets: field (x1), wound (x10, about 10 cells across), cells (x40, a few cells) ----------
+  // ---------- camera presets: field (x1), wound (x10, about 16 sites across), cells (x40, a few sites) ----------
   let woundC = V(0, 0, 0);
-  { let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { const [x, z] = pos(k); sx += x; sz += z; n++; } if (n) woundC = V(sx / n, 0, sz / n); }
+  { let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { sx += wx[k]; sz += wz[k]; n++; } if (n) woundC = V(sx / n, 0, sz / n); }
   function edgePoint() {
     let best = null, bd = Infinity;
-    for (let k = 0; k < COUNT; k++) if (states[k] === "edge") { const [x, z] = pos(k), d = (x - woundC.x) ** 2 + (z - woundC.z - 2) ** 2; if (d < bd) { bd = d; best = V(x, 0, z); } }
+    for (let k = 0; k < COUNT; k++) if (cur.state[k] === 2) { const d = (wx[k] - woundC.x) ** 2 + (wz[k] - woundC.z - 2) ** 2; if (d < bd) { bd = d; best = V(wx[k], 0, wz[k]); } }
     return best || woundC;
   }
   const views = {
@@ -218,10 +325,11 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   }
 
   // screen length of 100 µm at the orbit target (for the HUD scale bar)
+  const sa = new THREE.Vector3(), sb = new THREE.Vector3();
   function pxPer100um() {
-    const a = controls.target.clone(), b = a.clone(); b.x += (100 / SITE_UM) * S;
-    a.project(camera); b.project(camera);
-    return Math.abs(b.x - a.x) / 2 * canvas.clientWidth;
+    sa.copy(controls.target); sb.copy(sa); sb.x += (100 / SITE_UM) * S;
+    sa.project(camera); sb.project(camera);
+    return Math.abs(sb.x - sa.x) / 2 * canvas.clientWidth;
   }
 
   // ---------- loop ----------
@@ -232,10 +340,10 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   const ro = new ResizeObserver(resize); ro.observe(host); resize();
   const clock = new THREE.Clock();
   let onFrameCb = null;
+  cur = f0; writeAll();
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta());
-    if (dirty) { settle = 1.2; dirty = false; }
-    if (settle > 0) { settle -= dt; updateColumns(reduced ? 1 : dt); if (sel) emitSel(); }
+    if (moving) { ease(reduced ? 1 : dt); if (sel && !moving) emitSel(); }
     if (fly) { fly.t = reduced ? 1 : Math.min(1, fly.t + dt / 1.4); const e = easeIO(fly.t); camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.q0, fly.q1, e); if (fly.t >= 1) fly = null; }
     controls.update(); renderer.render(scene, camera);
     onFrameCb && onFrameCb();
@@ -244,15 +352,23 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   return {
     frameForArea,
     showArea(area) {
-      const f = frameForArea(area); if (f === cur.f) return cur;
-      cur = frameData(f); drawOutline(cur.outline); dirty = true; return cur;
+      const f = frameForArea(area); if (cur && f === cur.f) return cur;
+      show(frameData(f, f0.wound)); drawOutline(cur.outline); return cur;
+    },
+    // live field { data, w, h, perSite, norm?, level } sampled onto the hexes; `fresh` (Uint8Array per hex) is kept
+    // by the caller: pass the same array each time and it accumulates every hex that was ever wound
+    showLive(field, fresh) {
+      const { dens, wound } = liveFd; sample(field, dens);
+      for (let k = 0; k < COUNT; k++) { wound[k] = dens[k] < field.level ? 1 : 0; if (wound[k]) fresh[k] = 1; }
+      if (cur !== liveFd) drawOutline(null);
+      show(classify(liveFd, fresh));
     },
     current: () => cur,
-    states: () => states,
-    stateOf: k => stateOf(cur, k),
-    grid: { NX, NY },
-    setSelecting, isSelecting: () => selecting,
-    clearSelection() { sel = null; drawSelBox(); dirty = true; emitSel(); },
+    stateOf: k => STATES[cur.state[k]],
+    grid: { NX, NY, COUNT, u: hu, v: hv, spacing: DX, W: FW, H: FH },
+    setSelecting(on) { setTool(on ? "select" : null); }, isSelecting: () => tool === "select",
+    setBrush(b) { setTool(b ? "brush" : null, b); },
+    clearSelection() { setSel(null); emitSel(); },
     hasSelection: () => !!sel,
     goTo, view: () => view, reset() { goTo("field"); }, zoom, pxPer100um,
     onFrame(cb) { onFrameCb = cb; },
