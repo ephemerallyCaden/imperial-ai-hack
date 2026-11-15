@@ -52,3 +52,4 @@
 .dr-scale i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--accent); }
 .dr-scale span { position: absolute; top: 15px; color: var(--accent); white-space: nowrap; }
 .dr-scale em { position: absolute; top: 30px; font-style: normal; }
+.dr-root [hidden] { display: none !important; }   /* .st-btn / .dr-canvas set display, which beats the hidden attribute */
