@@ -16,7 +16,8 @@ Scratch (wound-healing) assays are used across cancer migration, fibrosis, wound
 - **Stop-early advice**: on held-out wounds, 82% get a call at the first check (1.9 h); 91% of those calls are right, against 75% for always saying "won't close". Every early call is "won't reach 90% closure by 19 h"; we never confidently call early closure.
 - **Upload pipeline**: frames + frame interval + pixel size -> wound masks (texture segmenter) -> forecast. Refuses blank, out-of-focus or badly segmented frames, with the reason.
 - **Cell-level model**: a cell-agent simulator and a neural cellular automaton (NCA) that emulates it, for the draw-a-wound view and a continuous zoom from cells to the whole wound (simulated cells, labelled as such). Fine-tuned on real WHAD frames, the NCA now matches the statistical forecaster (see Results).
-- **Viewer**: _TODO (Joanne): draw tool, forecast view, upload screen, scorecard page, Figma link._
+- **Viewer** (`web/`): one page with three modes. **Assay** plays a recorded agent run on a wound: 3D simulated-cell field, closure curve with its 90% band, decision card with approve / reject, and the agent's summary. **Ops** shows the run log step by step, the agent scoreboard, the adversarial test results and the forecast evidence (scorecard, calibration, stall flag, failure case). **Draw** lets you draw a wound and watch simulated cells heal it under a fitted preset (no band, no forecast claim). Designed in Figma: [Stitch-UI](https://www.figma.com/design/vTCApH2oLBShNu4Oi9dsGg).
+- **Agent layer** (`agent/`): at each check, code runs QC, the forecast, the stall flag and the stop-early advice; policy code lists the allowed decisions; Claude picks one and explains it; every number it writes is checked against the tool outputs (100% traced); stopping a plate needs a human. A Reporter writes a short summary per run, and an Intake helper reads the protocol text (frame interval, pixel size, condition). The plate-hour gain comes from the forecaster and the policy; the model chooses among allowed options and explains them. See `agent/README.md`.
 
 ## How it works
 
@@ -85,13 +86,15 @@ python -m pytest -q tests/                       # fast checks, no raw data need
 
 ## Open-source libraries
 
-numpy, scipy, pandas, matplotlib, tifffile, Pillow, jsonschema, PyTorch (NCA). _TODO (Joanne): add web libraries._
+numpy, scipy, pandas, matplotlib, tifffile, Pillow, jsonschema, PyTorch (NCA), anthropic (agent model calls), transformers + peft (optional, to run the Intake fine-tune locally), pytest. Web: three.js 0.170 (plain ES modules, no build step).
 
 ## Models / APIs
 
 - Statistical baselines and conformal calibration: our code (`eval/`).
 - Cell-agent simulator and NCA: our code (`sim/`, `nca/`), PyTorch on CPU.
-- Claude (Anthropic) was used as a coding assistant. _TODO: list any LLM use in the product (e.g. cached assay-intake notes), or "none"._
+- Claude (Anthropic) was used as a coding assistant.
+- In the product, Claude (Opus 5.5) is the agent's model: it chooses among the decisions the policy code allows, explains them, writes the end-of-run summary and, without the fine-tune, reads protocol text. It never produces a number that the Critic cannot trace to a tool output, and it never raises or clears a flag. Demo runs are recorded once and played back, so viewing needs no key.
+- Adaption: a small model (Qwen 3.5 0.8B) fine-tuned on our Intake task (protocol text to settings); see `data/adaption/` and the results doc for its win rate.
 
 ## Honesty notes
 
