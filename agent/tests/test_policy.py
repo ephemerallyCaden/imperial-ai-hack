@@ -20,7 +20,7 @@ def test_stall_forces_ask_human():
 
 
 def test_open_choice_middle_p():
-    assert ids(st()) == [P.CONTINUE, P.IMAGE_AGAIN]
+    assert ids(st()) == [P.CONTINUE, P.ASK_HUMAN, P.IMAGE_AGAIN]
 
 
 def test_threshold_edges():
@@ -31,11 +31,11 @@ def test_threshold_edges():
 
 
 def test_no_p_no_stops():
-    assert ids(st(p_close=None)) == [P.CONTINUE, P.IMAGE_AGAIN]
+    assert ids(st(p_close=None)) == [P.CONTINUE, P.ASK_HUMAN, P.IMAGE_AGAIN]
 
 
 def test_no_next_check():
-    assert ids(st(next_check_h=None)) == [P.CONTINUE]
+    assert ids(st(next_check_h=None)) == [P.CONTINUE, P.ASK_HUMAN]
 
 
 def test_item_shape_and_flags():
