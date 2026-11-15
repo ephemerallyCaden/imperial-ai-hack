@@ -50,7 +50,7 @@ def report(rng, decision, data, calibrated):
     t50 = (f.get("t50") or {}).get("median")
     p = f.get("p_close_by_T")
     s = []
-    s.append(rng.choice([f"{decision['label']} at the {fmt(cut)} h check: {decision['evidence']}.",
+    s.append(rng.choice([f"Check at {fmt(cut)} h: {decision['label'].lower()}, since {decision['evidence']}.",
                          f"Decision at {fmt(cut)} h: {decision['label'].lower()}, because {decision['evidence']}."]))
     if med is not None and lo is not None and hi is not None:
         s.append(rng.choice([f"The forecast median leaves {fmt(med)} of the starting area open at {fmt(H)} h, with a {band} of {fmt(lo)} to {fmt(hi)}.",
