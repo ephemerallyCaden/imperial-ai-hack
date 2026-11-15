@@ -10,6 +10,20 @@ export const PRESETS = {
   CC: { Tm: 0.4815544732805177, Td: null, bias: 0.25 }, // n 7 (4 manual); Tm IQR 0.39-0.63, bias IQR 0.25-0.57
   C61: { Tm: 0.4805468482096445, Td: null, bias: 0.362584527178654 }, // n 7 (3 manual); Tm IQR 0.44-0.53, bias IQR 0.29-0.41
 };
+// rule 'follow' presets = sim/fits/whad_fits_follow.json presets.draw_tool (Agent 1, 490b4c7, feature/p2-v2-sim; sha256
+// b5859c8c0993): part II medians at cut-off 9.5 h under rule = "follow". Tm is ~9x the free-rule value: never mix the sets.
+// Caption (Agent 1): bias is not identified from these data; Tm carries the signal.
+export const PRESET_LABEL_FOLLOW = 'simulation, preset parameters (WHAD part II fits, follow rule)';
+export const PRESET_CAPTION_FOLLOW = 'bias not identified from these data; Tm carries the signal';
+export const PRESETS_FOLLOW = {
+  CC: { Tm: 4.2867591533230405, Td: null, bias: 0.7541227302000011 }, // n 7 (4 manual); Tm IQR 4.06-7.34, bias IQR 0.64-0.90
+  C61: { Tm: 4.707304000226463, Td: null, bias: 0.5330060647425588 }, // n 7 (3 manual); Tm IQR 4.42-5.04, bias IQR 0.43-0.66
+};
+// demo default (user decision, recorded on #68 as an open departure from the pre-declared criterion)
+export const DEFAULT_RULE = 'follow';
+export const presetsFor = (rule) => (rule === 'follow' ? PRESETS_FOLLOW : PRESETS);
+export const presetLabelFor = (rule) => (rule === 'follow' ? PRESET_LABEL_FOLLOW : PRESET_LABEL);
+export const presetCaptionFor = (rule) => (rule === 'follow' ? PRESET_CAPTION_FOLLOW : null);
 export const DT = 0.05; // hours per step, = cellsim.DT
 export const SITE_UM = 20; // um per lattice site (one site = one cell), = cellsim.SITE_UM; WHAD field = 32x44 sites
 export const FIELD_H = 32, FIELD_W = 44; // draw tool is locked to the WHAD field (presets were fitted at this size)
@@ -43,18 +57,26 @@ export function reservoirMask(occ, h, w, edge = DEFAULTS.edge) {
 
 export class Engine {
   // wound: Uint8Array(w*h), 1 = drawn wound (empty); everything else starts as cells.
-  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1 }) {
+  // rule: 'follow' (DEFAULT since the v2 decision, #68) or 'free' (the pre-registered gate rules; 'frozen' = alias).
+  // 'follow' (cellsim Params.follow, feature/p2-follower): a mover that is
+  // Moore-connected to the reservoir through occupied sites pulls the chain behind it, so its source stays occupied;
+  // movers on islands leave a vacancy as before. Fixed at construction (preset switches keep it). params.follow = true
+  // is accepted as an alias.
+  constructor({ w, h, wound, preset = 'CC', params = null, seed = 1, rule = DEFAULT_RULE }) {
     this.w = w; this.h = h;
     this.occ = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) this.occ[i] = wound[i] ? 0 : 1;
     this.rand = rng(seed);
     this.t_hours = 0;
+    this.follow = (rule === 'follow' || !!(params && params.follow)) && !(params && params.follow === false);
+    this.rule = this.follow ? 'follow' : 'free'; // = cellsim Params.rule names; picks the matching preset set
     this.setPreset(preset, params);
     // reservoir = border-band sites occupied at t0 (cellsim.reservoir_mask): a wound touching the edge stays open
     this.resMask = reservoirMask(this.occ, h, w, this.p.edge);
     this.res = [];
     for (let i = 0; i < w * h; i++) if (this.resMask[i]) this.res.push(i);
     this._refill();
+    if (this.follow) { this.conn = Uint8Array.from(this.resMask); this._growConnected(); }
     this.g = new Float32Array(w * h);
     const R = this.p.blur;
     this.cum = new Float64Array((w + 2 * R + 1) * (h + 2 * R + 1));
@@ -62,7 +84,24 @@ export class Engine {
   }
 
   setPreset(name, override) {
-    this.p = { ...DEFAULTS, ...(PRESETS[name] || PRESETS.CC), ...(override || {}) };
+    const set = presetsFor(this.rule);
+    this.p = { ...DEFAULTS, ...(set[name] || set.CC), ...(override || {}) };
+  }
+
+  // cellsim.grow_connected: conn &= occ, then extend to every occupied site Moore-connected to it (conn only grows)
+  _growConnected() {
+    const { w, h, occ, conn } = this, q = this._q || (this._q = new Int32Array(w * h));
+    let tail = 0;
+    for (let i = 0; i < w * h; i++) { if (!occ[i]) conn[i] = 0; else if (conn[i]) q[tail++] = i; }
+    for (let head = 0; head < tail; head++) {
+      const i = q[head], x = i % w, y = (i / w) | 0;
+      for (let k = 0; k < 8; k++) {
+        const ny = y + NY[k], nx = x + NX[k];
+        if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+        const j = ny * w + nx;
+        if (occ[j] && !conn[j]) { conn[j] = 1; q[tail++] = j; }
+      }
+    }
   }
 
   _refill() {
@@ -128,9 +167,10 @@ export class Engine {
     for (let a = 0; a < srcs.length; a++) {
       if (keys[a] !== best[tgts[a]]) continue; // lost the conflict
       occ[tgts[a]] = 1;
-      if (moves[a]) occ[srcs[a]] = 0;
+      if (moves[a] && !(this.follow && this.conn[srcs[a]])) occ[srcs[a]] = 0; // follow: connected source stays filled
     }
     this._refill();
+    if (this.follow) this._growConnected();
     this.t_hours += p.dt;
   }
 
