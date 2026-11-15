@@ -54,7 +54,7 @@ import time
 
 import numpy as np
 
-from agent import config, critic, llm, policy, prompts, tools
+from agent import config, critic, llm, policy, prompts, reporter, tools
 from agent.runlog import RunLog, fingerprint
 
 LOO_DIR = os.path.join(config.REPO, "eval", "forecasts", "whad", "loo_all")
@@ -186,6 +186,7 @@ class _Run:
         self.max_steps, self.token_budget, self.runs_dir = max_steps, token_budget, runs_dir
         self.steps, self.tok_in, self.tok_out, self.traced, self.untraced = 0, 0, 0, 0, 0
         self.inherited_outputs, self.branches, self.last, self.last_cut = [], [], None, None
+        self.inherited_records = []   # the parent's records up to the branch point (Reporter facts)
         self.budget_out, self.child_log, self.child_used = False, None, False
         self.investigated, self.prev_doc = False, None
         if parent is not None:   # a branch shares the parent's counters and evidence up to the branch point
@@ -193,6 +194,7 @@ class _Run:
                       "investigated", "prev_doc"):
                 setattr(self, k, copy.deepcopy(getattr(parent, k)))
             self.inherited_outputs = parent.inherited_outputs + parent.log.tool_outputs()
+            self.inherited_records = parent.inherited_records + list(parent.log.records)
 
     # -- limits
     def _step(self):
@@ -407,6 +409,23 @@ class _Run:
         else:
             self.branches.append(child.run_from(k + 1, checks))
 
+    def _report(self, end):
+        """Reporter (reporter.summarise), once per run log, just before run_end. The report call counts against
+        MAX_STEPS and TOKEN_BUDGET; with none left it is the template. A Reporter error never blocks run_end."""
+        recs = self.inherited_records + list(self.log.records) + [{"kind": "run_end", **end}]
+        try:
+            rep = reporter.summarise(recs, steps_left=self.max_steps - self.steps,
+                                     tokens_left=self.token_budget - self._tokens())
+        except Exception as e:  # noqa: BLE001 - the run must still end with run_end
+            self.log.log("report", source="error", error=f"{type(e).__name__}: {e}")
+            return
+        if rep.get("model_called"):
+            self.steps += 1
+            self.tok_in += rep["usage"]["input_tokens"]
+            self.tok_out += rep["usage"]["output_tokens"]
+            rep["step"] = self.steps
+        self.log.log("report", **rep)
+
     def _end(self, reason, stop_h=None, stop_kind=None, **extra):
         last = self.last or {}
         if self.child_log is not None and not self.child_used and not self.child_log.records:
@@ -415,11 +434,13 @@ class _Run:
             except OSError:
                 pass
             self.child_log = None
+        end = dict(reason=reason, decision=last.get("id"), decision_label=last.get("label"),
+                   explanation=last.get("explanation"), stopped=stop_h is not None, stop_h=stop_h, stop_kind=stop_kind,
+                   ended_at_h=self.last_cut, horizon_h=config.HORIZON_H,
+                   plate_hours_saved=round(config.HORIZON_H - stop_h, 3) if stop_h is not None else 0.0)
+        self._report(end)
         summary = self.log.log(
-            "run_end", reason=reason, decision=last.get("id"), decision_label=last.get("label"),
-            explanation=last.get("explanation"), stopped=stop_h is not None, stop_h=stop_h, stop_kind=stop_kind, ended_at_h=self.last_cut,
-            horizon_h=config.HORIZON_H,
-            plate_hours_saved=round(config.HORIZON_H - stop_h, 3) if stop_h is not None else 0.0,
+            "run_end", **end,
             steps=self.steps, tokens={"input": self.tok_in, "output": self.tok_out, "total": self._tokens()},
             numbers_traced=self.traced, numbers_untraced=self.untraced,
             branch_run_ids=[b["run_id"] for b in self.branches], **extra)
@@ -588,8 +609,12 @@ def run_wound(run_id, wound, checks=config.CHECKS_H, approve=lambda decision: Tr
 
 def replay_stub(messages, system, tools_):
     """Deterministic offline model for STITCH_PROVIDER=stub: follows the schedule advice, quotes the evidence."""
-    allowed = tools_[0]["input_schema"]["properties"]["decision_id"]["enum"]
     text = messages[-1]["content"]
+    if tools_[0]["name"] == prompts.REPORT_TOOL:   # the Reporter: the template from the fact block, as the "reply"
+        facts = json.loads(text.split(f"<{prompts.REPORT_TAG}>", 1)[1].split(f"</{prompts.REPORT_TAG}>", 1)[0])
+        return {"tool_calls": [{"id": "stub_r", "name": prompts.REPORT_TOOL, "input": reporter.template(facts)}],
+                "stop_reason": "tool_use", "model": "replay_stub"}
+    allowed = tools_[0]["input_schema"]["properties"]["decision_id"]["enum"]
     data = json.loads(text.split(f"<{prompts.DATA_TAG}>", 1)[1].split(f"</{prompts.DATA_TAG}>", 1)[0])
     pick = next(d for d in (policy.STOP_UNLIKELY, policy.IMAGE_AGAIN, policy.CONTINUE) if d in allowed)
     item = next(d for d in data["allowed_decisions"] if d["id"] == pick)

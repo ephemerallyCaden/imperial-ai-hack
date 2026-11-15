@@ -145,7 +145,8 @@ class Trace:
         prompts_seen, orig = [], llm.call_model
 
         def recorder(messages, system="", tools=None, max_tokens=4096):
-            prompts_seen.append({"messages": messages, "system": system, "tools": tools})
+            if not (tools and tools[0].get("name") == prompts.REPORT_TOOL):   # decision prompts only, not the Reporter
+                prompts_seen.append({"messages": messages, "system": system, "tools": tools})
             return orig(messages, system=system, tools=tools, max_tokens=max_tokens)
         asked = []
         if not self.real:

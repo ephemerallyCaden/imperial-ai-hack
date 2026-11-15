@@ -11,7 +11,8 @@ At each imaging check (1.9, 3.8, 5.7 and 9.5 h) the agent:
 3. asks the model to pick one allowed decision and explain it in plain English;
 4. checks the pick against policy, then passes the explanation through the scope guard and the Critic;
 5. asks a human to approve anything that cannot be undone (stopping a plate);
-6. writes every step to a run log.
+6. writes every step to a run log;
+7. at the end of the run, the Reporter writes a plain-English report (`reporter.py`), logged before `run_end`.
 
 ## Where the gain comes from
 
@@ -30,6 +31,39 @@ fixed seeds, about 1 s) and ranks them by fit error to the observed curve up to 
 logged as a `tool_call` (with `trigger`), so the Critic can trace its fit errors. The model sees the ranking and may
 mention it; it never changes the decision. Accuracy on the simulated known-cause wounds is in
 `results/investigator.md` (`python -m agent.investigator`). The start is a synthetic band, not the wound's own mask.
+
+## Intake (protocol text -> settings)
+
+`agent/intake.py` `extract(protocol_text)` (also the `intake` tool) sends the exact training prompt from
+`data/adaption/prompt.py` to a model, validates the reply against `data/adaption/schema.json`, then code checks units
+(interval in hours, scale in um/px, sane ranges, non-hourly and non-WHAD-scale notes), maps the condition to CC or C61
+and checks scope (MCF10A plus mitomycin, 2D monolayer, transmitted light). Returns `fields`, `feeds_code` (interval,
+scale, condition), `informational`, `unit_notes`, `scope_ok`, `scope_notes`, `backend`, `fallback_reason` and the
+(truncated) `source_text` so the UI can show the extraction next to the source.
+
+- Backend: `STITCH_INTAKE_BACKEND=adapter|llm|stub`; default adapter when `STITCH_INTAKE_ADAPTER` is an existing folder
+  or `.tgz`, else llm (`call_model`). Adapter = transformers + peft on the base in `adapter_config.json`
+  (`STITCH_INTAKE_BASE` overrides, `STITCH_INTAKE_OFFLINE=1` uses the local cache only), greedy decoding, chat template
+  with thinking off (`STITCH_INTAKE_PROMPT_STYLE=raw` to send the prompt as is).
+- Fallback: adapter or stub -> llm -> "could not extract" (`ok: false`); each skipped step is in `fallback_reason`.
+- Eval: `python -m agent.intake --eval [--preds out.jsonl]` scores the configured backend (no fallback) on
+  `data/adaption/test_real.jsonl` with `score.py`. It calls the configured model, so it is not run in tests.
+
+## Reporter (end of run)
+
+`reporter.summarise(records, steps_left, tokens_left)` runs once per run log (branch logs too), just before `run_end`.
+Its inputs are code-extracted facts from the log only: each check's decision (label, evidence, source, human answer),
+the end (reason, stop time, plate-hours saved), flags, refusal reasons and Investigator hypotheses. Model explanations,
+wound names, notes and protocol text are never in the fact block. The block is compact (strings cut to 200 characters,
+oldest checks dropped past 3000 characters) and sent inside `<run_facts>` delimiters as data. One `call_model()` call
+with the strict `write_report` tool returns `headline` (one sentence), `summary` (3 to 5 sentences), `next_step` (one
+sentence) and `caveats`. Each field goes through the scope guard (a hit replaces that field with the template's, or
+drops that caveat) and then the Critic (sources: the run's tool outputs, the code-computed end facts such as
+plate-hours saved, and the allowlist). With no model, no step or token budget left (the call counts against
+`MAX_STEPS` and `TOKEN_BUDGET`), a failed call, a refusal or an invalid reply, a deterministic template from the same
+facts is used (`source: template`). Code always adds the fixed caveats: research use only; simulated cells are
+labelled; Investigator results are hypotheses, not causes (when present); "likely to close" is untested (when it
+appears). It also works on a finished log read back with `runlog.read`.
 
 ## What it does not do
 
@@ -61,8 +95,10 @@ mention it; it never changes the decision. Accuracy on the simulated known-cause
 | `critic.py` | `trace(text, tool_outputs)`: returns cleaned text plus traced and untraced counts |
 | `prompts.py` | System prompt, the `propose_decision` tool and the delimited data block |
 | `run.py` | The hand-written loop and the CLI; `replay_stub` is the offline model |
+| `reporter.py` | `summarise(records)`: the end-of-run report from run-log facts; one model call, scope guard and Critic on every field, template fallback |
 | `evaluate.py` | Replay scoreboard for the three policies |
 
+| `intake.py` | Intake (#90, 9b): protocol text -> interval, scale, condition with the fine-tune's prompt and schema; unit and scope checks in code |
 | `investigator.py` | Investigator lite (#87): reruns the simulator from alternative starts and ranks them by fit to the observed curve; hypotheses, not causes |
 
 Flow: tools -> policy -> model pick -> policy check -> Critic -> approval -> run log.
@@ -125,6 +161,7 @@ One JSON object per line. Every record has `run_id`, `seq`, `ts` and `kind`.
 | `decision` | each check | `decision`, `label`, `allowed`, `state`, `source` (`forced`, `llm` or `fallback`), `fallback_reason`, `explanation`, `irreversible`, `untested` |
 | `approval` | at a stop or stall | `decision`, `approved`, `note` |
 | `human_review` | "ask a human to review" | `decision`, `note` |
+| `report` | once per log, just before `run_end` | `headline`, `summary`, `next_step`, `caveats`, `source` (`llm` or `template`), `fallback_reason`, `facts`, `critic` (`removed`, `traced`, `untraced`), `scope`, `model`, `model_called`, `usage`; `step` when the model was called |
 | `run_end` | last line | `reason`, `decision`, `stopped`, `stop_h`, `stop_kind`, `plate_hours_saved`, `steps`, `tokens`, `numbers_traced`, `numbers_untraced`, `branch_run_ids` |
 
 `run_end.reason` is one of `stopped`, `schedule_complete`, `handed_to_human`, `max_steps`, `token_budget`,

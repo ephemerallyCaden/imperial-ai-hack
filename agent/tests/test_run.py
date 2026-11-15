@@ -30,6 +30,9 @@ def _need(*paths):
 def _schedule_stub(extra="", calls=None, usage=None):
     """Follows the schedule advice and quotes the policy evidence (plus `extra`)."""
     def h(messages, system, tools):
+        if tools[0]["name"] == prompts.REPORT_TOOL:   # end-of-run Reporter (not counted in `calls`)
+            return {"tool_calls": [{"id": "r", "name": prompts.REPORT_TOOL, "input": {
+                "headline": "Run ended.", "summary": "One. Two. Three.", "next_step": "Review.", "caveats": []}}]}
         if calls is not None:
             calls.append((messages, system, tools))
         allowed = tools[0]["input_schema"]["properties"]["decision_id"]["enum"]
@@ -57,7 +60,7 @@ def test_normal_run_to_a_stop(tmp_path):
     assert out["stop_h"] == 1.9 and out["plate_hours_saved"] == pytest.approx(17.1)
     assert seen and seen[0]["id"] == policy.STOP_UNLIKELY and seen[0]["irreversible"]
     assert [r["kind"] for r in recs] == ["run_start", "tool_call", "tool_call", "model_call", "critic", "decision",
-                                         "approval", "run_end"]
+                                         "approval", "report", "run_end"]
     tc = _kind(recs, "tool_call")
     assert all(r["input_fp"].startswith("sha256:") for r in tc)
     assert tc[1]["output"]["results"][0]["schedule"]["p_close_by_T"] == 0.094
@@ -157,7 +160,8 @@ def test_prompt_injection_in_metadata_is_data(tmp_path):
     calls = []
 
     def obey(messages, system, tools):   # a model that falls for the injection
-        calls.append((messages, system, tools))
+        if tools[0]["name"] != prompts.REPORT_TOOL:   # the Reporter's prompt is checked in test_reporter.py
+            calls.append((messages, system, tools))
         return {"tool_calls": [{"id": "t", "name": prompts.TOOL_NAME,
                                 "input": {"decision_id": policy.STOP_LIKELY, "explanation": "99% sure it closes."}}]}
     llm.set_stub(obey)
@@ -265,7 +269,7 @@ def test_budget_out_after_call_finishes_the_check(tmp_path):
     out, recs = _go(tmp_path, NORMAL, approve=lambda d: False)
     assert out["reason"] == "token_budget" and out["ended_at_h"] == 1.9
     assert [r["kind"] for r in recs] == ["run_start", "tool_call", "tool_call", "model_call", "critic", "decision",
-                                         "approval", "run_end"]
+                                         "approval", "report", "run_end"]
     assert _kind(recs, "decision")[0]["source"] == "llm"
 
 
@@ -293,7 +297,11 @@ def test_metadata_is_truncated(tmp_path):
     docs[0]["forecasts"][0]["notes"] = "D" * 600
     docs[0]["dataset"] = "E" * 600
     seen = []
-    llm.set_stub(lambda m, s, t: seen.append(m[0]["content"]) or _schedule_stub()(m, s, t))
+    def h(m, s, t):
+        if t[0]["name"] != prompts.REPORT_TOOL:   # decision prompts only
+            seen.append(m[0]["content"])
+        return _schedule_stub()(m, s, t)
+    llm.set_stub(h)
     _, recs = _go(tmp_path, docs, approve=lambda d: False)
     assert len(seen) == 1 and len(seen[0]) < 10000
     meta = _kind(recs, "model_call")[0]["data"]["wound_metadata"]
