@@ -12,7 +12,7 @@ const pct = (x, d = 0) => (x * 100).toFixed(d) + "%";
 const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const shortId = id => id.replace(/^exp(\d)_part(I+)_/, "E$1·$2·").replace(/_/g, "·");
 const condOf = id => { const k = (id.match(/_(CC|C61|NC|N61)_/) || [])[1]; return k ? COND[k] ?? `Condition ${k}` : ""; };
-const hrs = t => t?.median == null ? `> ${H} h` : `${t.median.toFixed(1)} h`;
+const hrs = t => t?.median == null || t.median > H ? `> ${H} h` : `${t.median.toFixed(1)} h`;   // past the 19 h recording: not observed
 
 function series(doc, cut) {
   return doc.forecasts.map(f => {

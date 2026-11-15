@@ -67,10 +67,10 @@ Stall across cut-offs: AUC 0.77-0.90, precision 0.48-0.75, recall 0.62-0.71.
 
 Policy fixed in advance: at each check (1.9, 3.8, 5.7, 9.5 h), if P(90% closed by 19 h) <= 0.1 or >= 0.9, make the call and stop imaging; otherwise keep imaging. Held-out WHAD wounds, edge-speed forecaster. This is a simulation on recorded data, not a lab trial.
 
-- **45 of 55 series (82%) get a call by the first check** (median 1.9 h); 91% of calls are right (4 wrong), vs 75% for always saying 'won't close'.
+- **Edge speed: 43 of 55 series (78%) get a call at the first check (1.9 h) and 45 (82%) by 9.5 h**; 91% of calls are right (4 wrong), vs 75% for always saying 'won't close'.
 - Every early call is **'won't reach 90% closure by 19 h'** (45 calls); the forecaster never confidently calls early closure. The wrong calls are wounds that did close: stopping them would have been a mistake.
-- Simulated imaging saved: 13.9 h per series on average (of 19 h).
-- Same policy with the shipped forecaster (real-data NCA v3): 45 of 55 series called by the first check, 91% of calls right (4 wrong).
+- Simulated imaging saved (edge speed): 13.9 h per series on average (of 19 h).
+- Same policy with the shipped forecaster (real-data NCA v3): 39 of 55 series (71%) called at the first check (38 right) and 45 (82%) by 9.5 h, 91% of calls right (4 wrong), 13.5 h of imaging saved per series on average (`eval/results/calls_by_check.csv`).
 
 ## NCA vs baselines (gate, design.md 5.3)
 
