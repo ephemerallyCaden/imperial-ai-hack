@@ -1,4 +1,4 @@
-// Final tissue look for every 2D view in web/draw (Caden's pick, from the 3D prototype URL
+// Final tissue look for the held-out 2D view (heldout.js), moved from the removed web/draw/tissue.js (Caden's pick, from the 3D prototype URL
 // design/prototypes/glass-dish/index.html?pal=C68B6E,B3122E,FFD2C6,FFFFFF,24120F&bg=120A09&mat=toon&age=skin&hshift=8).
 // 2D port: palette, skin age ramp (ageSkin), cool hue shift (coolShift, 8 deg x darkness toward 240), and a 3-step toon
 // shade (70/150/255, as the prototype's MeshToon gradientMap). Lighting has no 2D equivalent. Colours are illustrative.

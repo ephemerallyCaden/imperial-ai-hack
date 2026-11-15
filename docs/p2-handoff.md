@@ -21,7 +21,7 @@ The files import each other by relative path. Use a module worker; `file://` wil
 
 The worker, the weights fetch and playback have been smoke-tested in headless Chrome (see the browser smoke test).
 
-**Draw mode, ready to mount (#106):** `web/draw/draw.js` exports `mountDraw(el)`, which builds both Draw views on these files: *Draw a wound* (engine, follow presets, no band) and *Real wound* (sim vs NCA vs observed on exp1_partII_C61_P2, with the NCA band computed live in the worker and labelled uncalibrated). Asset paths resolve from the module, so it works from any page. Standalone page: `python -m http.server 8000 --directory web`, then open `/draw/`. Styling uses the `st-*` classes and tokens from `design/style-guide/tokens.css`, with fallbacks in `web/draw/draw.css`.
+**Drawing (live, in Assay's 3D view):** the separate Draw screen (`web/draw/`, #106) is gone. Pick *Draw a wound · live NCA* in Assay (or press Draw / B): the brush raycasts the hex columns, maps the hex centre to the coarse 16x22 NCA grid and sets density 0 there; the v2 follower NCA keeps running in `web/public/sim/js/live.js` (copy of `sim/js/live.js`, check `node sim/js/live_check.mjs`) until every cell is back to 0.95 density (stall guard 12 simulated h, cap 500 h), and any new cut restarts it. Hexes sample the coarse density bilinearly (display interpolation). Presets = CC / C61 `PRESETS_FOLLOW` as (Tm, bias); no band, no forecast. *From photo…* carves a photo's traced outline (`web/assay/photo.js`). The *Real wound: sim vs NCA* view and the edge-speed heatmap UI went with the Draw screen; `web/edge/edge_speed.js` and the worker's `nca-load` / `band` API are unchanged.
 
 ## 0. v2 defaults: the follower rule (demo, user decision recorded on #68)
 
