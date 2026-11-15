@@ -46,6 +46,18 @@ Full tables, every split and cut-off: [`docs/results.md`](docs/results.md). Head
 - **No "measure again" flag**: no signal we tried, including the NCA's own ensemble spread, predicts which forecasts will go wrong consistently (AUC 0.61-0.72, varying by cut-off), so we don't ship one.
 - **Small data**: 28 WHAD wounds (9 with manual masks); coverage CIs are about +/-0.05 to +/-0.15.
 
+### Adaption fine-tune: Intake (protocol text to settings)
+
+`Qwen/Qwen3.5-2B` fine-tuned with Adaption AutoScientist (run `695c8c20`, 1,500 templated rows, LoRA) to turn a Methods paragraph into the upload settings. Scored on 30 **real** open-access Methods paragraphs that were never trained on, with labels checked by a person, same prompt and greedy decoding for both ([`docs/adaption-results.md`](docs/adaption-results.md)):
+
+| | Base Qwen3.5-2B | Fine-tuned |
+|---|---|---|
+| Mean field accuracy (9 fields) | 47.4% | **80.4%** |
+| Exact match (all 9 fields right) | 0% | **20%** |
+| Adaption win rate vs base (platform, held-out synthetic rows) | | 0.9471 |
+
+The win rate is Adaption's own figure on a held-out split of our synthetic rows; the real-paragraph table is ours. 80% of real paragraphs still have at least one wrong field, so Intake only proposes settings next to the source text and a person confirms them. It runs locally; Claude is the fallback. Triage and Reporter fine-tunes: #115.
+
 ## Datasets
 
 | Dataset | Licence | Use |
@@ -92,6 +104,7 @@ numpy, scipy, pandas, matplotlib, tifffile, Pillow, jsonschema, PyTorch (NCA). _
 - Statistical baselines and conformal calibration: our code (`eval/`).
 - Cell-agent simulator and NCA: our code (`sim/`, `nca/`), PyTorch on CPU.
 - Claude (Anthropic) was used as a coding assistant. _TODO: list any LLM use in the product (e.g. cached assay-intake notes), or "none"._
+- Intake: `Qwen/Qwen3.5-2B` + a LoRA trained with Adaption (run locally, output cached), Claude as fallback (`data/adaption/`).
 
 ## Honesty notes
 
