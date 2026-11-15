@@ -154,6 +154,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
   // ---------- columns: coloured + matte greyscale (outside a selection) ----------
   // the mockup's hex prism and proportions: radius 0.55 x hex spacing, turned 30 deg (look.js colGeo)
   const colGeo = hexGeo(0.55 * DX * S);
+  colGeo.setDrawRange(0, colGeo.groups[2].start);   // groups: side, top, bottom cap; the bottom faces the floor (never seen): -25% triangles
   const cols = new THREE.InstancedMesh(colGeo, makeColumnMaterial(FINAL.mat, FINAL.hshift), COUNT);
   const dull = new THREE.InstancedMesh(colGeo, new THREE.MeshLambertMaterial(), COUNT);
   cols.frustumCulled = dull.frustumCulled = false;   // one draw each; the instance bounds never need computing
