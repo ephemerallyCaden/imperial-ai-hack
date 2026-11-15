@@ -14,7 +14,8 @@ hours_out    output times (hours, > t_obs_hours[-1]); the NCA steps hourly from 
              linearly interpolated.
 stochastic   True = NCA noise on (ensemble band); False = deterministic.
 Returns area_norm trajectories, normalised to the first frame like whad_curves.csv.
-Weights: nca/weights.pt (default; override with weights=PATH).
+Weights: nca/weights.pt (default, v1 frozen rules; override with weights=PATH, e.g. nca/v2/weights.pt for the follower
+rule). A <weights>.config.json next to the file sets the Tm range, the source gate and the sim rule; none = v1.
 """
 import os, sys
 import numpy as np, torch
@@ -22,7 +23,7 @@ import numpy as np, torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "sim")); sys.path.insert(0, HERE)
 from cellsim import Params, reservoir_mask, coarse_grain, GRAIN
-from model import NCA, norm_params, TM_MIN, TM_MAX, BIAS_MIN, BIAS_MAX
+from model import NCA, build, load_config, encode
 
 WEIGHTS = os.path.join(HERE, "weights.pt")
 _nets = {}
@@ -30,7 +31,7 @@ _nets = {}
 
 def load(weights=WEIGHTS):
     if weights not in _nets:
-        net = NCA(); net.load_state_dict(torch.load(weights, map_location="cpu")); net.eval()
+        net = build(load_config(weights)); net.load_state_dict(torch.load(weights, map_location="cpu")); net.eval()
         _nets[weights] = net
     return _nets[weights]
 
@@ -46,11 +47,12 @@ def rollout(net, rho, R, members, n, stochastic=True, seed=0):
     """rho, R (h, w) float32; members (B, 2) -> wound fraction (B, n+1), frame 0 = start."""
     torch.manual_seed(seed)
     m = np.asarray(members, float).reshape(-1, 2)
-    m = np.column_stack([np.clip(m[:, 0], TM_MIN, TM_MAX), np.clip(m[:, 1], BIAS_MIN, BIAS_MAX)])
+    c = net.cfg
+    m = np.column_stack([np.clip(m[:, 0], c["tm_min"], c["tm_max"]), np.clip(m[:, 1], c["bias_min"], c["bias_max"])])
     B = len(m)
     x = torch.tensor(rho, dtype=torch.float32)[None, None].repeat(B, 1, 1, 1)
     r = torch.tensor(R, dtype=torch.float32)[None, None].repeat(B, 1, 1, 1)
-    p = torch.tensor([norm_params(*q) for q in m], dtype=torch.float32)
+    p = torch.tensor([encode(c, *q) for q in m], dtype=torch.float32)
     with torch.no_grad():
         fr = net(x, p, n, R=r, stochastic=stochastic).numpy()
     return 1.0 - fr.mean((2, 3))
