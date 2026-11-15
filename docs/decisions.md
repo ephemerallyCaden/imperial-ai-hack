@@ -121,3 +121,6 @@ Legend: DECIDED = user said so; PROPOSED = our recommendation, not yet confirmed
 - DECIDED: the age heatmap is the only 3D heatmap (button, A, H, View menu). It grows from the dish centre and shrinks back over 700 ms. The edge-stall overlay from #143 is removed; stall decisions keep their cards and timeline ticks.
 - DECIDED: idle camera orbit. After 6 s without input the camera turns around the target (one turn per 2.5 min). Any input stops it, it resumes after 6 s idle, I toggles it, and it is off under reduced motion.
 - DECIDED (performance): no multithreading, chunking or WASM. Profile at 6,424 hexes: GPU about 0.5 ms per frame and the NCA worker about 1% of a core, so the 3D view is not compute-bound. Doing the cheap fixes instead: DOM writes on change only, minimap early exit, dropping the never-visible hex bottoms. Skipped: shader warm-up (the first-use hitch only appeared with vsync off), worker frame precompute, and GPU-driven instancing (worth it only past about 30k hexes).
+
+## 2026-11-15 [Caden] Video role-play number
+- DECIDED: Stitch's role-play line reads "stagnating at under 1% an hour". Source: stall demo wound exp1_partI_C61_P1 closed 0.76% of its starting area in the first hour before the stall flag fired at 1.9 h (it ended 4% larger at 19 h). "An hour", not "a day", because WHAD frames are hourly.
