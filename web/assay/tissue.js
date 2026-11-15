@@ -169,15 +169,20 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
 
   // ---------- cell age = steps since the hex stopped being wound; never wound = original tissue (age Infinity) ----------
   // playback: born = first frame a hex is no longer wound after being wound (display mask), found by walking the frames in
-  // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. span 0.6 x frames.
+  // order up to the latest one shown; once set it holds for every later frame, so seeking back stays right. Playback ages
+  // count simulated time, AGE_STEPS_PER_H steps per hour (about the mockup's step: its ~240-step heal vs a ~13 h wound), so
+  // look.js's 25-step new-tissue rise and the span mean the same whatever the frame interval (the NCA playbacks' 0.5 h
+  // frames put 0.6 x frames under the 60 floor: a 42.5 h ramp, new tissue stayed pale). span 0.6 x the playback's length,
+  // as the mockup's is 0.6 x its frames.
   // live: born = the step its NCA density is first back at the wound level after its latest carve; step = field.step when
   // the caller passes one (e.g. NCA substeps), else the count of distinct NCA states received. span 60 steps.
+  const AGE_STEPS_PER_H = 18, stepOf = f => Math.round(pb.t_hours[f] * AGE_STEPS_PER_H);   // playback frame -> age step
   let SPAN_PB; const SPAN_LIVE = 60;   // SPAN_PB is set per playback in load()
   const bornPb = new Int32Array(COUNT).fill(-1), woundSeen = new Uint8Array(COUNT); let bornTo = -1;
   function bornUpTo(f) {
     for (let g = bornTo + 1; g <= f; g++) {
       const w = frameData(g, f0.wound).wound;
-      for (let k = 0; k < COUNT; k++) if (w[k]) woundSeen[k] = 1; else if (woundSeen[k] && bornPb[k] < 0) bornPb[k] = g;
+      for (let k = 0; k < COUNT; k++) if (w[k]) woundSeen[k] = 1; else if (woundSeen[k] && bornPb[k] < 0) bornPb[k] = stepOf(g);
     }
     bornTo = Math.max(bornTo, f);
   }
@@ -188,7 +193,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     if (p.W !== FW || p.H !== FH) throw new Error(`playback ${p.name} is ${p.H}x${p.W} sites, the 3D field is ${FH}x${FW}`);
     pb = p; cache = new Map(); wf0 = pb.wound_frac[0] || 1;
     f0 = frameData(0, null); classify(f0, f0.wound);
-    SPAN_PB = Math.max(60, 0.6 * pb.wound_frac.length); bornPb.fill(-1); woundSeen.fill(0); bornTo = -1;
+    SPAN_PB = Math.max(60, 0.6 * (stepOf(pb.t_hours.length - 1) - stepOf(0))); bornPb.fill(-1); woundSeen.fill(0); bornTo = -1;
     let sx = 0, sz = 0, n = 0; for (let k = 0; k < COUNT; k++) if (f0.wound[k]) { sx += wx[k]; sz += wz[k]; n++; }
     woundC = n ? new THREE.Vector3(sx / n, 0, sz / n) : new THREE.Vector3();
   }
@@ -470,7 +475,7 @@ export function createTissue(host, pb, { onSelection, onHover } = {}) {
     playback: () => pb,
     showArea(area) {
       const f = frameForArea(area); if (cur && f === cur.f) return cur;
-      bornUpTo(f); show(frameData(f, f0.wound), bornPb, f, SPAN_PB); drawOutline(cur.outline);
+      bornUpTo(f); show(frameData(f, f0.wound), bornPb, stepOf(f), SPAN_PB); drawOutline(cur.outline);
       return cur;
     },
     zoomLevel, setZoom,
