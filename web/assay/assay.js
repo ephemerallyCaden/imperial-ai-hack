@@ -44,7 +44,7 @@ export async function mount(el, ctx) {
       <button class="st-btn st-btn--primary" data-act="upload" title="1-5 phase-contrast frames (forecast) or one skin-wound photo (live NCA, no forecast)"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>Upload images…</button>
       <input type="file" accept="image/*" multiple hidden id="as-file">
       <span class="as-qc" hidden></span>
-      <span class="as-honesty" hidden></span>
+      <span class="as-honesty"></span>
     </div>
     <div class="as-main">
       <div class="as-centre">
@@ -70,13 +70,13 @@ export async function mount(el, ctx) {
           <div class="as-hud as-hud-br as-selstats st-panel" hidden></div>
           <div class="st-tip as-tip" hidden></div>
           <div class="as-cover" hidden></div>
-          <div class="as-notice st-panel--solid" hidden></div>
         </div>
       </div>
       <aside class="as-panel" aria-label="Decision and forecast"></aside>
     </div>
     <div class="as-heldout" hidden></div>
     <div class="as-timeline"></div>
+    <div class="as-notice st-panel--solid" hidden></div>
   </div>`;
   const $ = s => el.querySelector(s), panel = $(".as-panel"), stage = $(".as-stage");
 
@@ -157,7 +157,7 @@ export async function mount(el, ctx) {
   const VIEWS = {
     draw: {
       enter(it) {
-        leaveRun(it); $(".as-honesty").innerHTML = chips([LIVE_LABEL, "Simulated cells · not tracked cells", "No forecast"]);
+        leaveRun(it); $(".as-honesty").innerHTML = chips(["Simulated cells · not tracked cells", "NCA emulator · preset parameters", "No forecast"]);
         if (!tissue) { panel.innerHTML = `<div class="error">Drawing needs the 3D field, which could not load (three.js offline?).</div>`; return; }
         tissue.clearSelection();
         live = live || createLive(tissue, { onState: liveState });
@@ -172,7 +172,7 @@ export async function mount(el, ctx) {
     },
     heldout: {
       enter(it) {
-        leaveRun(it); $(".as-honesty").innerHTML = chips(["Uncalibrated (simulator / NCA spread)", "Simulated cells · not tracked cells", "Observed data end at 19 h"]);
+        leaveRun(it); $(".as-honesty").innerHTML = chips(["Uncalibrated spread", "Simulated cells · not tracked cells", "Observed data end at 19 h"]);
         $(".as-main").hidden = true; const host = $(".as-heldout"); host.hidden = false; heldout = mountHeldout(host);
       },
       leave() { heldout?.dispose(); heldout = null; $(".as-heldout").hidden = true; $(".as-main").hidden = false; },
@@ -464,6 +464,12 @@ export async function mount(el, ctx) {
       const im = images();
       panel.innerHTML = refusedDoc ? refusedPanel(refusedDoc) + framesRow(im) : decisionCard(ps) + charts(r, c, S.t) + framesRow(im);
       panel.querySelectorAll("canvas[data-mask]").forEach(drawMask);
+      // honesty line (design.md 11): source, simulated cells, calibration; QC flag reasons on hover
+      const sq = !refusedDoc && fc?.segmentation_quality;
+      $(".as-honesty").innerHTML = chips([S.item.kind === "run" ? "Recorded run" : S.item.kind === "upload" ? "Browser estimate · edge speed" : "Sample data",
+        refusedDoc ? null : "Simulated cells · not tracked cells", c && !refusedDoc && !isCalibrated(c.doc, fc) ? "Uncalibrated" : null,
+        S.active === "branch" ? "Rejected branch (recorded)" : null].filter(Boolean))
+        + (sq?.status === "flagged" ? `<span class="st-chip st-chip--flag" title="${esc((sq.reasons || []).join("; "))}">QC flagged</span>` : "");
     }
     const now = panel.querySelector(".c-now");
     if (now) { const x = curveX(S.t).toFixed(1); now.setAttribute("x1", x); now.setAttribute("x2", x); }

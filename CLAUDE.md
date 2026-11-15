@@ -32,7 +32,7 @@ Python data/eval/sim/NCA pipeline (no build step; Python 3.12); browser code is 
 - Agent scoreboard: `.venv/bin/python -m agent.evaluate` (writes `agent/results/scoreboard.csv` and `.md`; no real model calls)
 - Agent real run: load `.env` (`set -a; . ./.env; set +a`, with `STITCH_PROVIDER`, `STITCH_MODEL` and key or AWS profile), then the `agent.run` command above
 - Assay 3D NCA fields (`web/public/sim/nca_follow_<wound>.json`, docs/p2-handoff.md): `python3 -I sim/js/assay_nca_case.py <wound> /tmp/case.json`, then `node sim/js/make_nca_playback.mjs web/public/sim/nca_v2_weights.json /tmp/case.json web/public/sim/nca_follow_<wound>.json 0 web/public/sim/nca_v2_weights.config.json`
-- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`, `node sim/js/heal_check.mjs`, `node sim/js/live_check.mjs`; look parity `python3 -I scripts/check_look_sync.py` (web/vendor-design/look.js must equal design/prototypes/glass-dish/look.js)
+- P2 browser code: `sim/js/` (copied to `web/public/sim/js/`); integration guide `docs/p2-handoff.md`; JS checks `node sim/js/parity.mjs`, `node sim/js/draw_check.mjs`, `node sim/js/heal_check.mjs`, `node sim/js/live_check.mjs`; upload checks `node web/upload/parity.mjs` (browser upload vs data/upload.py; python3 with numpy/scipy) and `node web/upload/route_check.mjs` (Upload images routing on the sample images; python3 with Pillow); look parity `python3 -I scripts/check_look_sync.py` (web/vendor-design/look.js must equal design/prototypes/glass-dish/look.js)
 
 ## Architecture
 <!-- Fill in after initial scaffolding -->
