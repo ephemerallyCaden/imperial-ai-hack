@@ -91,3 +91,39 @@ Reading:
 - `nca_deterministic` is within about 5% of `nca_ensemble`, so the stochastic members add little beyond their median.
 - Note: P1's `gate()` counts every non-gated model in a group as a "baseline", so `nca_deterministic` shows up as
   "best baseline" in some rows. The table above compares against the statistical baselines only.
+
+---
+
+# NCA v2: follower (sheet-like) rule (`nca/v2/`, branch feature/p2-v2-nca)
+
+Decision (user, recorded on #68): adopt the follower rule everywhere. This openly departs from the pre-declared
+criterion. v2 is the demo NCA, and the v1 rows stay in the scorecard. v1 files (`nca/weights.*`, `nca_ensemble*`,
+`nca_deterministic*`) are unchanged.
+
+## What changed vs v1
+- **Simulator:** `Params(rule="follow")` (Agent 4, 3dd4fcf). A mover connected to the reservoir pulls the chain behind
+  it, so its source stays occupied. The sheet stays packed and the wound closes as a front. A room-capped local flux
+  cannot carry mass through rho = 1 cells.
+- **Front mechanism:** the existing non-negative source head is switched ON (gate `division = 1`):
+  `add = near * sigmoid(src - 3) * (1 - new) / K`, where `near` = 3 x 3 max of rho at the substep start (zero pad).
+  So mass can only appear next to cells, and never inside an empty wound interior. The flux is still exactly
+  conservative. Mass enters only through this front source and the reservoir floor.
+- **Parameter range:** Tm 0.05-500 h (follower fits reach 500 h for stalled part I wounds). The encoding is
+  `p0 = 2 (ln Tm - ln 0.05) / (ln 500 - ln 0.05) - 1`, so nothing is clipped.
+- **Config travels with the weights:** `nca/v2/weights.config.json` (rule, Tm/bias range, source gate, data
+  provenance). `nca/api.py`, the gate scripts and the JS read it; weights without a config are read as v1.
+- **Loss:** from the start, an energy score on the normalised closure curve (`--w-anorm 2`) and a low per-cell MSE
+  (`--w-mse 1`), so the members are not pulled together.
+
+## Data and audit fixes (Agent 3's audit)
+- 3000 follower runs (sha256 7df49a98108b) on the 32 x 44 lattice. Tm is log-uniform 0.05-500 h, bias 0.25-0.9.
+- Start shapes: 50% real WHAD masks, but only frames with series time t <= 1.9 h (P1's earliest cut-off): 32 shapes
+  from 16 positions, flipped. The other 50% are synthetic.
+- Provenance is asserted end to end:
+  - the npz stores {rule, Tm range, early_t} and `train.py` asserts they match the config;
+  - the gate picks `whad_fits_follow.json` by the model's rule and asserts the fits file's `params.rule`;
+  - the real-data scripts assert that every fold model is follower/v2.
+- Training: 2000 steps with the curriculum to 19 h. Selection is on simulator validation runs only
+  (best normalised-area MAE 0.0195; v1 was 0.036).
+- Weights: `nca/v2/weights.pt` sha256 ccf3c4acdddf, `weights.json` a426643dab3b. Torch vs JS max diff 8.9e-7
+  (Agent 3).
