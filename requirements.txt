@@ -4,5 +4,6 @@ pandas>=2.2
 tifffile>=2024.1
 Pillow>=10
 jsonschema>=4
+matplotlib>=3.8
 torch==2.15.0  # NCA training/inference (nca/), CPU is enough
 contourpy>=1.2

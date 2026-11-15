@@ -35,7 +35,7 @@ def score_series(f, cut, T):
     y = a[m]
     q = {p: np.interp(t[m], ft, f[k]) for p, k in zip(QS, ("area_q05", "area_q50", "area_q95"))}
     pin = lambda p, qq: np.maximum(p * (y - qq), (p - 1) * (y - qq))
-    r = {"wound": f["wound"], "n_pts": int(m.sum()),
+    r = {"wound": f.get("wound", f["wound_id"]), "n_pts": int(m.sum()),
          "inside": int(((y >= q[0.05]) & (y <= q[0.95])).sum()),
          "coverage": float(np.mean((y >= q[0.05]) & (y <= q[0.95]))), "width": float(np.mean(q[0.95] - q[0.05])),
          "qscore": float(np.mean([2 * pin(p, q[p]) for p in QS])), "mae": float(np.mean(np.abs(q[0.5] - y)))}
