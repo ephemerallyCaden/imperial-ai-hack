@@ -44,6 +44,15 @@ def fit_params(fits, pos):
     return f[key]["Tm"], f[key]["bias"], key
 
 
+CUTS = ["1.9", "3.8", "5.7", "9.5"]
+
+
+def fit_params_by_cut(fits, pos):
+    """(4, 2) Tm, bias fitted on frames <= each cut-off: what the forecast actually receives (NaN if missing)."""
+    f = fits[pos]
+    return [(f[c]["Tm"], f[c]["bias"]) if c in f else (np.nan, np.nan) for c in CUTS]
+
+
 def masks_manual(pos, t_abs):
     z = np.load(f"{PROC}/whad_masks/{pos}.npz")
     th = z["t_hours"]
@@ -73,7 +82,7 @@ def main():
     tab = frame_table()
     fits = {**json.load(open(os.path.join(ROOT, "sim/fits/whad_fits.json")))["fits"],
             **json.load(open(os.path.join(ROOT, "sim/fits/whad_auto_fits.json")))["fits"]}
-    arrs, ids, wounds, sources, params = {}, [], [], [], []
+    arrs, ids, wounds, sources, params, params_cuts = {}, [], [], [], [], []
     area_err, corrs, shapes, cut_used, n_frames = [], [], set(), {}, 0
     for i, sid in enumerate(sorted(S)):
         s, g = S[sid], tab[sid]
@@ -91,11 +100,13 @@ def main():
         shapes.add(dens.shape[1:])
         arrs[f"{i}__density"], arrs[f"{i}__t"], arrs[f"{i}__R"] = dens, np.asarray(s["t"], np.float32), R
         ids.append(sid); wounds.append(s["wound"]); sources.append(s["source"]); params.append((Tm, bias))
+        params_cuts.append(fit_params_by_cut(fits, sid))
         n_frames += len(dens)
         print(f"  [{i + 1}/{len(S)}] {sid:22} {s['source']:6} F={len(dens):2d} wound {wf[0]:.3f}->{wf[-1]:.3f} "
               f"a_end {s['a'][-1]:.3f} corr {corrs[-1]:.3f}", flush=True)
     np.savez_compressed(OUT, ids=np.array(ids, str), wounds=np.array(wounds, str), datasets=np.array(["whad"] * len(ids)),
-                        params=np.array(params, np.float32), sources=np.array(sources, str), **arrs)
+                        params=np.array(params, np.float32), sources=np.array(sources, str),
+                        params_cuts=np.array(params_cuts, np.float32), cuts=np.array([float(c) for c in CUTS], np.float32), **arrs)
 
     z = np.load(OUT, allow_pickle=False)
     assert set(z["ids"]) == set(S) and all(f"{i}__density" in z.files for i in range(len(S)))

@@ -16,6 +16,9 @@ Five simple forecasters, all with the same calibration: no-change, linear, const
 **Which wins?**
 On WHAD, constant edge speed (wound edge moving at a fixed speed, 2 parameters): quantile score 0.0386 vs 0.0732 for the typical-wound curve at 3.8 h of history. More history helps every model.
 
+**What happens on a condition you haven't seen?**
+"Bands calibrated on control wounds alone under-covered CYR61-knockdown wounds: 0.72 at 9.5 h for the NCA. Calibrating on every other known condition fixes that (0.90). At 1.9 h it stays a bit low (0.81, 0.85 with extra widening). So for a cell line we've never calibrated on, Stitch widens the band and says so with an 'uncalibrated condition' flag, rather than pretending."
+
 **Did you hold out anything harder than random wounds?**
 Two held-out conditions. WHAD control to CYR61 knockdown: coverage 0.92 at 3.8 h, but only 0.78 at 1.9 h. WHiM-BC ordinary to stem-cell-enriched cells: it fails, 15-58% coverage. Stem-cell wounds close about twice as fast, so bands calibrated on ordinary cells do not transfer. We report that as a limit.
 
@@ -43,7 +46,7 @@ After 1.9, 3.8, 5.7 and 9.5 hours (10/20/30/50% of the 19 h series). Every WHAD 
 Frames -> texture segmenter (wound = low-texture region) -> wound area curve -> forecaster -> conformal band -> flags -> forecast file in a fixed JSON schema that the viewer reads. Bad inputs are refused: blank, out of focus (texture score < 1.0; real WHAD frames are >= 1.10), wound < 1% or > 70% of the field, more than 3 large wound regions, or no scale / interval.
 
 **What does the NCA add?** (gate results, design.md R18 and R26)
-"Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes 9 of 12 checks: at 3.8 h its quantile score is 0.0403 vs 0.0386 for edge speed (within 4%), and at 9.5 h it is the best model we have. Training on real data was the difference. Adding a second dataset (Zaritsky) made it worse, so we didn't."
+"Trained only on our simulator, it failed our pre-set gate. Fine-tuned on real WHAD frames, with 4 wound-level folds so no wound is forecast by a model that trained on it, it passes. Our cleanest version beats every model at the earliest cut-off (1.9 h: 0.0530 vs 0.0562 for edge speed) and at 9.5 h, and is within a few percent in between. What made it work: training on real frames, giving it the same early parameter estimates it gets at forecast time, and averaging three training runs. Adding a second dataset (Zaritsky) made it worse, so we didn't."
 _Earlier answer (simulator-only NCA):_
 "Our neural cellular automaton is trained on our cell-agent simulator and given the same leave-one-wound-out calibration as the baselines. At 3.8 h it is 29% worse than the 2-parameter edge-speed model (quantile score 0.0495 vs 0.0385), so by our own pre-set gate the statistical forecaster ships. The NCA catches up with more history: by 9.5 h it ties or beats every baseline on all three splits. It matches the simulator within 7% everywhere, so its value is speed: it is the fast emulator behind the draw-a-wound tool, labelled as an emulator."
 **Why not just trust the NCA's own spread?** "Uncalibrated, its 90% band covers 14% of what happens (the simulator's 21%): member spread is too small. The same conformal step brings both to 93%."
@@ -109,5 +112,5 @@ Our contribution: per-wound early forecasts with uncertainty checked on unseen w
 | Stall flag | AUC 0.77-0.90 |
 | Segmenter | IoU 0.84 / 0.60, area error ~1.8 points |
 | Data | 28 WHAD wounds (9 manual), 24 WHiM-BC, 62 embryo, 19 Zaritsky |
-| NCA at 3.8 h | sim-only 0.0499 (fails); real-data fine-tune 0.0403 vs 0.0386 (passes, 9/12); best at 9.5 h |
+| NCA real-data v3 | best of all models at 1.9 h (0.0530 vs 0.0562) and 9.5 h; within 3-8% at 3.8/5.7 h; sim-only failed |
 | Stop early | 82% called at 1.9 h, 91% right (95% real-data NCA) vs 75% always-no; only "won't close" calls |

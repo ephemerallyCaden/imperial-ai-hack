@@ -25,13 +25,16 @@ ap.add_argument("--steps", type=int, default=800); ap.add_argument("--bs", type=
 ap.add_argument("--lr", type=float, default=1e-3); ap.add_argument("--max-hours", type=float, default=19.0)
 ap.add_argument("--w-anorm", type=float, default=1.0); ap.add_argument("--w-mse", type=float, default=1.0)
 ap.add_argument("--val-every", type=int, default=100); ap.add_argument("--seed", type=int, default=0)
+ap.add_argument("--threads", type=int, default=4)
+ap.add_argument("--param-mode", choices=["cut", "fixed"], default="cut",
+                help="cut = per start frame, the fit at the matching forecast cut-off (what the forecast receives); fixed = one fit per sequence")
 ap.add_argument("--augment", type=int, default=1, help="random horizontal/vertical flips of start, reservoir and targets")
 ap.add_argument("--keep-edge-params", action="store_true", help="keep non-WHAD sequences whose params hit the grid corner")
 ap.add_argument("--select", choices=["last", "val"], default="last",
                 help="last = save the final weights (no peeking: the held-out fold is the gate's test set); "
                      "val = keep the best held-out checkpoint (leaks test outcomes into weight choice; diagnostics only)")
 a = ap.parse_args()
-torch.manual_seed(a.seed); torch.set_num_threads(4); rng = np.random.default_rng(a.seed)
+torch.manual_seed(a.seed); torch.set_num_threads(a.threads); rng = np.random.default_rng(a.seed)
 a.out = a.out or f"nca/weights_real_fold{a.fold}.pt"
 
 
@@ -39,9 +42,16 @@ def fold_of(w):
     return zlib.crc32(str(w).encode()) % a.nfolds
 
 
+def norm_clip(Tm, bias):
+    Tm = Tm if np.isfinite(Tm) else 1.0; bias = bias if np.isfinite(bias) else 0.5
+    return norm_params(min(max(Tm, TM_MIN), TM_MAX), min(max(bias, BIAS_MIN), BIAS_MAX))
+
+
 def load(path):
     d = np.load(path, allow_pickle=False)
     out = []
+    has_cuts = "params_cuts" in d.files and a.param_mode == "cut"
+    cuts = np.asarray(d["cuts"], float) if has_cuts else None
     for i in range(len(d["ids"])):
         Tm, bias = (float(v) for v in d["params"][i])
         Tm = Tm if np.isfinite(Tm) else 1.0; bias = bias if np.isfinite(bias) else 0.5
@@ -50,7 +60,9 @@ def load(path):
                         x=torch.tensor(d[f"{i}__density"], dtype=torch.float32), t=np.asarray(d[f"{i}__t"], np.float64),
                         R=(lambda r: r[:, None] if r.dim() == 3 else r[None, None].expand(len(d[f"{i}__t"]), 1, *r.shape))(
                             torch.tensor(d[f"{i}__R"], dtype=torch.float32)),  # (F,1,h,w): reservoir at each start frame
-                        p=torch.tensor(norm_params(Tm, bias), dtype=torch.float32)))
+                        p=torch.tensor(norm_params(Tm, bias), dtype=torch.float32),
+                        pc=(torch.tensor([norm_clip(*q) for q in d["params_cuts"][i]], dtype=torch.float32) if has_cuts else None),
+                        cuts=cuts))
     keep = [s for s in out if len(s["t"]) >= 2]
     if not a.keep_edge_params:  # self-fit stuck at the grid corner = no usable param label (review #66 finding 6)
         keep = [s for s, (Tm, bias) in zip(out, d["params"]) if len(s["t"]) >= 2 and not
@@ -87,12 +99,23 @@ def val_metric(net):
             hrs = np.rint(s["t"] - s["t"][0]).astype(int)
             if hrs.max() < 1:
                 continue
-            y = net(s["x"][None, :1], s["p"][None], int(hrs.max()), R=s["R"][:1], stochastic=False)[0]
+            y = net(s["x"][None, :1], params_at(s, 0)[None], int(hrs.max()), R=s["R"][:1], stochastic=False)[0]
             w0 = (1 - s["x"][0].mean()).clamp_min(1e-3)
             pw, ow = (1 - y.mean((1, 2))) / w0, (1 - s["x"].mean((1, 2))) / w0
             j = np.nonzero(hrs > 0)[0]
             errs.append((pw[hrs[j]] - ow[j]).abs().mean().item())
     return float(np.mean(errs))
+
+
+def params_at(s, st):
+    """Params for a rollout starting at frame st: the latest cut-off fit that has not seen the next frame (largest
+    cut < t[st+1]). Forecast starts (t = 1/3/5/9 h) get exactly their cut's fit (1.9/3.8/5.7/9.5); other training starts
+    never get a fit that saw frames they are scored on, except st = 0, which peeks one frame (unavoidable; review #92)."""
+    if s["pc"] is None:
+        return s["p"]
+    nxt = s["t"][st + 1] - s["t"][0] if st + 1 < len(s["t"]) else np.inf
+    j = int(np.searchsorted(s["cuts"], nxt - 1e-9)) - 1
+    return s["pc"][min(max(j, 0), len(s["cuts"]) - 1)]
 
 
 def batch():
@@ -114,7 +137,7 @@ def batch():
         for hr, j in hrs.items():
             tgt[b, hr] = s["x"][j]; m[b, hr] = 1
     x0 = torch.stack([s["x"][st] for s, st, _ in picks])[:, None]
-    R = torch.stack([s["R"][st] for s, st, _ in picks]); P = torch.stack([s["p"] for s, _, _ in picks])
+    R = torch.stack([s["R"][st] for s, st, _ in picks]); P = torch.stack([params_at(s, st) for s, st, _ in picks])
     if a.augment:  # dynamics do not depend on orientation: same flip for start, reservoir and targets
         for dim in (-1, -2):
             if rng.random() < 0.5:

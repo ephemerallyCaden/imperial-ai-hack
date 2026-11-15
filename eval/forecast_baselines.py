@@ -75,8 +75,14 @@ def load(dataset):
 def splits(dataset, S):
     if dataset == "whad":
         man = {k for k, s in S.items() if s["source"] == "manual"}
-        return {"loo_all": (set(S), set(S)), "loo_manual": (man, man),
-                "CC_to_C61": ({k for k in S if S[k]["cond"] == "C61"}, {k for k in S if S[k]["cond"] == "CC"})}
+        cond = lambda c: {k for k in S if S[k]["cond"] == c}
+        out = {"loo_all": (set(S), set(S)), "loo_manual": (man, man),
+               "CC_to_C61": (cond("C61"), cond("CC")),  # pre-registered held-out condition test (R15)
+               # v4 (R28): calibrate on every non-C61 condition; C61 is still never in the pool
+               "rest_to_C61": (cond("C61"), set(S) - cond("C61"))}
+        for c in ("CC", "N61", "NC"):  # leave-one-condition-out among KNOWN conditions -> condition-shift inflation
+            out[f"lco_{c}"] = (cond(c), set(S) - cond(c) - cond("C61"))
+        return out
     if dataset in ("embryo", "zaritsky"):
         return {"loo": (set(S), set(S))}
     return {"loo": (set(S), set(S)),
