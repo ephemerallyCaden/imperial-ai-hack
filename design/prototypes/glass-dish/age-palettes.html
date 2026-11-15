@@ -50,6 +50,7 @@ const GROUPS = [
     ['Berry', 'last round, for comparison', '883955', 'FF3E41', 'FFC2D1', 'FFFFFF', '1E141D', '0E090E'],
   ]],
 ];
+const EDGE = 'FF3E41';   // Strawberry Red from the Berry palette
 const L = h => { const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(x => x <= .04045 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
   const Y = .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; return Math.round(116 * (Y > .008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16); };
 const mix = (a, b, t) => '#' + [0, 2, 4].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
@@ -70,6 +71,7 @@ function render() {
   for (const [title, pals] of GROUPS) {
     out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`); const g = document.createElement('div'); g.className = 'grid'; out.appendChild(g);
     for (const [name, why, ...hex] of pals) {
+      hex[1] = EDGE;   // one leading-edge red for every palette
       const q = `pal=${hex.slice(0, 5).join(',')}&bg=${hex[5]}${hex[6] ? '&light=' + hex[6] : ''}&mat=toon&age=skin&ageramp=${st.ramp}${st.mode === 'heat' ? '&heat' : ''}`;
       const a = document.createElement('a'); a.className = 'card'; a.target = '_blank'; a.href = `index.html?${q}`;
       a.innerHTML = `<iframe loading="lazy" src="index.html?bare&t=${st.t}&view=${st.view}&${q}"></iframe>
